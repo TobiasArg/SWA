@@ -27,8 +27,8 @@
   --xy-connectionline-stroke: var(--sa-color-accent);
   --xy-connectionline-stroke-width: var(--sa-stroke);
 
-  --xy-handle-background-color: var(--sa-handle-fill);
-  --xy-handle-border-color: var(--sa-handle-border);
+  --xy-handle-background-color: var(--sa-port-fill);
+  --xy-handle-border-color: var(--sa-port-border);
 
   --xy-selection-background-color: color-mix(in srgb, var(--sa-color-accent) 8%, transparent);
   --xy-selection-border: var(--sa-stroke-thin) solid var(--sa-color-accent);
@@ -79,35 +79,155 @@
   pointer-events: none;
 }
 
-/* ---- Component nodes (handoff 5.1, 5.2) ------------------------------------ */
+/* ---- Component nodes (UI v2 §3, §4, §7.1) --------------------------------- */
 
 .sa-flow .react-flow__node-component {
   cursor: grab;
 }
 
+.sa-flow .react-flow__node-component.dragging {
+  cursor: grabbing;
+}
+
+/*
+ * Per-node variables (UI v2 §4.1). Type rules set only --sa-node-ink and
+ * --sa-node-fill; accent rules set only the border and chip variables, so the
+ * two never compete on specificity. Text never takes an accent.
+ */
 .sa-node {
   --sa-node-ink: var(--sa-type-agent-ink);
   --sa-node-fill: var(--sa-type-agent-fill);
-  --sa-node-inset: 0 0 0 0 transparent;
-  --sa-node-halo: 0 0 0 0 transparent;
+  --sa-node-border: var(--sa-node-ink);
+  --sa-node-chip-fill: var(--sa-node-surface);
+  --sa-node-chip-ink: var(--sa-node-ink);
+  --sa-node-label-ink: var(--sa-node-ink);
+  --sa-node-stroke-rest: 1.5px; /* NODE_STROKE */
 
   position: relative;
   display: flex;
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
   flex-direction: column;
-  padding: 10px 12px 4px;
-  border: var(--sa-stroke) solid var(--sa-node-ink);
-  border-radius: var(--sa-radius-md);
-  background: var(--sa-node-fill);
-  box-shadow: var(--sa-node-inset), var(--sa-node-halo);
   color: var(--sa-color-text);
-  transition: border-color var(--sa-duration-fast) var(--sa-ease);
 }
 
-.sa-node__frame {
-  display: none;
+.sa-node[data-subtype="orchestrator"] {
+  --sa-node-ink: var(--sa-type-orchestrator-ink);
+  --sa-node-fill: var(--sa-type-orchestrator-fill);
+  --sa-node-stroke-rest: 2px; /* ORCHESTRATOR_STROKE */
 }
+
+.sa-node[data-type="tool"] {
+  --sa-node-ink: var(--sa-type-tool-ink);
+  --sa-node-fill: var(--sa-type-tool-fill);
+}
+
+.sa-node[data-type="memory"] {
+  --sa-node-ink: var(--sa-type-memory-ink);
+  --sa-node-fill: var(--sa-type-memory-fill);
+}
+
+.sa-node[data-type="external_system"] {
+  --sa-node-ink: var(--sa-type-external-ink);
+  --sa-node-fill: var(--sa-type-external-fill);
+}
+
+.sa-node[data-type="decision"] {
+  --sa-node-ink: var(--sa-type-decision-ink);
+  --sa-node-fill: var(--sa-type-decision-fill);
+}
+
+/* Accent (UI v2 §2.3, §4.1): silhouette stroke, chip ring and glyph, chip tint, Memory rim. */
+.sa-node[data-accent="tomato"] { --sa-node-border: var(--sa-accent-tomato-ink); --sa-node-chip-ink: var(--sa-accent-tomato-ink); --sa-node-chip-fill: var(--sa-accent-tomato-tint); }
+.sa-node[data-accent="coral"] { --sa-node-border: var(--sa-accent-coral-ink); --sa-node-chip-ink: var(--sa-accent-coral-ink); --sa-node-chip-fill: var(--sa-accent-coral-tint); }
+.sa-node[data-accent="tangerine"] { --sa-node-border: var(--sa-accent-tangerine-ink); --sa-node-chip-ink: var(--sa-accent-tangerine-ink); --sa-node-chip-fill: var(--sa-accent-tangerine-tint); }
+.sa-node[data-accent="mustard"] { --sa-node-border: var(--sa-accent-mustard-ink); --sa-node-chip-ink: var(--sa-accent-mustard-ink); --sa-node-chip-fill: var(--sa-accent-mustard-tint); }
+.sa-node[data-accent="olive"] { --sa-node-border: var(--sa-accent-olive-ink); --sa-node-chip-ink: var(--sa-accent-olive-ink); --sa-node-chip-fill: var(--sa-accent-olive-tint); }
+.sa-node[data-accent="fern"] { --sa-node-border: var(--sa-accent-fern-ink); --sa-node-chip-ink: var(--sa-accent-fern-ink); --sa-node-chip-fill: var(--sa-accent-fern-tint); }
+.sa-node[data-accent="mint"] { --sa-node-border: var(--sa-accent-mint-ink); --sa-node-chip-ink: var(--sa-accent-mint-ink); --sa-node-chip-fill: var(--sa-accent-mint-tint); }
+.sa-node[data-accent="teal"] { --sa-node-border: var(--sa-accent-teal-ink); --sa-node-chip-ink: var(--sa-accent-teal-ink); --sa-node-chip-fill: var(--sa-accent-teal-tint); }
+.sa-node[data-accent="lagoon"] { --sa-node-border: var(--sa-accent-lagoon-ink); --sa-node-chip-ink: var(--sa-accent-lagoon-ink); --sa-node-chip-fill: var(--sa-accent-lagoon-tint); }
+.sa-node[data-accent="sky"] { --sa-node-border: var(--sa-accent-sky-ink); --sa-node-chip-ink: var(--sa-accent-sky-ink); --sa-node-chip-fill: var(--sa-accent-sky-tint); }
+.sa-node[data-accent="denim"] { --sa-node-border: var(--sa-accent-denim-ink); --sa-node-chip-ink: var(--sa-accent-denim-ink); --sa-node-chip-fill: var(--sa-accent-denim-tint); }
+.sa-node[data-accent="indigo"] { --sa-node-border: var(--sa-accent-indigo-ink); --sa-node-chip-ink: var(--sa-accent-indigo-ink); --sa-node-chip-fill: var(--sa-accent-indigo-tint); }
+.sa-node[data-accent="lavender"] { --sa-node-border: var(--sa-accent-lavender-ink); --sa-node-chip-ink: var(--sa-accent-lavender-ink); --sa-node-chip-fill: var(--sa-accent-lavender-tint); }
+.sa-node[data-accent="plum"] { --sa-node-border: var(--sa-accent-plum-ink); --sa-node-chip-ink: var(--sa-accent-plum-ink); --sa-node-chip-fill: var(--sa-accent-plum-tint); }
+.sa-node[data-accent="rose"] { --sa-node-border: var(--sa-accent-rose-ink); --sa-node-chip-ink: var(--sa-accent-rose-ink); --sa-node-chip-fill: var(--sa-accent-rose-tint); }
+.sa-node[data-accent="cocoa"] { --sa-node-border: var(--sa-accent-cocoa-ink); --sa-node-chip-ink: var(--sa-accent-cocoa-ink); --sa-node-chip-fill: var(--sa-accent-cocoa-tint); }
+
+/* ---- Silhouette SVG (UI v2 §3.1) ------------------------------------------- */
+
+.sa-node__shape {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sa-node__body {
+  fill: var(--sa-node-fill);
+  stroke: var(--sa-node-border);
+  stroke-linejoin: round;
+  stroke-width: var(--sa-node-stroke-rest);
+}
+
+.sa-node[data-type="external_system"] .sa-node__body {
+  stroke-dasharray: 6 4;
+}
+
+.sa-node__detail {
+  fill: none;
+  stroke-linecap: butt;
+}
+
+/* Orchestrator header band: always the orchestrator ink, never the accent. */
+.sa-node__detail--band {
+  fill: var(--sa-type-orchestrator-ink);
+  stroke: none;
+}
+
+/* Memory lid rim: the front of the lid, in the node border colour. */
+.sa-node__detail--rim {
+  stroke: var(--sa-node-border);
+  stroke-width: 1px;
+}
+
+/* External hatch: texture, not border; never accented. */
+.sa-node__detail--hatch {
+  stroke: var(--sa-type-external-hatch);
+  stroke-width: 1px;
+}
+
+.sa-node__halo,
+.sa-node__selection {
+  display: none;
+  fill: none;
+  stroke-linejoin: round;
+}
+
+.sa-node__halo {
+  stroke: var(--sa-color-accent-soft);
+  stroke-width: 8px;
+}
+
+.sa-node__selection {
+  stroke: var(--sa-color-accent);
+  stroke-width: 2px;
+}
+
+.sa-node[data-selected="true"] .sa-node__halo,
+.sa-node[data-selected="true"] .sa-node__selection {
+  display: inline;
+}
+
+/* Hover: thicker stroke in the same colour, so the accent stays visible. */
+.sa-flow .react-flow__node-component:hover .sa-node__body {
+  stroke-width: 2.25px; /* NODE_STROKE_HOVER */
+}
+
+/* ---- Node content (UI v2 §3.3, §3.4) --------------------------------------- */
 
 .sa-node__content {
   position: relative;
@@ -122,10 +242,26 @@
 
 .sa-node__type {
   display: flex;
+  height: 24px;
   min-width: 0;
+  flex: none;
   align-items: center;
-  gap: var(--sa-space-2);
-  color: var(--sa-node-ink);
+  gap: var(--sa-space-3);
+  color: var(--sa-node-label-ink);
+}
+
+.sa-node__chip {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: var(--sa-stroke-thin) solid var(--sa-node-chip-ink);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-node-chip-fill);
+  color: var(--sa-node-chip-ink);
 }
 
 .sa-node__icon {
@@ -158,151 +294,75 @@
   line-clamp: 2;
 }
 
-/* Agent: the plain baseline. */
-
-/* Orchestrator: 2 px border plus a solid ink header band behind the type row. */
-.sa-node[data-subtype="orchestrator"] {
-  --sa-node-ink: var(--sa-type-orchestrator-ink);
-  --sa-node-fill: var(--sa-type-orchestrator-fill);
-  padding: 0 0 2px;
-  border-width: var(--sa-stroke-strong);
-}
-
-/* The band bleeds into the content padding, which overflow: hidden does not clip. */
-.sa-node[data-subtype="orchestrator"] .sa-node__content {
-  padding: 0 12px;
-}
-
+/* Orchestrator: the type row sits in the 24 px band in white; the name starts 4 px below. */
 .sa-node[data-subtype="orchestrator"] .sa-node__type {
-  height: 24px;
-  flex: none;
-  margin: 0 -12px var(--sa-space-1);
-  padding: 0 12px;
-  border-radius: var(--sa-radius-sm) var(--sa-radius-sm) 0 0;
-  background: var(--sa-node-ink);
+  margin-bottom: var(--sa-space-1);
   color: var(--sa-color-on-accent);
 }
 
-/* Tool: tighter radius plus a 4 px ink bar along the left edge. */
-.sa-node[data-type="tool"] {
-  --sa-node-ink: var(--sa-type-tool-ink);
-  --sa-node-fill: var(--sa-type-tool-fill);
-  --sa-node-inset: inset 4px 0 0 0 var(--sa-type-tool-ink);
-  padding-left: 16px;
-  border-radius: var(--sa-radius-sm);
-}
+/* ---- Ports (UI v2 §7.2) ---------------------------------------------------- */
 
-/* Memory / Data Store: elliptical "disk lid" top plus a second rule below it. */
-.sa-node[data-type="memory"] {
-  --sa-node-ink: var(--sa-type-memory-ink);
-  --sa-node-fill: var(--sa-type-memory-fill);
-  padding-top: 16px;
-  border-radius: 50% 50% var(--sa-radius-md) var(--sa-radius-md) / 10px 10px var(--sa-radius-md) var(--sa-radius-md);
-}
-
-.sa-node[data-type="memory"]::before {
-  position: absolute;
-  top: 6px;
-  right: -1px;
-  left: -1px;
-  height: 10px;
-  border-top: var(--sa-stroke-thin) solid var(--sa-node-ink);
-  border-radius: 50% / 10px;
-  content: "";
-  pointer-events: none;
-}
-
-/* External System: dashed border and a 45° hatch over the fill. */
-.sa-node[data-type="external_system"] {
-  --sa-node-ink: var(--sa-type-external-ink);
-  --sa-node-fill: var(--sa-type-external-fill);
-  border-style: dashed;
-  background:
-    repeating-linear-gradient(
-      45deg,
-      var(--sa-type-external-hatch) 0 1px,
-      transparent 1px 8px
-    ),
-    var(--sa-node-fill);
-}
-
-/* Decision / Routing Rule: chamfered corners, stroked through an inner frame. */
-.sa-node[data-type="decision"] {
-  --sa-node-ink: var(--sa-type-decision-ink);
-  --sa-node-fill: var(--sa-type-decision-fill);
-  border-color: transparent;
-  border-radius: 0;
-  background: transparent;
-}
-
-.sa-node[data-type="decision"] .sa-node__frame {
-  position: absolute;
-  inset: calc(-1 * var(--sa-stroke));
-  display: block;
-  background: var(--sa-node-ink);
-  clip-path: polygon(
-    10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
-    calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px
-  );
-  pointer-events: none;
-}
-
-.sa-node[data-type="decision"] .sa-node__frame::after {
-  position: absolute;
-  inset: var(--sa-stroke);
-  background: var(--sa-node-fill);
-  clip-path: polygon(
-    9.4px 0, calc(100% - 9.4px) 0, 100% 9.4px, 100% calc(100% - 9.4px),
-    calc(100% - 9.4px) 100%, 9.4px 100%, 0 calc(100% - 9.4px), 0 9.4px
-  );
-  content: "";
-}
-
-/* Hover: border darkens to text colour. */
-.sa-flow .react-flow__node-component:hover .sa-node:not([data-type="decision"]) {
-  border-color: var(--sa-color-text);
-}
-
-.sa-flow .react-flow__node-component:hover .sa-node[data-type="decision"] .sa-node__frame {
-  background: var(--sa-color-text);
-}
-
-/* Selected: 2 px accent outline 2 px outside the border plus a soft halo. */
-.sa-node[data-selected="true"] {
-  --sa-node-halo: 0 0 0 8px var(--sa-color-accent-soft);
-  outline: var(--sa-stroke-strong) solid var(--sa-color-accent);
-  outline-offset: 2px;
-}
-
-/* ---- Handles (handoff 5.3) ------------------------------------------------- */
-
-.sa-flow .react-flow__handle.sa-handle {
-  width: 8px;
-  height: 8px;
-  min-width: 8px;
-  min-height: 8px;
-  border: var(--sa-stroke) solid var(--sa-handle-border);
-  background: var(--sa-handle-fill);
-  opacity: 0;
-  transition: opacity var(--sa-duration-fast) var(--sa-ease);
-  /* Above the node content layer (z-index 1), which spans the full width of orchestrators. */
+/*
+ * Positioned inline at portAnchor(...) (left/top in px); React Flow's side
+ * offsets are cleared so the disc centres exactly on the outline.
+ */
+.sa-flow .react-flow__handle.sa-port {
+  right: auto;
+  bottom: auto;
   z-index: 2;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  border: var(--sa-stroke) solid var(--sa-port-border);
+  border-radius: 50%;
+  background: var(--sa-port-fill);
+  cursor: crosshair;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity var(--sa-duration-fast) var(--sa-ease),
+    transform var(--sa-duration-fast) var(--sa-ease);
 }
 
-/* 16 px invisible hit area. */
-.sa-flow .react-flow__handle.sa-handle::after {
+/* 24 x 24 hit area (PORT_HIT, WCAG 2.5.8). */
+.sa-flow .react-flow__handle.sa-port::after {
   position: absolute;
-  inset: -5px;
+  inset: -7px;
   border-radius: 50%;
   content: "";
 }
 
-.sa-flow .react-flow__node-component:hover .sa-handle,
-.sa-flow .react-flow__node-component:focus-visible .sa-handle,
-.sa-flow .react-flow__node-component:focus-within .sa-handle,
-.sa-flow .react-flow__node-component.selected .sa-handle,
-.sa-flow .react-flow__handle.sa-handle.connectingfrom {
+.sa-flow .react-flow__node-component:hover .sa-port,
+.sa-flow .react-flow__node-component:focus-within .sa-port,
+.sa-flow .react-flow__node-component.selected .sa-port,
+.sa-canvas[data-connecting] .sa-flow .sa-port,
+.sa-flow .react-flow__handle.sa-port.connectingfrom,
+.sa-flow .react-flow__handle.sa-port.sa-port--active {
   opacity: 1;
+}
+
+.sa-flow .react-flow__handle.sa-port:hover {
+  border-color: var(--sa-port-active);
+  background: var(--sa-port-active);
+}
+
+/* The drag source port and the port a connection would use (set by the connection code). */
+.sa-flow .react-flow__handle.sa-port.connectingfrom,
+.sa-flow .react-flow__handle.sa-port.sa-port--active {
+  border-color: var(--sa-port-active);
+  background: var(--sa-port-active);
+}
+
+.sa-flow .react-flow__handle.sa-port.sa-port--active {
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+/* A valid connection target under the pointer (UI v2 §7.1; set by the connection code). */
+.sa-node[data-connect-target="true"] .sa-node__body {
+  stroke: var(--sa-port-active);
+  stroke-width: 2.25px;
 }
 
 /* ---- Resize controls (handoff 5.3) ----------------------------------------- */
@@ -551,8 +611,15 @@
   outline: none !important;
 }
 
-.sa-exporting .sa-node[data-selected="true"] {
-  --sa-node-halo: 0 0 0 0 transparent;
+.sa-exporting .sa-node__halo,
+.sa-exporting .sa-node__selection {
+  display: none !important;
+}
+
+/* Rest stroke only: no hover or connection-target treatment in the image. */
+.sa-exporting .sa-node .sa-node__body {
+  stroke: var(--sa-node-border) !important;
+  stroke-width: var(--sa-node-stroke-rest) !important;
 }
 
 .sa-exporting .react-flow__edge .sa-edge-path,
@@ -579,32 +646,42 @@
   background: var(--sa-group-header-fill);
 }
 
-.sa-exporting .react-flow__node-component:hover .sa-node:not([data-type="decision"]) {
-  border-color: var(--sa-node-ink);
-}
-
 /* ---- Reduced motion and forced colours (handoff 4, 9.3) -------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .sa-node,
   .sa-edge-arrow,
   .sa-flow .react-flow__edge-path.sa-edge-path,
-  .sa-flow .react-flow__handle.sa-handle {
+  .sa-flow .react-flow__handle.sa-port {
     transition: none;
   }
 }
 
 @media (forced-colors: active) {
-  .sa-node {
+  .sa-node__body,
+  .sa-node__detail--rim {
+    stroke: CanvasText;
+  }
+
+  .sa-node__detail--band {
+    fill: none;
+    stroke: CanvasText;
+    stroke-width: 1px;
+  }
+
+  .sa-node[data-subtype="orchestrator"] .sa-node__type {
+    color: CanvasText;
+  }
+
+  .sa-node__selection {
+    stroke: Highlight;
+  }
+
+  .sa-node__halo {
+    stroke: none;
+  }
+
+  .sa-node__chip {
     border-color: CanvasText;
-  }
-
-  .sa-node[data-type="decision"] .sa-node__frame {
-    background: CanvasText;
-  }
-
-  .sa-node[data-selected="true"] {
-    outline-color: Highlight;
   }
 
   .sa-flow .react-flow__edge-path.sa-edge-path,

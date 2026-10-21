@@ -389,7 +389,7 @@ function CanvasSurface() {
           fitViewOptions={FIT_VIEW_OPTIONS}
           ariaLabelConfig={CANVAS_ARIA_LABELS}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--sa-color-canvas-grid)" />
           <MiniMap className="sa-minimap" pannable={false} zoomable={false} />
         </ReactFlow>
       </CanvasNodeCallbacksContext.Provider>

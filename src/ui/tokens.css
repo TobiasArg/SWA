@@ -2,8 +2,8 @@
   color-scheme: light;
 
   /* Neutrals and surfaces */
-  --sa-color-canvas: #F5F3EE;
-  --sa-color-canvas-grid: #DDD8CD;
+  --sa-color-canvas: #F7F6F3;
+  --sa-color-canvas-grid: #C9C4B8;
   --sa-color-surface: #FFFFFF;
   --sa-color-surface-sunken: #EFECE6;
   --sa-color-surface-hover: #F5F3EE;
@@ -48,12 +48,52 @@
   --sa-type-decision-ink: #6C3D74;
   --sa-type-decision-fill: #F5EEF6;
 
+  /* Component accents (UI v2 §2.3): ink = stroke and glyph, tint = icon chip. Never text. */
+  --sa-accent-tomato-ink: #B23A2B;
+  --sa-accent-tomato-tint: #F9D9D3;
+  --sa-accent-coral-ink: #A8452F;
+  --sa-accent-coral-tint: #FADFD2;
+  --sa-accent-tangerine-ink: #9A4D10;
+  --sa-accent-tangerine-tint: #FBE2C8;
+  --sa-accent-mustard-ink: #7D5F00;
+  --sa-accent-mustard-tint: #F6E7B0;
+  --sa-accent-olive-ink: #5F6512;
+  --sa-accent-olive-tint: #E9EBC2;
+  --sa-accent-fern-ink: #3F6B2A;
+  --sa-accent-fern-tint: #D9EBCF;
+  --sa-accent-mint-ink: #1F6E55;
+  --sa-accent-mint-tint: #CDEDE0;
+  --sa-accent-teal-ink: #106A6E;
+  --sa-accent-teal-tint: #C9EAEA;
+  --sa-accent-lagoon-ink: #0F6584;
+  --sa-accent-lagoon-tint: #CBE6F2;
+  --sa-accent-sky-ink: #2C5F9E;
+  --sa-accent-sky-tint: #D3E3F6;
+  --sa-accent-denim-ink: #3B4F8F;
+  --sa-accent-denim-tint: #D9DEF2;
+  --sa-accent-indigo-ink: #4F46A5;
+  --sa-accent-indigo-tint: #DFDCF5;
+  --sa-accent-lavender-ink: #6A4AA0;
+  --sa-accent-lavender-tint: #E6DCF4;
+  --sa-accent-plum-ink: #86397E;
+  --sa-accent-plum-tint: #F1D8EC;
+  --sa-accent-rose-ink: #A3355A;
+  --sa-accent-rose-tint: #F8D6E1;
+  --sa-accent-cocoa-ink: #6E4B35;
+  --sa-accent-cocoa-tint: #EBDDD1;
+
   /* Canvas structure */
   --sa-edge-stroke: #6B655B;
   --sa-edge-stroke-hover: #1F1D1A;
   --sa-edge-stroke-selected: var(--sa-color-accent);
   --sa-edge-label-text: #3A3631;
-  --sa-edge-label-bg: #F5F3EE;
+  --sa-edge-label-bg: var(--sa-color-canvas);
+  --sa-edge-terminal-fill: var(--sa-color-canvas);
+  --sa-port-fill: #FFFFFF;
+  --sa-port-border: #6B655B;
+  --sa-port-active: var(--sa-color-accent);
+  --sa-port-invalid: var(--sa-color-danger);
+  --sa-node-surface: #FFFFFF;
   --sa-group-border: #857F72;
   --sa-group-fill: rgba(87, 83, 76, 0.05);
   --sa-group-header-fill: rgba(87, 83, 76, 0.10);

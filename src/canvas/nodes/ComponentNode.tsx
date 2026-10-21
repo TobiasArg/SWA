@@ -1,11 +1,22 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, type CSSProperties } from "react";
 import { Handle, NodeResizer, Position, type NodeProps, type OnResizeEnd } from "@xyflow/react";
-import { MAX_SIZE, MIN_SIZE } from "../../domain/constants";
+import { DEFAULT_SIZE, MAX_SIZE, MIN_SIZE, isAccentId } from "../../domain/constants";
 import type { Component } from "../../domain/types";
 import { Icon, type IconName } from "../../ui/icons";
 import type { ComponentFlowNode } from "../flowTypes";
 import { componentTypeTag } from "../labels";
 import { useCanvasNodeCallbacks } from "../nodeContext";
+import {
+  PORT_SIDES,
+  SELECTION_INFLATE,
+  contentInsets,
+  isOrchestrator,
+  portAnchor,
+  shapeDetails,
+  shapeKindFor,
+  shapePath,
+  type PortSide,
+} from "../shapes";
 
 function iconFor(component: Component): IconName {
   switch (component.type) {
@@ -22,24 +33,28 @@ function iconFor(component: Component): IconName {
   }
 }
 
-const HANDLES = [
-  { id: "top", position: Position.Top },
-  { id: "right", position: Position.Right },
-  { id: "bottom", position: Position.Bottom },
-  { id: "left", position: Position.Left },
-] as const;
+const HANDLE_POSITION: Record<PortSide, Position> = {
+  top: Position.Top,
+  right: Position.Right,
+  bottom: Position.Bottom,
+  left: Position.Left,
+};
 
 /**
- * A component node (UI handoff 5.1/5.2). The per-type treatment is selected in
- * canvas.css through `data-type` / `data-subtype`, derived from the domain type
- * (never from user-provided IDs, TD 3.4).
+ * A component node (UI v2 §3, §4, §7). The silhouette is one inline SVG (halo,
+ * selection outline, body, type details) built from the pure geometry in
+ * shapes.ts, with no url(#...) references so PNG export needs no ID resolution.
+ * Per-type and accent styling is selected in canvas.css through `data-type`,
+ * `data-subtype` and `data-accent`; `data-accent` is only ever a validated
+ * accent ID, never user text (TD 3.4).
  *
- * Four `source` handles (connection mode is Loose) are always rendered so React
- * Flow can measure them; CSS shows them on hover, focus and selection.
+ * Four `source` ports (connection mode is Loose) are always rendered so React
+ * Flow can measure them. Each sits exactly on the outline at `portAnchor(...)`;
+ * CSS shows them on hover, focus, selection and while a connection is dragged.
  * NodeResizer is visible only while selected; the resize commit is the
  * `onResizeEnd` hook from CanvasView (see interactions.ts).
  */
-function ComponentNodeView({ id, data, selected, isConnectable }: NodeProps<ComponentFlowNode>) {
+function ComponentNodeView({ id, data, selected, isConnectable, width, height }: NodeProps<ComponentFlowNode>) {
   const { component } = data;
   const { onResizeEnd } = useCanvasNodeCallbacks();
   const handleResizeEnd = useCallback<OnResizeEnd>(
@@ -47,13 +62,30 @@ function ComponentNodeView({ id, data, selected, isConnectable }: NodeProps<Comp
     [id, onResizeEnd],
   );
   const description = component.description?.trim();
+  const fallback = component.size ?? DEFAULT_SIZE[component.type];
+  const w = Math.max(0, width ?? fallback.width);
+  const h = Math.max(0, height ?? fallback.height);
+  const kind = shapeKindFor(component);
+  const orchestrator = isOrchestrator(component);
+  const accent = isAccentId(component.accent) ? component.accent : undefined;
+  const insets = contentInsets({ ...component, size: { width: w, height: h } });
+  const outline = shapePath(kind, w, h, SELECTION_INFLATE);
+  const padding: CSSProperties = {
+    paddingTop: insets.top,
+    paddingRight: insets.right,
+    paddingBottom: insets.bottom,
+    paddingLeft: insets.left,
+  };
 
   return (
     <div
       className="sa-node"
       data-type={component.type}
       data-subtype={component.subtype}
+      data-accent={accent}
+      data-shape={kind}
       data-selected={selected ? "true" : undefined}
+      style={padding}
     >
       <NodeResizer
         isVisible={selected}
@@ -65,25 +97,55 @@ function ComponentNodeView({ id, data, selected, isConnectable }: NodeProps<Comp
         lineClassName="sa-resize-line"
         onResizeEnd={handleResizeEnd}
       />
-      <div className="sa-node__frame" aria-hidden="true" />
+      <svg
+        className="sa-node__shape"
+        width={w}
+        height={h}
+        overflow="visible"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path className="sa-node__halo" d={outline} />
+        <path className="sa-node__selection" d={outline} />
+        <path className="sa-node__body" d={shapePath(kind, w, h)} />
+        {shapeDetails(component, w, h).map((detail) => (
+          <path
+            key={detail.kind}
+            className={`sa-node__detail sa-node__detail--${detail.kind}`}
+            data-detail={detail.kind}
+            d={detail.d}
+          />
+        ))}
+      </svg>
       <div className="sa-node__content">
         <div className="sa-node__type">
-          <Icon name={iconFor(component)} size={16} className="sa-node__icon" />
+          {orchestrator ? (
+            <Icon name={iconFor(component)} size={16} className="sa-node__icon" />
+          ) : (
+            <span className="sa-node__chip">
+              <Icon name={iconFor(component)} size={16} className="sa-node__icon" />
+            </span>
+          )}
           <span className="sa-node__type-label">{componentTypeTag(component)}</span>
         </div>
         <div className="sa-node__name">{component.name}</div>
         {description ? <div className="sa-node__description">{description}</div> : null}
       </div>
-      {HANDLES.map((handle) => (
-        <Handle
-          key={handle.id}
-          id={handle.id}
-          type="source"
-          position={handle.position}
-          isConnectable={isConnectable}
-          className="sa-handle"
-        />
-      ))}
+      {PORT_SIDES.map((side) => {
+        const anchor = portAnchor(kind, w, h, side);
+        return (
+          <Handle
+            key={side}
+            id={side}
+            type="source"
+            position={HANDLE_POSITION[side]}
+            isConnectable={isConnectable}
+            className="sa-port"
+            data-port={side}
+            style={{ left: anchor.x, top: anchor.y }}
+          />
+        );
+      })}
     </div>
   );
 }
