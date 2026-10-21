@@ -49,14 +49,14 @@
 | Styling | **Plain CSS with CSS custom properties** (one tokens file + one CSS file per feature module) | The spec *suggests* Tailwind but also says to avoid dependencies without clear value. Per-module CSS files also give clean file ownership for parallel agents. Design agents own the visual values in `src/ui/tokens.css`. **[Design decision]** |
 | Icons | Inline SVG components in `src/ui/icons.tsx` | No icon library dependency. |
 | Fonts | System font stack only | No network font requests (Scenario J) and no font-embedding problems in PNG export. |
-| Markdown | **Not rendered in the MVP.** Notes are edited and displayed as Markdown *source* text. **[Design decision]** | Spec requires notes to *be* Markdown and to be rendered safely if rendered. Showing the source as plain text satisfies both with zero dependencies and zero XSS surface. A sanitized preview is post-MVP. |
+| Markdown | `react-markdown` (lazy-loaded preview only). Notes are stored and edited as Markdown *source*; an Edit/Preview toggle renders them. **[Design decision, post-MVP addition]** | Raw HTML is skipped (`skipHtml`, no raw-HTML plugin), links pass `safeLink`, images render as text placeholders so no network request happens. The renderer is a separate chunk loaded on first preview. |
 | Unit/component tests | **Vitest** + **@testing-library/react** + **@testing-library/user-event** + **jsdom** + **fake-indexeddb** | Standard Vite-native tooling. |
 | End-to-end tests | **Playwright** (`@playwright/test`) | React Flow needs real layout (ResizeObserver, measured DOM); Scenarios A–J run in a real browser. |
 | Lint/format | ESLint config from the Vite template; Prettier optional | Keep template defaults. |
 
 ### 1.1 Dependency list (complete)
 
-Runtime: `react`, `react-dom`, `@xyflow/react`, `zod`, `idb`, `html-to-image@1.11.11` (exact pin).
+Runtime: `react`, `react-dom`, `@xyflow/react`, `zod`, `idb`, `html-to-image@1.11.11` (exact pin), `react-markdown` (notes preview, lazy-loaded; added for the documentation feature, licenses in `public/THIRD_PARTY_LICENSES.md`).
 Dev: `typescript`, `vite`, `@vitejs/plugin-react`, `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `fake-indexeddb`, `@playwright/test`, ESLint packages from the template.
 
 No other dependency may be added without a coordinator decision (record it in this file's section 16 or an ADR note in the PR).
@@ -695,7 +695,7 @@ All inputs have visible `<label>`s. Text edits dispatch on change with a coalesc
 | **Responsibilities** | Responsibilities (`behavior.responsibilities`), Boundaries (`behavior.boundaries`) | `ListField`: textarea, one item per line; committed as trimmed non-empty lines |
 | **Behavior** | Activation, Behavioral Rules (`rules`, ListField), Delegation, Outputs, Failure Handling | textareas |
 | **Relationships** | read-only `RelationshipList` (7.4) | — |
-| **Documentation** | Notes (`notes`, Markdown source), External links (`links`) | textarea (monospace hint "Markdown"); `LinksField` rows of label + URL with add/remove buttons |
+| **Documentation** | Notes (`notes`, Markdown source), External links (`links`) | `NotesField`: textarea (monospace hint "Markdown") with an Edit/Preview toggle (two `aria-pressed` buttons; Preview renders `ui/MarkdownPreview`, see 14); `LinksField` rows of label + URL with add/remove buttons |
 | Footer actions | Connect…, Duplicate, Delete | buttons → `actions.*` |
 
 Sections are collapsible (`<details>`/`<summary>`); Identity open by default.
@@ -727,7 +727,7 @@ Identity (Name, Description, Group), then **type fields** (`TypeFields.tsx`), th
 
 ### 7.5 Group inspector
 
-Name (required), Description, Notes; Members list (each: name button to select the member, "Remove from group" button); action "Delete group (keeps members)".
+Name (required), Description, Notes (`NotesField` with Edit/Preview, as in 7.1); Members list (each: name button to select the member, "Remove from group" button); action "Delete group (keeps members)".
 
 ### 7.6 Architecture inspector (nothing selected) and Multi-selection inspector
 
@@ -821,6 +821,13 @@ export function startAutosave(store: EditorStore, repo: Repository): SaveControl
 - Exports from the in-memory state (no save required). Available in the editor toolbar and in each library row.
 - Library export of a **damaged** record downloads its raw stored JSON (`{slug}-raw.json`) so data is never trapped.
 
+### 9.3 Markdown export (`exportMarkdown.ts`)
+
+- `exportArchitectureMarkdown(a)` → a deterministic documentation document (`text/markdown`), filename `{slug(name) || "architecture"}.md`. Available from the editor **Export ▾** menu ("Markdown document") and as **Export Markdown** on each healthy library row (not on damaged rows). Export only; there is no Markdown import.
+- Content: title and description, summary counts, Groups (description, members, notes, plus an "Ungrouped" list), Components (type, orchestrator subtype, groups, description, agent behavior, type properties, safe links, notes), Relationships (source, verb, direction arrow, target, label, description). The Relationships section states that relationships are semantic documentation, not execution order, control flow or data flow.
+- Determinism: groups and components sort by name then id (codepoint order), relationships by source name, target name, type, label, id. Timestamps and canvas geometry are never emitted. Empty fields and empty sections are omitted.
+- Escaping: single-line structured fields are backslash-escaped; multi-line fields are escaped per line; notes are embedded verbatim with any unclosed code fence closed. Only `safeLink` URLs become Markdown links; others are shown as code spans.
+
 ### 9.2 Import (`importJson.ts`, `readFile.ts`)
 
 ```ts
@@ -888,7 +895,7 @@ Failure → toast "Image export failed. Try zooming out or reducing the diagram 
 
 - **Loading:** skeleton rows while `repo.list()` runs.
 - **Empty:** "No architectures yet." + primary **New architecture** + **Import JSON**.
-- **List:** a `<table>` (name, last edited (relative + exact in `title`), counts) sorted by `updatedAt` desc. Row actions: Open (row name is a link to `#/a/<id>`), Rename, Duplicate, Export JSON, Delete.
+- **List:** a `<table>` (name, last edited (relative + exact in `title`), counts) sorted by `updatedAt` desc. Row actions: Open (row name is a link to `#/a/<id>`), Rename, Duplicate, Export JSON, Export Markdown, Delete.
 - **New architecture:** dialog with Name (default "Untitled architecture", required) → `repo.create` → open editor (Scenario A: it appears in the library).
 - **Rename:** dialog with Name.
 - **Delete:** `ConfirmDialog` "Delete '{name}'? This cannot be undone. Export it to JSON first if you want a backup." with **Delete** (destructive) / Cancel; Cancel is focused by default.
@@ -906,7 +913,7 @@ Lifecycle: `repo.get(id)` → if ok, `createEditorStore(file.architecture)` → 
 
 Left: "Library" back button; architecture name (inline-editable text input → `renameArchitecture` on blur/Enter; Escape reverts); `SaveStatusIndicator` (`role="status"`).
 Center: Undo, Redo (disabled per `canUndo/canRedo`), Zoom out, Zoom in, Fit.
-Right: Group, Ungroup, Connect…, Delete (enabled per selection), **Export ▾** (JSON, PNG), **Import**.
+Right: Group, Ungroup, Connect…, Delete (enabled per selection), **Export ▾** (JSON, Markdown, PNG), **Import**.
 All icon buttons have `aria-label` and a tooltip with the shortcut.
 
 ---
@@ -952,7 +959,7 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 - **No network:** the app makes no network requests at runtime. Production `index.html` gets a CSP meta tag injected by a tiny `transformIndexHtml` plugin in `vite.config.ts` (build only, so Vite dev/HMR is unaffected):
   `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'`
   (`'unsafe-inline'` for styles is needed for React Flow's inline style attributes and html-to-image's cloned styles.)
-- **Untrusted text:** all user/imported text is rendered as React text nodes. `dangerouslySetInnerHTML` is forbidden (lint rule `react/no-danger` or code review). Markdown is not rendered (section 1).
+- **Untrusted text:** all user/imported text is rendered as React text nodes. `dangerouslySetInnerHTML` is forbidden (lint rule `react/no-danger` or code review). Markdown notes are rendered only by `ui/MarkdownPreview` (react-markdown, `skipHtml`, no raw-HTML plugin, URL transform limited to `safeLink` protocols, `img` replaced by a text placeholder so remote images never load).
 - **Links:** `ui/safeLink.ts` renders `<a href>` only for `http:`, `https:` and `mailto:` URLs (parsed with `new URL`), always with `target="_blank" rel="noopener noreferrer"`. Other values are shown as plain text. Links are only followed on explicit user click.
 - **No secrets, no telemetry, no analytics, no external fonts or CDNs.** Scenario J is tested by failing any non-local request in Playwright (15.3).
 - Imported data limits (3.5) bound memory use.

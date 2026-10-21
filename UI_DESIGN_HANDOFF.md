@@ -288,6 +288,7 @@ Empty states are text-first and calm, with no illustrations or mascots.
 | Hint | below the control, `--sa-text-xs` muted (for example "Shown on the node", "One item per line", "Markdown") |
 | Text input / select | height `--sa-control-h`, padding 0 × 8 px, 1 px `--sa-color-border-strong`, `--sa-radius-sm`, surface background; hover border `--sa-color-text-muted` |
 | Textarea | minimum 3 rows (ListField and Notes minimum 4), `resize: vertical`, same border |
+| Notes Edit/Preview toggle | two compact buttons in the label row (`aria-pressed`, group label "Notes view"); the active one carries a check glyph like the segmented control. Preview replaces the textarea with a bordered region ("Notes preview") using compact headings, mono code and wrapped text; images show as "[image: alt]" text; empty notes read "No notes yet." |
 | Read-only direction text (TD 6.4) | plain `--sa-text-sm` text with a lock glyph, e.g. "Directed (fixed by type)". It is not styled as a disabled input, because it is information, not a control. |
 | Segmented control (Agent / Orchestrator; Directed / Undirected) | 1 px border-strong container; the active option has an accent fill with white text **and** a check glyph; inactive options are surface with text color |
 | Relationship header sentence (TD 7.3) | `--sa-text-sm`; component names are link-style buttons (accent, underlined on hover and focus) |
@@ -426,4 +427,4 @@ Module CSS references tokens only; no raw hex values outside `tokens.css`. The P
 | TD 1 / 14: system fonts, no external resources | 3 |
 | Scenario H: export legibility | 2.1 (canvas token), 6 (SVG labels), 9.1 (hidden in export) |
 
-**Out of scope here (deliberately not added):** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts, an icon library, a Markdown preview, and any new controls or screens.
+**Out of scope here (deliberately not added):** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts, an icon library, and any new controls (the notes Markdown preview, 8.2, was added later as a documentation feature) or screens.
