@@ -176,9 +176,9 @@ describe("App shell", () => {
     await openEditor();
     const input = document.querySelector<HTMLInputElement>(".sa-toolbar input[type='file']")!;
 
-    await user.upload(input, jsonFile({ schemaVersion: 2, architecture: {} }));
+    await user.upload(input, jsonFile({ schemaVersion: 3, architecture: {} }));
     const dialog = await screen.findByRole("dialog", { name: "This file can't be imported" });
-    expect(within(dialog).getByText(/format version 2/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/format version 3/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     await user.upload(input, jsonFile(makeFile({ id: "arch_2", name: "Imported Swarm" })));

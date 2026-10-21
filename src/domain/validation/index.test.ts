@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ACCENT_IDS } from "../constants";
 import type { ArchitectureFile, Component, Relationship } from "../types";
 import { parseArchitectureFile } from "./index";
 import { cloneFixture, validArchitectureFixture } from "./__fixtures__/fixtureFactory";
@@ -67,7 +68,7 @@ describe("architecture file validation", () => {
     ["E_NOT_ARCHITECTURE_FILE", { schemaVersion: 1 }],
     ["E_SCHEMA_VERSION_MISSING", { architecture: {} }],
     ["E_SCHEMA_VERSION_MISSING", { schemaVersion: "1", architecture: {} }],
-    ["E_SCHEMA_VERSION_UNSUPPORTED", { schemaVersion: 2, architecture: {} }],
+    ["E_SCHEMA_VERSION_UNSUPPORTED", { schemaVersion: 3, architecture: {} }],
     ["E_SCHEMA_VERSION_UNSUPPORTED", { schemaVersion: 0, architecture: {} }],
     ["E_SCHEMA_VERSION_UNSUPPORTED", { schemaVersion: 1.5, architecture: {} }],
   ])("reports file/version issue %s", (expectedCode, raw) => {
@@ -122,6 +123,12 @@ describe("architecture file validation", () => {
         ...file.architecture.relationships[0]!,
         type: "shares_context_with",
       } as Relationship;
+    }],
+    ["E_INVALID_ACCENT", (file: ArchitectureFile) => {
+      file.architecture.components[0] = {
+        ...file.architecture.components[0]!,
+        accent: "chartreuse",
+      } as unknown as Component;
     }],
     ["E_INVALID_SUBTYPE", (file: ArchitectureFile) => {
       file.architecture.components[0] = {
@@ -187,5 +194,58 @@ describe("architecture file validation", () => {
     const before = structuredClone(file);
     parseArchitectureFile(file);
     expect(file).toEqual(before);
+  });
+
+  it("reports the accent message with the allowed ids", () => {
+    const result = parseArchitectureFile(
+      fixtureWith((file) => {
+        Object.assign(file.architecture.components[0]!, { accent: "chartreuse" });
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues[0]?.message).toBe(
+        `Component cmp_agent: accent must be one of ${ACCENT_IDS.join(", ")}.`,
+      );
+    }
+  });
+
+  it("accepts every accent id and strips an accent key from groups", () => {
+    const file = cloneFixture();
+    file.architecture.components.forEach((component, index) => {
+      component.accent = ACCENT_IDS[index];
+    });
+    Object.assign(file.architecture.groups[0]!, { accent: "teal" });
+    const result = parseArchitectureFile(file);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.architecture.components.map((c) => c.accent)).toEqual(["tomato", "coral"]);
+      expect(result.value.architecture.groups[0]).not.toHaveProperty("accent");
+    }
+  });
+
+  it("preserves malformed relationship visual.ports verbatim", () => {
+    const visual = { ports: { source: "north", target: 7, extra: [1] }, other: true };
+    const result = parseArchitectureFile(
+      fixtureWith((file) => {
+        file.architecture.relationships[0]!.visual = visual;
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.architecture.relationships[0]?.visual).toEqual(visual);
+  });
+
+  it("migrates a v1 file to v2 without changing content, and rejects v3", () => {
+    const v1 = JSON.parse(leadHuntingEngineJson) as { schemaVersion: number; architecture: unknown };
+    expect(v1.schemaVersion).toBe(1);
+    const migrated = parseArchitectureFile(v1);
+    expect(migrated.ok).toBe(true);
+    if (!migrated.ok) return;
+    expect(migrated.value.schemaVersion).toBe(2);
+    const v2 = parseArchitectureFile({ ...v1, schemaVersion: 2 });
+    expect(v2.ok).toBe(true);
+    if (v2.ok) expect(v2.value).toEqual(migrated.value);
+    expect(migrated.value.architecture.components).toHaveLength(4);
+    expect(firstIssueCode({ ...v1, schemaVersion: 3 })).toBe("E_SCHEMA_VERSION_UNSUPPORTED");
   });
 });

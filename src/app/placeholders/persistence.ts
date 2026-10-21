@@ -1,4 +1,4 @@
-import type { Architecture, ArchitectureFile } from "../../domain/types";
+import { SCHEMA_VERSION, type Architecture, type ArchitectureFile } from "../../domain/types";
 import type { EditorStore } from "../../editor/storeTypes";
 import type { Repository, SaveController, SaveStatus, StoredRecord } from "../../persistence/types";
 
@@ -52,7 +52,7 @@ export function createMemoryRepository(now: () => string = () => new Date().toIS
       put(file);
     },
     async create(name) {
-      const file: ArchitectureFile = { schemaVersion: 1, architecture: emptyArchitecture(name, now()) };
+      const file: ArchitectureFile = { schemaVersion: SCHEMA_VERSION, architecture: emptyArchitecture(name, now()) };
       put(file);
       return clone(file);
     },
@@ -60,7 +60,7 @@ export function createMemoryRepository(now: () => string = () => new Date().toIS
       const source = requireFile(id);
       const timestamp = now();
       const file: ArchitectureFile = {
-        schemaVersion: 1,
+        schemaVersion: SCHEMA_VERSION,
         architecture: {
           ...clone(source.architecture),
           id: newId("arch"),
@@ -107,7 +107,7 @@ export function startPlaceholderAutosave(store: EditorStore, repository: Reposit
     if (revision === savedRevision && status !== "error") return true;
     setStatus("saving");
     inFlight = repository
-      .put({ schemaVersion: 1, architecture })
+      .put({ schemaVersion: SCHEMA_VERSION, architecture })
       .then(() => {
         savedRevision = revision;
         setStatus(store.getState().revision === revision ? "saved" : "pending");

@@ -9,7 +9,10 @@ import {
 export type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
 
 /** Future migrations are keyed by the schema version they upgrade from. */
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  // v2 only adds the optional `component.accent`; v1 content is valid as is.
+  1: (raw) => raw,
+};
 
 export function migrateArchitectureFile(raw: unknown): ValidationResult<Record<string, unknown>> {
   if (

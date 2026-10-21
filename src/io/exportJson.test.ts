@@ -28,7 +28,7 @@ describe("architecture JSON export", () => {
 
     expect(json.endsWith("\n")).toBe(true);
     expect(JSON.parse(json)).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       architecture: { id: architecture.id, name: architecture.name },
     });
   });

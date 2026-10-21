@@ -1,3 +1,5 @@
+import type { AccentId } from "./constants";
+import type { PortSide } from "./ports";
 import type {
   AgentBehavior,
   Architecture,
@@ -32,11 +34,17 @@ export type Command =
   | { kind: "setComponentProperty"; id: string; key: string; value: string | undefined }
   | { kind: "updateBehavior"; id: string; patch: Partial<AgentBehavior> }
   | { kind: "setSubtype"; id: string; subtype: "orchestrator" | undefined }
+  | { kind: "setComponentAccent"; ids: string[]; accent: AccentId | undefined }
   | { kind: "addRelationship"; relationship: Relationship }
   | { kind: "updateRelationship"; id: string; patch: { label?: string; description?: string } }
   | { kind: "retypeRelationship"; id: string; type: RelationshipType }
   | { kind: "setRelationshipDirection"; id: string; direction: Direction }
   | { kind: "reverseRelationship"; id: string }
+  | {
+      kind: "setRelationshipPorts";
+      id: string;
+      ports: { source?: PortSide; target?: PortSide } | null;
+    }
   | { kind: "createGroup"; group: { id: string; name: string }; memberIds: string[] }
   | {
       kind: "updateGroup";

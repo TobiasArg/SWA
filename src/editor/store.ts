@@ -1,3 +1,4 @@
+import { DEFAULT_COMMAND_LABELS } from "./commandLabels";
 import { applyCommand, DomainError } from "../domain/commands";
 import { breakCoalescing, createHistory, push, redo as redoHistory, undo as undoHistory } from "../history/history";
 import type { Architecture, Selection, Viewport } from "../domain/types";
@@ -111,7 +112,7 @@ export function createEditorStore(initial: Architecture, now: () => string = () 
           before,
           after,
           ...(options.coalesceKey === undefined ? {} : { coalesceKey: options.coalesceKey }),
-          label: options.label ?? command.kind,
+          label: options.label ?? DEFAULT_COMMAND_LABELS[command.kind] ?? command.kind,
         });
         publish(stateWithArchitecture(after, true));
         return { ok: true, ...(result.summary === undefined ? {} : { summary: result.summary }) };

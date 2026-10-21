@@ -1,4 +1,4 @@
-import { ACCESS_SCOPES, allowedDirections, STORE_KINDS } from "../constants";
+import { ACCESS_SCOPES, allowedDirections, isAccentId, STORE_KINDS } from "../constants";
 import type { Architecture, Component, RelationshipType } from "../types";
 import {
   behaviorNotAllowedIssue,
@@ -6,6 +6,7 @@ import {
   duplicateIdIssue,
   groupAsEndpointIssue,
   groupAsMemberIssue,
+  invalidAccentIssue,
   invalidDirectionIssue,
   invalidPropertyValueIssue,
   invalidSubtypeIssue,
@@ -39,6 +40,10 @@ function validateComponent(component: Component, issues: ValidationIssue[]): voi
     } else if (component.type !== "agent") {
       issues.push(invalidSubtypeIssue(component.id, component.subtype, "not-agent"));
     }
+  }
+
+  if (component.accent !== undefined && !isAccentId(component.accent)) {
+    issues.push(invalidAccentIssue(component.id));
   }
 
   if (component.behavior !== undefined && component.type !== "agent") {

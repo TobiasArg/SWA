@@ -1,4 +1,4 @@
-import { COMPONENT_TYPE_LABELS, RELATIONSHIP_TYPES } from "../constants";
+import { ACCENT_IDS, COMPONENT_TYPE_LABELS, RELATIONSHIP_TYPES } from "../constants";
 import type { ComponentType, RelationshipType } from "../types";
 
 export const VALIDATION_CODES = [
@@ -15,6 +15,7 @@ export const VALIDATION_CODES = [
   "E_SELF_RELATIONSHIP",
   "E_INVALID_DIRECTION",
   "E_INVALID_SUBTYPE",
+  "E_INVALID_ACCENT",
   "E_BEHAVIOR_NOT_ALLOWED",
   "E_INVALID_PROPERTY_VALUE",
   "E_UNKNOWN_MEMBER",
@@ -143,6 +144,14 @@ export function invalidDirectionIssue(
     "E_INVALID_DIRECTION",
     `relationships.${relationshipId}.direction`,
     `Relationship ${displayId(relationshipId)} of type ${RELATIONSHIP_TYPES[type].label} must be ${allowedText}.`,
+  );
+}
+
+export function invalidAccentIssue(componentId: string): ValidationIssue {
+  return makeIssue(
+    "E_INVALID_ACCENT",
+    `components.${componentId}.accent`,
+    `Component ${displayId(componentId)}: accent must be one of ${ACCENT_IDS.join(", ")}.`,
   );
 }
 

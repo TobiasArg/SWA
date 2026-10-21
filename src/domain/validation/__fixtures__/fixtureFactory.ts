@@ -2,7 +2,7 @@ import type { ArchitectureFile } from "../../types";
 
 export function validArchitectureFixture(): ArchitectureFile {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     architecture: {
       id: "arch_fixture",
       name: "Fixture Architecture",

@@ -107,6 +107,31 @@ describe("IndexedDB architecture repository", () => {
     expect(stored?.status === "ok" && stored.file.architecture.name).toBe("Fixture Architecture");
   });
 
+  it("opens a stored v1 record unchanged and rewrites it as v2", async () => {
+    const databaseName = `v1-test-${globalThis.crypto.randomUUID()}`;
+    const database = await openDatabase(databaseName);
+    const v1 = { ...validArchitectureFixture(), schemaVersion: 1 };
+    await database.put("architectures", v1 as unknown as ArchitectureFile);
+    database.close();
+
+    const repository = await openRepository(databaseName);
+    openedRepositories.push(repository);
+    const result = await repository.get(v1.architecture.id);
+    expect(result?.status).toBe("ok");
+    if (result?.status !== "ok") return;
+    expect(result.file.schemaVersion).toBe(2);
+    expect(result.file.architecture.components).toEqual(v1.architecture.components);
+    expect(result.file.architecture.relationships).toEqual(v1.architecture.relationships);
+    expect(result.file.architecture.name).toBe(v1.architecture.name);
+
+    repository.close();
+    openedRepositories.pop();
+    const reopened = await openDatabase(databaseName);
+    const stored = (await reopened.get("architectures", v1.architecture.id)) as { schemaVersion: number };
+    reopened.close();
+    expect(stored.schemaVersion).toBe(2);
+  });
+
   it("reports missing records with a repository error", async () => {
     const repository = await createRepository();
     await expect(repository.duplicate("arch_missing")).rejects.toBeInstanceOf(RecordNotFoundError);

@@ -1,4 +1,5 @@
 import {
+  ACCENT_IDS,
   ACCESS_SCOPES,
   allowedDirections,
   DUPLICATE_OFFSET,
@@ -8,7 +9,9 @@ import {
   RELATIONSHIP_TYPES,
   STORE_KINDS,
   defaultDirection,
+  isAccentId,
 } from "./constants";
+import { isPortSide, type PortSide } from "./ports";
 import { DomainError, type Command, type CommandResult } from "./commands";
 import { computeGroupBounds, recomputeGroupBounds } from "./geometry";
 import type {
@@ -528,6 +531,25 @@ function setRelationshipDirection(
   };
 }
 
+/** Swaps `visual.ports.source/target`, preserving other keys and unknown values verbatim. */
+function swapPortPins(visual: Relationship["visual"]): Relationship["visual"] {
+  const ports = visual?.ports;
+  if (visual === undefined || ports === null || typeof ports !== "object" || Array.isArray(ports)) {
+    return visual;
+  }
+  const { source, target, ...rest } = ports as Record<string, unknown>;
+  const hasSource = Object.prototype.hasOwnProperty.call(ports, "source");
+  const hasTarget = Object.prototype.hasOwnProperty.call(ports, "target");
+  return {
+    ...visual,
+    ports: {
+      ...rest,
+      ...(hasTarget ? { source: target } : {}),
+      ...(hasSource ? { target: source } : {}),
+    },
+  };
+}
+
 function reverseRelationship(architecture: Architecture, id: string): Architecture {
   const relationship = relationshipById(architecture, id);
   if (relationship.type !== "generic" || relationship.direction !== "directed") {
@@ -535,12 +557,73 @@ function reverseRelationship(architecture: Architecture, id: string): Architectu
   }
   return {
     ...architecture,
-    relationships: architecture.relationships.map((candidate) =>
-      candidate.id === id
-        ? { ...candidate, sourceId: candidate.targetId, targetId: candidate.sourceId }
-        : candidate,
-    ),
+    relationships: architecture.relationships.map((candidate) => {
+      if (candidate.id !== id) return candidate;
+      const reversed: Relationship = {
+        ...candidate,
+        sourceId: candidate.targetId,
+        targetId: candidate.sourceId,
+      };
+      const visual = swapPortPins(candidate.visual);
+      if (visual !== undefined) reversed.visual = visual;
+      return reversed;
+    }),
   };
+}
+
+function setRelationshipPorts(
+  architecture: Architecture,
+  id: string,
+  ports: { source?: PortSide; target?: PortSide } | null,
+): Architecture {
+  const relationship = relationshipById(architecture, id);
+  let nextPorts: { source?: PortSide; target?: PortSide } | undefined;
+  if (ports !== null) {
+    nextPorts = {};
+    for (const key of ["source", "target"] as const) {
+      const side = ports[key];
+      if (side === undefined) continue;
+      if (!isPortSide(side)) {
+        fail("E_INVALID_PORT", `Relationship ${id}: port side must be one of top, right, bottom, left.`);
+      }
+      nextPorts[key] = side;
+    }
+  }
+
+  const visual: Record<string, unknown> = { ...relationship.visual };
+  if (nextPorts === undefined) delete visual.ports;
+  else visual.ports = nextPorts;
+  const updated: Relationship = { ...relationship };
+  if (Object.keys(visual).length === 0) delete updated.visual;
+  else updated.visual = visual;
+
+  if (JSON.stringify(relationship) === JSON.stringify(updated)) return architecture;
+  return {
+    ...architecture,
+    relationships: architecture.relationships.map((candidate) => (candidate.id === id ? updated : candidate)),
+  };
+}
+
+function setComponentAccent(
+  architecture: Architecture,
+  ids: string[],
+  accent: Component["accent"],
+): Architecture {
+  for (const id of ids) componentById(architecture, id);
+  if (accent !== undefined && !isAccentId(accent)) {
+    fail("E_INVALID_ACCENT", `Accent must be one of ${ACCENT_IDS.join(", ")}.`);
+  }
+  const targets = new Set(ids);
+  let changed = false;
+  const components = architecture.components.map((candidate) => {
+    if (!targets.has(candidate.id) || candidate.accent === accent) return candidate;
+    changed = true;
+    const updated = { ...candidate };
+    if (accent === undefined) delete updated.accent;
+    else updated.accent = accent;
+    return updated;
+  });
+  return changed ? { ...architecture, components } : architecture;
 }
 
 function createGroup(
@@ -641,6 +724,9 @@ export function applyCommand(architecture: Architecture, command: Command): Comm
       if (component.type !== "agent" && component.behavior !== undefined) {
         fail("E_BEHAVIOR_NOT_ALLOWED", `Component ${component.id} (${component.type}) cannot have agent behavior fields.`);
       }
+      if (component.accent !== undefined && !isAccentId(component.accent)) {
+        fail("E_INVALID_ACCENT", `Component ${component.id}: accent must be one of ${ACCENT_IDS.join(", ")}.`);
+      }
       assertName(component.name, "Component");
       assertPosition(component.position);
       if (component.size !== undefined) {
@@ -727,6 +813,9 @@ export function applyCommand(architecture: Architecture, command: Command): Comm
       };
     }
 
+    case "setComponentAccent":
+      return { architecture: setComponentAccent(architecture, command.ids, command.accent) };
+
     case "addRelationship":
       return { architecture: addRelationship(architecture, command.relationship) };
 
@@ -741,6 +830,9 @@ export function applyCommand(architecture: Architecture, command: Command): Comm
 
     case "reverseRelationship":
       return { architecture: reverseRelationship(architecture, command.id) };
+
+    case "setRelationshipPorts":
+      return { architecture: setRelationshipPorts(architecture, command.id, command.ports) };
 
     case "createGroup":
       return {

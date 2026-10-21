@@ -1,4 +1,5 @@
 import { normalizeArchitecture } from "./normalize";
+import { SCHEMA_VERSION } from "./types";
 import type { AgentBehavior, Architecture, ArchitectureFile, Component, Group, Relationship } from "./types";
 
 function serializeBehavior(behavior: AgentBehavior): AgentBehavior {
@@ -35,6 +36,7 @@ function serializeComponent(component: Component): Component {
     ...(component.size === undefined
       ? {}
       : { size: { width: component.size.width, height: component.size.height } }),
+    ...(component.accent === undefined ? {} : { accent: component.accent }),
     ...(component.properties === undefined
       ? {}
       : {
@@ -96,7 +98,7 @@ function serializeArchitecture(architecture: Architecture): Architecture {
 
 export function toArchitectureFile(architecture: Architecture): ArchitectureFile {
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     architecture: serializeArchitecture(normalizeArchitecture(architecture)),
   };
 }

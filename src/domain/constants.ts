@@ -69,3 +69,47 @@ export type StoreKind = (typeof STORE_KINDS)[number];
 
 export const ACCESS_SCOPES = ["shared", "private"] as const;
 export type AccessScope = (typeof ACCESS_SCOPES)[number];
+
+export const ACCENT_IDS = [
+  "tomato",
+  "coral",
+  "tangerine",
+  "mustard",
+  "olive",
+  "fern",
+  "mint",
+  "teal",
+  "lagoon",
+  "sky",
+  "denim",
+  "indigo",
+  "lavender",
+  "plum",
+  "rose",
+  "cocoa",
+] as const;
+export type AccentId = (typeof ACCENT_IDS)[number];
+
+/** Persisted IDs are stable; never rename or recolor an ID's hue family (UI v2 §5.4). */
+export const ACCENTS: Record<AccentId, { label: string; ink: string; tint: string }> = {
+  tomato: { label: "Tomato", ink: "#B23A2B", tint: "#F9D9D3" },
+  coral: { label: "Coral", ink: "#A8452F", tint: "#FADFD2" },
+  tangerine: { label: "Tangerine", ink: "#9A4D10", tint: "#FBE2C8" },
+  mustard: { label: "Mustard", ink: "#7D5F00", tint: "#F6E7B0" },
+  olive: { label: "Olive", ink: "#5F6512", tint: "#E9EBC2" },
+  fern: { label: "Fern", ink: "#3F6B2A", tint: "#D9EBCF" },
+  mint: { label: "Mint", ink: "#1F6E55", tint: "#CDEDE0" },
+  teal: { label: "Teal", ink: "#106A6E", tint: "#C9EAEA" },
+  lagoon: { label: "Lagoon", ink: "#0F6584", tint: "#CBE6F2" },
+  sky: { label: "Sky", ink: "#2C5F9E", tint: "#D3E3F6" },
+  denim: { label: "Denim", ink: "#3B4F8F", tint: "#D9DEF2" },
+  indigo: { label: "Indigo", ink: "#4F46A5", tint: "#DFDCF5" },
+  lavender: { label: "Lavender", ink: "#6A4AA0", tint: "#E6DCF4" },
+  plum: { label: "Plum", ink: "#86397E", tint: "#F1D8EC" },
+  rose: { label: "Rose", ink: "#A3355A", tint: "#F8D6E1" },
+  cocoa: { label: "Cocoa", ink: "#6E4B35", tint: "#EBDDD1" },
+};
+
+export function isAccentId(value: unknown): value is AccentId {
+  return typeof value === "string" && (ACCENT_IDS as readonly string[]).includes(value);
+}

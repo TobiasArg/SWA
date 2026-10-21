@@ -1,4 +1,4 @@
-import type { Architecture, ArchitectureFile } from "../domain/types";
+import { SCHEMA_VERSION, type Architecture, type ArchitectureFile } from "../domain/types";
 
 /**
  * Shared helpers for the WS-E tests (app, library, toolbar). jsdom does not implement
@@ -35,7 +35,7 @@ export function makeArchitecture(overrides: Partial<Architecture> = {}): Archite
 }
 
 export function makeFile(overrides: Partial<Architecture> = {}): ArchitectureFile {
-  return { schemaVersion: 1, architecture: makeArchitecture(overrides) };
+  return { schemaVersion: SCHEMA_VERSION, architecture: makeArchitecture(overrides) };
 }
 
 export function jsonFile(content: unknown, name = "architecture.json"): File {

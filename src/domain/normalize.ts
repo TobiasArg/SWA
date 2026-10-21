@@ -67,6 +67,7 @@ function normalizeComponent(component: Component): Component {
     ...(links === undefined ? {} : { links }),
     position: { x: component.position.x, y: component.position.y },
     ...(size === undefined ? {} : { size }),
+    ...(component.accent === undefined ? {} : { accent: component.accent }),
     ...(properties === undefined || Object.keys(properties).length === 0 ? {} : { properties }),
     ...(behavior === undefined ? {} : { behavior }),
   };

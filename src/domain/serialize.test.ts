@@ -98,4 +98,41 @@ describe("toArchitectureFile", () => {
     expect(Object.keys(toArchitectureFile(input).architecture)).not.toContain("description");
     expect(Object.keys(toArchitectureFile(input).architecture.components[0]!)).not.toContain("description");
   });
+
+  it("writes the current schema version and emits accent after size, only when defined", () => {
+    const input: Architecture = {
+      id: "arch_test",
+      name: "Test",
+      createdAt: "2026-10-21T00:00:00Z",
+      updatedAt: "2026-10-21T00:00:00Z",
+      components: [
+        {
+          id: "cmp_1",
+          type: "tool",
+          name: "Tool",
+          position: { x: 0, y: 0 },
+          size: { width: 200, height: 72 },
+          accent: "teal",
+          properties: { a: "b" },
+        },
+        { id: "cmp_2", type: "tool", name: "Plain", position: { x: 0, y: 0 } },
+      ],
+      relationships: [],
+      groups: [],
+    };
+    const file = toArchitectureFile(input);
+    expect(file.schemaVersion).toBe(2);
+    expect(Object.keys(file.architecture.components[0]!)).toEqual([
+      "id",
+      "type",
+      "name",
+      "position",
+      "size",
+      "accent",
+      "properties",
+    ]);
+    expect(file.architecture.components[1]).not.toHaveProperty("accent");
+    const json = JSON.stringify(file);
+    expect(JSON.stringify(toArchitectureFile(JSON.parse(json).architecture))).toBe(json);
+  });
 });

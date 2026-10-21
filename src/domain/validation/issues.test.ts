@@ -40,6 +40,7 @@ describe("validation issue contracts", () => {
       "E_SELF_RELATIONSHIP",
       "E_INVALID_DIRECTION",
       "E_INVALID_SUBTYPE",
+      "E_INVALID_ACCENT",
       "E_BEHAVIOR_NOT_ALLOWED",
       "E_INVALID_PROPERTY_VALUE",
       "E_UNKNOWN_MEMBER",

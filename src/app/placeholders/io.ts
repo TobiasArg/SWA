@@ -1,4 +1,4 @@
-import type { Architecture, ArchitectureFile } from "../../domain/types";
+import { SCHEMA_VERSION, type Architecture, type ArchitectureFile } from "../../domain/types";
 import {
   fileTooLargeIssue,
   jsonParseIssue,
@@ -38,7 +38,7 @@ export function download(blob: Blob, filename: string): void {
 }
 
 export function placeholderExportArchitectureJson(architecture: Architecture): void {
-  const file: ArchitectureFile = { schemaVersion: 1, architecture };
+  const file: ArchitectureFile = { schemaVersion: SCHEMA_VERSION, architecture };
   const json = `${JSON.stringify(file, null, 2)}\n`;
   download(new Blob([json], { type: "application/json" }), `${slug(architecture.name) || "architecture"}.json`);
 }
@@ -80,7 +80,7 @@ export async function placeholderImportArchitectureFile(
   }
   const record = raw as { schemaVersion?: unknown; architecture: unknown };
   if (typeof record.schemaVersion !== "number") return { ok: false, issues: [schemaVersionMissingIssue()] };
-  if (record.schemaVersion !== 1) {
+  if (record.schemaVersion < 1 || record.schemaVersion > SCHEMA_VERSION) {
     return { ok: false, issues: [schemaVersionUnsupportedIssue(record.schemaVersion)] };
   }
   const architecture = record.architecture as Architecture;
@@ -98,7 +98,7 @@ export async function placeholderImportArchitectureFile(
 
   const renamed = await repository.exists(architecture.id);
   const imported: ArchitectureFile = {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     architecture: {
       ...architecture,
       ...(renamed ? { id: `arch_${crypto.randomUUID()}`, name: `${architecture.name} (imported)` } : {}),

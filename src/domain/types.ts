@@ -1,7 +1,9 @@
-export const SCHEMA_VERSION = 1 as const;
+import type { AccentId } from "./constants";
+
+export const SCHEMA_VERSION = 2 as const;
 
 export interface ArchitectureFile {
-  schemaVersion: 1;
+  schemaVersion: 2;
   architecture: Architecture;
 }
 
@@ -57,6 +59,8 @@ export interface Component {
   links?: ExternalLink[];
   position: Position;
   size?: Size;
+  /** Presentation only; absent means the type default. Never set on groups. */
+  accent?: AccentId;
   properties?: Record<string, string>;
   behavior?: AgentBehavior;
 }

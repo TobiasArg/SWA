@@ -79,6 +79,8 @@ const componentSchema = z.object({
   ).optional(),
   position: positionSchema,
   size: sizeSchema.optional(),
+  // Kept as a string here so semantic validation can issue E_INVALID_ACCENT.
+  accent: text(64).optional(),
   properties: z.record(z.string().max(MAX_TEXT_LENGTH, limitMarker("text", MAX_TEXT_LENGTH)), text()).optional(),
   behavior: behaviorSchema.optional(),
 });

@@ -28,6 +28,7 @@ export {
   selfRelationshipIssue,
   invalidDirectionIssue,
   invalidSubtypeIssue,
+  invalidAccentIssue,
   behaviorNotAllowedIssue,
   invalidPropertyValueIssue,
   unknownMemberIssue,

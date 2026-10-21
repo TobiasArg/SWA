@@ -152,6 +152,17 @@ describe("exportArchitectureMarkdown", () => {
     expect(md).not.toContain("2026-01-01");
   });
 
+  it("does not emit accent colors", () => {
+    const plain = populated();
+    const accented = populated();
+    accented.components.forEach((c, index) => {
+      c.accent = index % 2 === 0 ? "teal" : "plum";
+    });
+    const md = exportArchitectureMarkdown(accented);
+    expect(md).toBe(exportArchitectureMarkdown(plain));
+    expect(md).not.toMatch(/accent|teal|plum/i);
+  });
+
   it("states that relationships are not execution semantics", () => {
     const md = exportArchitectureMarkdown(populated());
     expect(md).toContain("They do not represent execution order, control flow, or data flow.");
