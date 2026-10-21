@@ -69,6 +69,9 @@ function readsAs(components: Component[], type: RelationshipType, sourceId: stri
   });
 }
 
+/** Static note: keyboard connections never pin ports (UI v2 §8.4, D3). */
+export const PORTS_NOTE = "Ports are chosen automatically from the components' positions.";
+
 export function ConnectDialog({ open, sourceId, onClose }: ConnectDialogProps) {
   const store = useEditorStore();
   const components = useEditorState(selectComponents);
@@ -234,6 +237,7 @@ export function ConnectDialog({ open, sourceId, onClose }: ConnectDialogProps) {
           <p className="sa-connect-dialog__note" id={noteId}>
             {directionNote(type)}
           </p>
+          <p className="sa-connect-dialog__note">{PORTS_NOTE}</p>
         </div>
         <div className="sa-connect-dialog__field">
           <label className="sa-connect-dialog__label" htmlFor={targetSelectId}>

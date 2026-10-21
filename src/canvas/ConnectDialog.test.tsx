@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { installDialogPolyfill } from "../app/testUtils";
 import { EditorProvider } from "../editor/context";
-import { ConnectDialog, connectTargets } from "./ConnectDialog";
+import { ConnectDialog, PORTS_NOTE, connectTargets } from "./ConnectDialog";
 import { createFakeStore, type FakeEditorStore } from "./testing/fakeStore";
 import { buildFixtureArchitecture, emptyArchitecture, makeComponent } from "./testing/fixtures";
 
@@ -48,6 +48,14 @@ describe("ConnectDialog", () => {
     ]);
     expect(screen.getByText("CRM delegates to Discovery Agent.")).toBeInTheDocument();
     expect(screen.getByText(/^Directed \(fixed by type\)/)).toBeInTheDocument();
+  });
+
+  it("notes under the direction note that ports are chosen automatically", () => {
+    const store = createFakeStore(buildFixtureArchitecture());
+    renderDialog(store, "cmp_crm");
+    const note = screen.getByText("Ports are chosen automatically from the components' positions.");
+    expect(note).toBe(screen.getByText(PORTS_NOTE));
+    expect(note.previousElementSibling).toHaveTextContent(/^Directed \(fixed by type\)/);
   });
 
   it("dispatches ONE addRelationship with the default direction, selects it and closes", async () => {

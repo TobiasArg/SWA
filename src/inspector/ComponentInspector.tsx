@@ -2,6 +2,7 @@ import { COMPONENT_TYPE_LABELS } from "../domain/constants";
 import type { Architecture, Component } from "../domain/types";
 import { Button } from "../ui/Button";
 import type { IconName } from "../ui/icons";
+import { AccentPicker } from "./AccentPicker";
 import { AgentIdentityFields, AgentSections } from "./AgentSections";
 import { LinksField } from "./fields/LinksField";
 import { NotesField } from "./fields/NotesField";
@@ -110,6 +111,10 @@ export function ComponentInspector({ architecture, component }: ComponentInspect
           <TypeFields component={component} />
         </InspectorSection>
       )}
+      {/* Accent is decoration only: border and details, never the fill (UI v2 §6, C7). */}
+      <InspectorSection title="Appearance" defaultOpen>
+        <AccentPicker component={component} />
+      </InspectorSection>
       <InspectorSection title="Relationships" defaultOpen>
         <RelationshipList architecture={architecture} componentId={id} />
       </InspectorSection>
