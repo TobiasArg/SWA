@@ -19,6 +19,7 @@ function renderLibrary(repository: Repository, overrides: Partial<AppServices> =
   const services: AppServices = {
     ...placeholderServices,
     exportArchitectureJson: vi.fn(),
+    exportArchitectureMarkdown: vi.fn(),
     exportRawJson: vi.fn(),
     requestPersistentStorage: vi.fn(),
     ...overrides,
@@ -155,11 +156,18 @@ describe("LibraryScreen", () => {
     await user.click(await screen.findByRole("button", { name: "Export JSON of New" }));
     expect(services.exportArchitectureJson).toHaveBeenCalledWith(expect.objectContaining({ id: "arch_new" }));
 
+    await user.click(screen.getByRole("button", { name: "Export Markdown of Old" }));
+    expect(services.exportArchitectureMarkdown).toHaveBeenCalledTimes(1);
+    expect(services.exportArchitectureMarkdown).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "arch_old", name: "Old" }),
+    );
+
     const damagedRow = screen.getByText("Broken").closest("tr")!;
     expect(within(damagedRow).getByText("Can't be opened")).toBeInTheDocument();
     expect(within(damagedRow).getByText("The file uses format version 9.")).toBeInTheDocument();
     expect(within(damagedRow).queryByRole("link")).not.toBeInTheDocument();
     expect(within(damagedRow).queryByRole("button", { name: /Rename/ })).not.toBeInTheDocument();
+    expect(within(damagedRow).queryByRole("button", { name: /Markdown/ })).not.toBeInTheDocument();
     await user.click(within(damagedRow).getByRole("button", { name: "Export raw JSON of Broken" }));
     expect(services.exportRawJson).toHaveBeenCalledWith(raw, "Broken");
   });

@@ -48,6 +48,8 @@ export interface AppServices {
   subscribeToRepositoryChanges(listener: () => void): () => void;
   importArchitectureFile(file: File, repository: Repository, now: () => string): Promise<ImportResult>;
   exportArchitectureJson(architecture: Architecture): void;
+  /** Downloads the architecture as a human-readable Markdown document (`{slug}.md`). */
+  exportArchitectureMarkdown(architecture: Architecture): void;
   /** Downloads a damaged record's raw stored JSON as `{slug}-raw.json` (TD 9.1). */
   exportRawJson(raw: unknown, name: string): void;
   exportPng(api: CanvasApi, name: string): Promise<void>;

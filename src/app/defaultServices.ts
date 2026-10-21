@@ -6,6 +6,7 @@ import type { DispatchResult } from "../editor/storeTypes";
 import { Inspector } from "../inspector/Inspector";
 import { exportPng } from "../io/exportPng";
 import { downloadArchitectureJson, downloadRawArchitectureJson } from "../io/exportJson";
+import { downloadArchitectureMarkdown } from "../io/exportMarkdown";
 import { importArchitectureFile } from "../io/importJson";
 import { startAutosave } from "../persistence/autosave";
 import { openRepository } from "../persistence/repository";
@@ -16,6 +17,7 @@ import { placeholderActions } from "./placeholders/actions";
 import { createPlaceholderEditorStore } from "./placeholders/editorStore";
 import {
   placeholderExportArchitectureJson,
+  placeholderExportArchitectureMarkdown,
   placeholderExportPng,
   placeholderExportRawJson,
   placeholderImportArchitectureFile,
@@ -54,6 +56,7 @@ export const defaultServices: AppServices = {
   subscribeToRepositoryChanges: (listener) => subscribeArchitectureChanges(() => listener()),
   importArchitectureFile,
   exportArchitectureJson: downloadArchitectureJson,
+  exportArchitectureMarkdown: downloadArchitectureMarkdown,
   exportRawJson: downloadRawArchitectureJson,
   exportPng,
   requestPersistentStorage,
@@ -83,6 +86,7 @@ export const placeholderServices: AppServices = {
   subscribeToRepositoryChanges: () => () => undefined,
   importArchitectureFile: placeholderImportArchitectureFile,
   exportArchitectureJson: placeholderExportArchitectureJson,
+  exportArchitectureMarkdown: placeholderExportArchitectureMarkdown,
   exportRawJson: placeholderExportRawJson,
   exportPng: placeholderExportPng,
   requestPersistentStorage,

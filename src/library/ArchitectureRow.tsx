@@ -43,6 +43,8 @@ export interface ArchitectureRowProps {
   onRename(file: ArchitectureFile): void;
   onDuplicate(file: ArchitectureFile): void;
   onExport(record: StoredRecord): void;
+  /** Downloads the architecture as a Markdown document (OK rows only). */
+  onExportMarkdown(file: ArchitectureFile): void;
   onDelete(record: StoredRecord): void;
 }
 
@@ -50,7 +52,15 @@ export function recordName(record: StoredRecord): string {
   return record.status === "ok" ? record.file.architecture.name : record.name;
 }
 
-export function ArchitectureRow({ record, href, onRename, onDuplicate, onExport, onDelete }: ArchitectureRowProps) {
+export function ArchitectureRow({
+  record,
+  href,
+  onRename,
+  onDuplicate,
+  onExport,
+  onExportMarkdown,
+  onDelete,
+}: ArchitectureRowProps) {
   const name = recordName(record);
 
   if (record.status === "damaged") {
@@ -69,17 +79,19 @@ export function ArchitectureRow({ record, href, onRename, onDuplicate, onExport,
         <td className="sa-library-row__time">—</td>
         <td className="sa-library-row__counts">—</td>
         <td className="sa-library-row__actions">
-          <Button size="compact" aria-label={`Export raw JSON of ${name}`} onClick={() => onExport(record)}>
-            Export raw JSON
-          </Button>
-          <Button
-            size="compact"
-            variant="destructive-outline"
-            aria-label={`Delete ${name}`}
-            onClick={() => onDelete(record)}
-          >
-            Delete
-          </Button>
+          <div className="sa-library-row__action-list">
+            <Button size="compact" aria-label={`Export raw JSON of ${name}`} onClick={() => onExport(record)}>
+              Export raw JSON
+            </Button>
+            <Button
+              size="compact"
+              variant="destructive-outline"
+              aria-label={`Delete ${name}`}
+              onClick={() => onDelete(record)}
+            >
+              Delete
+            </Button>
+          </div>
         </td>
       </tr>
     );
@@ -101,23 +113,28 @@ export function ArchitectureRow({ record, href, onRename, onDuplicate, onExport,
       </td>
       <td className="sa-library-row__counts">{contentSummary(file)}</td>
       <td className="sa-library-row__actions">
-        <Button size="compact" aria-label={`Rename ${name}`} onClick={() => onRename(file)}>
-          Rename
-        </Button>
-        <Button size="compact" aria-label={`Duplicate ${name}`} onClick={() => onDuplicate(file)}>
-          Duplicate
-        </Button>
-        <Button size="compact" aria-label={`Export JSON of ${name}`} onClick={() => onExport(record)}>
-          Export JSON
-        </Button>
-        <Button
-          size="compact"
-          variant="destructive-outline"
-          aria-label={`Delete ${name}`}
-          onClick={() => onDelete(record)}
-        >
-          Delete
-        </Button>
+        <div className="sa-library-row__action-list">
+          <Button size="compact" aria-label={`Rename ${name}`} onClick={() => onRename(file)}>
+            Rename
+          </Button>
+          <Button size="compact" aria-label={`Duplicate ${name}`} onClick={() => onDuplicate(file)}>
+            Duplicate
+          </Button>
+          <Button size="compact" aria-label={`Export JSON of ${name}`} onClick={() => onExport(record)}>
+            Export JSON
+          </Button>
+          <Button size="compact" aria-label={`Export Markdown of ${name}`} onClick={() => onExportMarkdown(file)}>
+            Export Markdown
+          </Button>
+          <Button
+            size="compact"
+            variant="destructive-outline"
+            aria-label={`Delete ${name}`}
+            onClick={() => onDelete(record)}
+          >
+            Delete
+          </Button>
+        </div>
       </td>
     </tr>
   );

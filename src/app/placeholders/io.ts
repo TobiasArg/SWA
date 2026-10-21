@@ -10,8 +10,9 @@ import type { ImportResult } from "../../io/types";
 import type { Repository } from "../../persistence/types";
 
 /**
- * Placeholders for `io/importJson.ts`, `io/exportJson.ts` and `io/download.ts` (WS-B).
- * The import only checks the envelope; full validation lands with WS-B.
+ * Placeholders for `io/importJson.ts`, `io/exportJson.ts`, `io/exportMarkdown.ts` and
+ * `io/download.ts` (WS-B). The import only checks the envelope; full validation lands with
+ * WS-B, and the Markdown export only writes a title and the element counts.
  */
 
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -40,6 +41,19 @@ export function placeholderExportArchitectureJson(architecture: Architecture): v
   const file: ArchitectureFile = { schemaVersion: 1, architecture };
   const json = `${JSON.stringify(file, null, 2)}\n`;
   download(new Blob([json], { type: "application/json" }), `${slug(architecture.name) || "architecture"}.json`);
+}
+
+export function placeholderExportArchitectureMarkdown(architecture: Architecture): void {
+  const { name, components, relationships, groups } = architecture;
+  const markdown = [
+    `# ${name}`,
+    "",
+    `- Components: ${components.length}`,
+    `- Relationships: ${relationships.length}`,
+    `- Groups: ${groups.length}`,
+    "",
+  ].join("\n");
+  download(new Blob([markdown], { type: "text/markdown" }), `${slug(name) || "architecture"}.md`);
 }
 
 export function placeholderExportRawJson(raw: unknown, name: string): void {

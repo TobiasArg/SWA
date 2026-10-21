@@ -132,11 +132,18 @@
 
 .sa-library-row__actions {
   text-align: right;
-  white-space: nowrap;
 }
 
-.sa-library-row__actions .sa-button + .sa-button {
-  margin-left: var(--sa-space-2);
+/* Wraps onto a second line instead of overflowing the card when the row runs out of room. */
+.sa-library-row__action-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sa-space-2);
+}
+
+.sa-library-row__action-list .sa-button {
+  white-space: nowrap;
 }
 
 .sa-library-row--damaged .sa-library-row__damaged-name {
@@ -341,16 +348,8 @@
     margin-top: var(--sa-space-1);
   }
 
-  .sa-library-row__actions {
-    white-space: normal;
-  }
-
-  .sa-library-row__actions .sa-button {
-    margin: var(--sa-space-1) var(--sa-space-2) var(--sa-space-1) 0;
-  }
-
-  .sa-library-row__actions .sa-button + .sa-button {
-    margin-left: 0;
+  .sa-library-row__action-list {
+    justify-content: flex-start;
   }
 }
 

@@ -43,6 +43,7 @@ function renderToolbar(store: EditorStore, overrides: Partial<ToolbarProps> = {}
     onConnect: vi.fn(),
     onDelete: vi.fn(),
     onExportJson: vi.fn(),
+    onExportMarkdown: vi.fn(),
     onExportPng: vi.fn(async () => undefined),
     onImport: vi.fn(),
     ...overrides,
@@ -173,12 +174,33 @@ describe("Toolbar", () => {
     expect(screen.getByRole("button", { name: "Export" })).toHaveFocus();
   });
 
+  it("offers a Markdown export reachable by keyboard, closing the menu and refocusing the trigger", async () => {
+    const user = userEvent.setup();
+    const { props } = renderToolbar(twoComponents());
+    const trigger = screen.getByRole("button", { name: "Export" });
+    await user.click(trigger);
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "JSON file",
+      "Markdown document",
+      "PNG image",
+    ]);
+    expect(screen.getByRole("menuitem", { name: "JSON file" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Markdown document" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(props.onExportMarkdown).toHaveBeenCalledTimes(1);
+    expect(props.onExportJson).not.toHaveBeenCalled();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("disables PNG export when there is nothing to export", async () => {
     const user = userEvent.setup();
     renderToolbar(createPlaceholderEditorStore(makeArchitecture()));
     await user.click(screen.getByRole("button", { name: "Export" }));
     expect(screen.getByRole("menuitem", { name: /PNG image/ })).toBeDisabled();
     expect(screen.getByText("Nothing to export")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Markdown document" })).toBeEnabled();
   });
 
   it("passes the chosen import file on", async () => {

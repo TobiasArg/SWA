@@ -362,6 +362,7 @@ function EditorWorkspace({
           onConnect={openConnectDialog}
           onDelete={() => services.actions.deleteSelection(store, feedback)}
           onExportJson={() => services.exportArchitectureJson(store.getState().architecture)}
+          onExportMarkdown={() => services.exportArchitectureMarkdown(store.getState().architecture)}
           onExportPng={exportPng}
           onImport={(file) => void importFile(file)}
         />

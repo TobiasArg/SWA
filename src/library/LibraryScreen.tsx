@@ -283,6 +283,7 @@ export function LibraryScreen({
                         onRename={(file) => setDialog({ kind: "rename", file })}
                         onDuplicate={(file) => void duplicate(file)}
                         onExport={exportRecord}
+                        onExportMarkdown={(file) => services.exportArchitectureMarkdown(file.architecture)}
                         onDelete={(target) => setDialog({ kind: "delete", record: target })}
                       />
                     ))}

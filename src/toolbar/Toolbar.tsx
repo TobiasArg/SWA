@@ -24,6 +24,8 @@ export interface ToolbarProps {
   onConnect(): void;
   onDelete(): void;
   onExportJson(): void;
+  /** Downloads the architecture as a Markdown document; always available. */
+  onExportMarkdown(): void;
   onExportPng(): Promise<void>;
   onImport(file: File): void;
 }
@@ -128,10 +130,12 @@ function ArchitectureNameInput() {
 function ExportMenu({
   canExportPng,
   onExportJson,
+  onExportMarkdown,
   onExportPng,
 }: {
   canExportPng: boolean;
   onExportJson(): void;
+  onExportMarkdown(): void;
   onExportPng(): Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -215,6 +219,17 @@ function ExportMenu({
             type="button"
             role="menuitem"
             className="sa-menu__item"
+            onClick={() => {
+              onExportMarkdown();
+              close(true);
+            }}
+          >
+            Markdown document
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="sa-menu__item"
             disabled={!canExportPng || exporting}
             onClick={() => void exportPng()}
           >
@@ -239,6 +254,7 @@ export function Toolbar({
   onConnect,
   onDelete,
   onExportJson,
+  onExportMarkdown,
   onExportPng,
   onImport,
 }: ToolbarProps) {
@@ -281,7 +297,12 @@ export function Toolbar({
           <ToolButton label="Delete" shortcut="Delete" icon={<Glyph name="trash" />} disabled={!hasSelection} onClick={onDelete} />
         </div>
         <span className="sa-toolbar__divider" aria-hidden />
-        <ExportMenu canExportPng={canExportPng} onExportJson={onExportJson} onExportPng={onExportPng} />
+        <ExportMenu
+          canExportPng={canExportPng}
+          onExportJson={onExportJson}
+          onExportMarkdown={onExportMarkdown}
+          onExportPng={onExportPng}
+        />
         <Button variant="ghost" aria-label="Import" onClick={() => fileInput.current?.click()}>
           <Glyph name="import" />
           <span className="sa-toolbar__collapsible-label">Import</span>

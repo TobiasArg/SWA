@@ -33,6 +33,7 @@ function renderApp(overrides: Partial<AppServices> = {}) {
     ...placeholderServices,
     openRepository: async () => repository,
     exportArchitectureJson: vi.fn(),
+    exportArchitectureMarkdown: vi.fn(),
     exportPng: vi.fn(async () => undefined),
     requestPersistentStorage: vi.fn(),
     ...overrides,
@@ -194,6 +195,12 @@ describe("App shell", () => {
     await user.click(screen.getByRole("button", { name: "Export" }));
     await user.click(screen.getByRole("menuitem", { name: "JSON file" }));
     expect(services.exportArchitectureJson).toHaveBeenCalledWith(expect.objectContaining({ id: "arch_1" }));
+
+    await user.click(screen.getByRole("button", { name: "Export" }));
+    await user.click(screen.getByRole("menuitem", { name: "Markdown document" }));
+    expect(services.exportArchitectureMarkdown).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "arch_1", name: "Lead Hunting Engine" }),
+    );
 
     await user.click(screen.getByRole("button", { name: "Export" }));
     await user.click(screen.getByRole("menuitem", { name: "PNG image" }));
