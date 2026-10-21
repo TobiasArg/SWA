@@ -61,7 +61,7 @@ Dev: `typescript`, `vite`, `@vitejs/plugin-react`, `vitest`, `jsdom`, `@testing-
 
 No other dependency may be added without a coordinator decision (record it in this file's section 16 or an ADR note in the PR).
 
-**Versions:** npm `latest` on 2026-10-21 was: `@xyflow/react` 12.12.0, `react` 19.3.1, `vite` 8.3.5, `zod` 4.6.7, `idb` 8.0.4, `html-to-image` 1.11.13 (pin 1.11.11 instead, see 10), `vitest` 5.0.5, `@playwright/test` 1.64.1, `typescript` 7.0.2. Use the versions the Vite `react-ts` template installs on the day of scaffolding, and commit the lockfile. If TypeScript 7 breaks the template's ESLint/`typescript-eslint` toolchain, pin the newest TypeScript major that the toolchain supports and note it in the scaffolding commit. Use caret ranges for everything except `html-to-image`.
+**Versions:** npm `latest` on 2026-10-21 was: `@xyflow/react` 12.12.0, `react` 19.3.1, `vite` 8.3.5, `zod` 4.6.7, `idb` 8.0.4, `html-to-image` 1.11.13 (pin 1.11.11 instead, see 10), `react-markdown` 10.1.0 (installed; range `^10.1.0`), `vitest` 5.0.5, `@playwright/test` 1.64.1, `typescript` 7.0.2. Use the versions the Vite `react-ts` template installs on the day of scaffolding, and commit the lockfile. If TypeScript 7 breaks the template's ESLint/`typescript-eslint` toolchain, pin the newest TypeScript major that the toolchain supports and note it in the scaffolding commit. Use caret ranges for everything except `html-to-image`.
 
 ---
 
@@ -821,13 +821,6 @@ export function startAutosave(store: EditorStore, repo: Repository): SaveControl
 - Exports from the in-memory state (no save required). Available in the editor toolbar and in each library row.
 - Library export of a **damaged** record downloads its raw stored JSON (`{slug}-raw.json`) so data is never trapped.
 
-### 9.3 Markdown export (`exportMarkdown.ts`)
-
-- `exportArchitectureMarkdown(a)` → a deterministic documentation document (`text/markdown`), filename `{slug(name) || "architecture"}.md`. Available from the editor **Export ▾** menu ("Markdown document") and as **Export Markdown** on each healthy library row (not on damaged rows). Export only; there is no Markdown import.
-- Content: title and description, summary counts, Groups (description, members, notes, plus an "Ungrouped" list), Components (type, orchestrator subtype, groups, description, agent behavior, type properties, safe links, notes), Relationships (source, verb, direction arrow, target, label, description). The Relationships section states that relationships are semantic documentation, not execution order, control flow or data flow.
-- Determinism: groups and components sort by name then id (codepoint order), relationships by source name, target name, type, label, id. Timestamps and canvas geometry are never emitted. Empty fields and empty sections are omitted.
-- Escaping: single-line structured fields are backslash-escaped; multi-line fields are escaped per line; notes are embedded verbatim with any unclosed code fence closed. Only `safeLink` URLs become Markdown links; others are shown as code spans.
-
 ### 9.2 Import (`importJson.ts`, `readFile.ts`)
 
 ```ts
@@ -848,6 +841,13 @@ Steps (spec 12.5):
 Entry points: library "Import JSON" button and editor toolbar "Import" (flushes the current save, then imports; never replaces the open architecture). UI uses `<input type="file" accept=".json,application/json">`.
 
 Error UI: an `ImportErrorDialog` (`<dialog>`) titled "This file can't be imported", listing issues (max 20, see 3.5) and "Nothing was saved." Import is not undoable.
+
+### 9.3 Markdown export (`exportMarkdown.ts`)
+
+- `exportArchitectureMarkdown(a)` → a deterministic documentation document (`text/markdown`), filename `{slug(name) || "architecture"}.md`. Available from the editor **Export ▾** menu ("Markdown document") and as **Export Markdown** on each healthy library row (not on damaged rows). Export only; there is no Markdown import.
+- Content: title and description, summary counts, Groups (description, members, notes, plus an "Ungrouped" list), Components (type, orchestrator subtype, groups, description, agent behavior, type properties, safe links, notes), Relationships (source, verb, direction arrow, target, label, description). The Relationships section states that relationships are semantic documentation, not execution order, control flow or data flow.
+- Determinism: groups and components sort by name then id (codepoint order), relationships by source name, target name, type, label, id. Timestamps and canvas geometry are never emitted. Empty fields and empty sections are omitted.
+- Escaping: single-line structured fields are backslash-escaped; multi-line fields are escaped per line; notes are embedded verbatim with any unclosed code fence closed. Only `safeLink` URLs become Markdown links; others are shown as code spans.
 
 ---
 
@@ -1016,8 +1016,12 @@ One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts`, fi
 | Two tabs overwriting each other | Low / Medium | `tabSync` warning banner; last write wins. |
 | TypeScript 7 / lint toolchain incompatibility | Medium / Low | Pin the newest TS supported by the template's lint stack (1.1). |
 | React Flow API drift across 12.x minors | Low / Medium | Caret within 12.x; lockfile; canvas isolated behind `canvas/` and `canvasApi`. |
-| Scope creep (Markdown preview, templates, SVG) | Medium / Medium | Out of scope per this document; requires coordinator decision. |
+| Scope creep (templates, SVG) | Medium / Medium | Templates and SVG export remain out of scope and require a coordinator decision. The Markdown notes preview is an approved post-MVP addition (16.1). |
 | Hand-edited import files with stale group bounds | Medium / Low | Normalization recomputes bounds rather than rejecting. |
+
+### 16.1 Dependency decision: Markdown notes preview (2026-10-21)
+
+Approve the runtime dependency `react-markdown@^10.1.0` for the Notes preview; the installed version is `10.1.0` (per `package-lock.json`). A formatted read view lets users inspect Markdown notes without replacing source editing or relying on an online service. Load the renderer lazily only when Preview is requested; its code and dependencies are isolated in a separate 117 kB preview chunk rather than the initial bundle. Treat notes as untrusted: skip raw HTML (`skipHtml`, with no raw-HTML plugin), and render images as text placeholders so remote images are never fetched. Links remain restricted through `safeLink` (14).
 
 ---
 

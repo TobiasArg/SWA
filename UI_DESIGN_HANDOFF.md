@@ -427,4 +427,4 @@ Module CSS references tokens only; no raw hex values outside `tokens.css`. The P
 | TD 1 / 14: system fonts, no external resources | 3 |
 | Scenario H: export legibility | 2.1 (canvas token), 6 (SVG labels), 9.1 (hidden in export) |
 
-**Out of scope here (deliberately not added):** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts, an icon library, and any new controls (the notes Markdown preview, 8.2, was added later as a documentation feature) or screens.
+**Out of scope here (deliberately not added):** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts, an icon library, and new screens. The Notes Markdown preview (8.2) is already included; this handoff specifies its visual treatment only.
