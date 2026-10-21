@@ -6,6 +6,8 @@ interface BaseProps {
   label: string;
   hint?: string;
   trailing?: ReactNode;
+  /** When set, shown in place of the control; the draft stays mounted so it survives the swap. */
+  preview?: ReactNode;
   multiline?: boolean;
   rows?: number;
   monospace?: boolean;
@@ -31,7 +33,7 @@ export type TextFieldProps = OptionalTextProps | RequiredTextProps;
 export const NAME_REQUIRED = "Name is required";
 
 export function TextField(props: TextFieldProps) {
-  const { label, hint, trailing, multiline = false, rows = 3, monospace = false, onBlur } = props;
+  const { label, hint, trailing, preview, multiline = false, rows = 3, monospace = false, onBlur } = props;
   const id = useId();
   const [draft, setDraft] = useDraft<string | undefined, string>(
     props.value,
@@ -67,7 +69,9 @@ export function TextField(props: TextFieldProps) {
 
   return (
     <Field id={id} label={label} hint={hint} error={error} trailing={trailing}>
-      {multiline ? (
+      {preview !== undefined ? (
+        preview
+      ) : multiline ? (
         <textarea {...controlProps} rows={rows} onChange={(event) => handleChange(event.target.value)} />
       ) : (
         <input

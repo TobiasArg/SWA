@@ -4,9 +4,10 @@ import { Button } from "../ui/Button";
 import type { IconName } from "../ui/icons";
 import { AgentIdentityFields, AgentSections } from "./AgentSections";
 import { LinksField } from "./fields/LinksField";
+import { NotesField } from "./fields/NotesField";
 import { SegmentedField } from "./fields/SegmentedField";
 import { SelectField } from "./fields/SelectField";
-import { TextAreaField, TextField } from "./fields/TextField";
+import { TextField } from "./fields/TextField";
 import { InspectorFooter, InspectorHeader, InspectorSection } from "./InspectorHeader";
 import { useInspectorCommands } from "./inspectorContext";
 import { RelationshipList } from "./RelationshipList";
@@ -113,11 +114,7 @@ export function ComponentInspector({ architecture, component }: ComponentInspect
         <RelationshipList architecture={architecture} componentId={id} />
       </InspectorSection>
       <InspectorSection title="Documentation">
-        <TextAreaField
-          label="Notes"
-          hint="Markdown"
-          monospace
-          rows={4}
+        <NotesField
           value={component.notes}
           onChange={(value) => update("notes", value)}
           onBlur={commands.breakCoalescing}

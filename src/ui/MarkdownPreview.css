@@ -1,0 +1,104 @@
+/* Notes preview: compact Markdown typography for the narrow inspector. */
+
+.sa-md {
+  margin: 0;
+  color: var(--sa-color-text);
+  font: var(--sa-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.sa-md--empty {
+  color: var(--sa-color-text-muted);
+}
+
+.sa-md > :first-child {
+  margin-top: 0;
+}
+
+.sa-md > :last-child {
+  margin-bottom: 0;
+}
+
+.sa-md p,
+.sa-md ul,
+.sa-md ol,
+.sa-md blockquote,
+.sa-md pre,
+.sa-md table {
+  margin: 0 0 var(--sa-space-3);
+}
+
+.sa-md h1,
+.sa-md h2,
+.sa-md h3,
+.sa-md h4,
+.sa-md h5,
+.sa-md h6 {
+  margin: var(--sa-space-4) 0 var(--sa-space-2);
+}
+
+.sa-md h1 {
+  font: var(--sa-text-lg);
+}
+
+.sa-md h2 {
+  font: var(--sa-text-md);
+}
+
+.sa-md h3,
+.sa-md h4,
+.sa-md h5,
+.sa-md h6 {
+  font: var(--sa-text-sm);
+  font-weight: var(--sa-weight-semibold);
+}
+
+.sa-md ul,
+.sa-md ol {
+  padding-left: var(--sa-space-5);
+}
+
+.sa-md li + li {
+  margin-top: var(--sa-space-1);
+}
+
+.sa-md blockquote {
+  padding-left: var(--sa-space-3);
+  border-left: var(--sa-stroke-strong) solid var(--sa-color-border-strong);
+  color: var(--sa-color-text-muted);
+}
+
+.sa-md code {
+  padding: 0 var(--sa-space-1);
+  border-radius: var(--sa-radius-sm);
+  background: var(--sa-color-surface-sunken);
+  font-family: var(--sa-font-mono);
+  font-size: 12px;
+}
+
+.sa-md pre {
+  overflow-x: auto;
+  padding: var(--sa-space-3);
+  border: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-radius: var(--sa-radius-sm);
+  background: var(--sa-color-surface-sunken);
+}
+
+.sa-md pre code {
+  padding: 0;
+  background: none;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.sa-md hr {
+  margin: var(--sa-space-4) 0;
+  border: 0;
+  border-top: var(--sa-stroke-thin) solid var(--sa-color-border);
+}
+
+.sa-md__image {
+  color: var(--sa-color-text-muted);
+  font-family: var(--sa-font-mono);
+  font-size: 12px;
+}

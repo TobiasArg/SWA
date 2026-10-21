@@ -1,6 +1,7 @@
 import type { Architecture, Group } from "../domain/types";
 import { Button } from "../ui/Button";
-import { TextAreaField, TextField } from "./fields/TextField";
+import { NotesField } from "./fields/NotesField";
+import { TextField } from "./fields/TextField";
 import { InspectorFooter, InspectorHeader, InspectorSection } from "./InspectorHeader";
 import { useInspectorCommands } from "./inspectorContext";
 import { componentName } from "./relationships";
@@ -72,11 +73,7 @@ export function GroupInspector({ architecture, group }: GroupInspectorProps) {
         )}
       </InspectorSection>
       <InspectorSection title="Documentation">
-        <TextAreaField
-          label="Notes"
-          hint="Markdown"
-          monospace
-          rows={4}
+        <NotesField
           value={group.notes}
           onChange={(value) => update("notes", value)}
           onBlur={commands.breakCoalescing}
