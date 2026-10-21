@@ -1,8 +1,8 @@
 # Swarm Architecturer — Component Color and Delete Confirmation Design
 
 **Status:** Design report only. This change adds no application code, tests, dependencies or edits to other specs.
-**Authority:** `PRODUCT_CONCEPT_V1.1.md` (PC) and `TECHNICAL_DESIGN.md` (TD) remain authoritative for product meaning. This report **replaces** these visual rules: the accent rule in `UI_DESIGN_HANDOFF.md` (UH) §2.3, and `UI_V2_DESIGN.md` (V2) §2.3 (contrast columns), §4.1, §4.2 and §6 (swatch and caption copy). It also tightens UH §7.4 (toast), UH §8.4 (dialogs) and TD 5.3, 8.5, 11.2 and 12 for delete feedback. The implementation worker updates those sections in the same change set that implements them. Anything not mentioned here keeps its current behavior.
-**Inputs inspected:** PC 6.2, 8.3, 9 (M2); TD 5.1–5.3, 6.7, 7.1, 8.5, 11.2, 12, 13; UH §1, §2, §5, §7.4, §8, §9; V2 §0, §2.3, §3, §4, §5, §6; `src/ui/{tokens.css,base.css,Dialog.tsx,ConfirmDialog.tsx,Toast.tsx}`, `src/canvas/{canvas.css,nodes/ComponentNode.tsx}`, `src/inspector/{AccentPicker.tsx,inspector.css}`, `src/palette/palette.css`, `src/editor/actions.ts`, `src/app/{EditorScreen.tsx,shortcuts.ts}`, `src/library/LibraryScreen.tsx`, `src/persistence/unloadGuard.ts`, and the tests that cover them.
+**Authority:** `PRODUCT_CONCEPT_V1.1.md` (PC) and `TECHNICAL_DESIGN.md` (TD) remain authoritative for product meaning. This report **replaces** these visual rules: the accent rule in `UI_DESIGN_HANDOFF.md` (UH) §2.3, and `UI_V2_DESIGN.md` (V2) §2.3 (contrast columns), §4.1, §4.2 and §6 (swatch and caption copy). For delete interactions it **replaces** the "undoable editor deletions need no confirmation" rule (PC 8.3 / M2 wording, UH §8.1, TD 5.3, 11.2 and 12) at the user's explicit request: every editor delete now asks first in an app-styled modal (§2). It also tightens UH §8.4 (dialogs). The implementation worker updates those sections in the same change set that implements them. Anything not mentioned here keeps its current behavior.
+**Inputs inspected:** PC 6.2, 8.3, 9 (M2); TD 5.1–5.3, 6.7, 7.1, 8.5, 11.2, 12, 13; UH §1, §2, §5, §7.4, §8, §9; V2 §0, §2.3, §3, §4, §5, §6; `src/ui/{tokens.css,base.css,Dialog.tsx,ConfirmDialog.tsx,Toast.tsx}`, `src/canvas/{canvas.css,nodes/ComponentNode.tsx}`, `src/inspector/{AccentPicker.tsx,inspector.css}`, `src/palette/palette.css`, `src/editor/actions.ts`, `src/domain/operations.ts` (`deleteElements`, `applyCommand`), `src/app/{EditorScreen.tsx,shortcuts.ts}`, `src/toolbar/Toolbar.tsx`, `src/inspector/{Component,Relationship,Group,MultiSelection}Inspector.tsx`, `src/inspector/inspectorContext.tsx`, `src/library/LibraryScreen.tsx`, `src/persistence/unloadGuard.ts`, and the tests that cover them.
 
 ---
 
@@ -16,11 +16,11 @@
 | D-C4 | Types stay distinguishable by silhouette, Orchestrator band, dash and hatch, icon, and type label, all of which are color-independent. Two components of different types with the same color must still be told apart in grayscale. |
 | D-C5 | Every palette pair must pass the paired-contrast checks in §1.6. **Tomato fails one of them today** (ink on tint is 4.4985:1). Its tint changes from `#F9D9D3` to `#FADCD6`. The ID, name and hue family are unchanged. |
 | D-C6 | Groups, edges, ports, selection, focus and app chrome stay neutral and never take a palette entry. The cobalt UI accent (`--sa-color-accent`) is unrelated to component color. |
-| D-N1 | **Editor deletions** (undoable) do not show a blocking dialog. They delete immediately and show an app-styled **Undo toast**. **Library deletions** (not undoable) always use the app-styled `ConfirmDialog`. No path uses `window.confirm`, `alert` or `prompt`. |
-| D-N2 | `ConfirmDialog` gets an explicit contract: initial focus on Cancel, Escape cancels, backdrop click does nothing, the busy state cannot be dismissed, errors appear inline, and focus is restored deterministically. |
-| D-N3 | The Undo toast may only undo the deletion it reports. It is dismissed on the next history change. It pauses while hovered or focused, and it is announced exactly once. |
-| D-N4 | The `beforeunload` "Leave site?" prompt is **browser-owned**. It cannot be styled, re-worded or replaced, and the app does not try to. |
-
+| D-N1 | **Every editor delete asks first.** Every UI route that dispatches `deleteElements` (Delete and Backspace shortcuts, toolbar Delete, the component, relationship, group and multi-selection inspector Delete buttons, and Ungroup with groups selected) opens the app-styled `ConfirmDialog`. **Cancel changes nothing. Confirm performs exactly today's deletion**, followed by today's app-styled Undo toast and announcement. This **reverses** the earlier version of this report, which chose no confirmation for undoable editor deletions. |
+| D-N2 | **Library deletions** keep their existing app-styled `ConfirmDialog` (not undoable). Editor and library share one `ConfirmDialog` contract: initial focus on Cancel, Escape cancels, a backdrop click does nothing, a busy state cannot be dismissed, errors appear inline, and focus is restored deterministically. |
+| D-N3 | **No browser-native dialogs or notifications.** App interactions never use `window.alert`, `window.confirm`, `window.prompt` or the `Notification` API. All confirmations are `ConfirmDialog` (built on `Dialog`) and all notices are `Toast`. Lint enforces this rule. |
+| D-N4 | **The toast is reused unchanged.** The existing Undo toast (copy, 5 s duration, Undo action) and the existing announcement stay as they are. This change adds no toast timing, stacking or history-binding features. |
+| D-N5 | The `beforeunload` "Leave site?" prompt is **browser-owned**. It cannot be styled, re-worded or replaced, and the app does not try to. It is the only native prompt that remains, and it is not an app interaction. |
 ---
 
 ## 1. Component color: one effective palette source
@@ -199,68 +199,103 @@ Color never identifies a type (UH §1 "Shape before color", TD 12). The palette 
 
 ## 2. Destructive delete: confirmation and notification
 
-### 2.1 Current inventory (as inspected)
+### 2.0 Correction to the earlier version of this report
 
-| Path | Code | Undoable | Today |
-|---|---|---|---|
-| Delete / Backspace on canvas selection | `app/shortcuts.ts:106` → `actions.deleteSelection` | yes | immediate; toast "Deleted …" + Undo; plus `announce` |
-| Toolbar Delete | `toolbar/Toolbar.tsx:297` | yes | same |
-| Inspector Delete (component, relationship, multi) and "Delete group (keeps members)" | `inspector/*Inspector.tsx` | yes | same |
-| Ungroup (`Mod+Shift+G`) with groups selected | `editor/actions.ts` `ungroupSelection` → `deleteElements` | yes | **no feedback at all** |
-| Library row Delete (ok and damaged rows) | `library/LibraryScreen.tsx:333` `ConfirmDialog` | no | app-styled modal; success only announced; failure toast appears behind the modal |
-| Tab close or reload with unsaved changes | `persistence/unloadGuard.ts` | — | browser `beforeunload` prompt |
+The earlier report decided that **undoable editor deletions would not show a confirmation** and relied on the Undo toast alone. That decision is **withdrawn**. The user explicitly asked for the browser-style "are you sure?" delete popup to be recreated in the app's own visual style, at every delete entry point. This report now specifies that behavior (D-N1). Undo stays as a second safety net after a confirmed delete. The PC 8.3 and M2 rationale ("the user sees it happen", "canvas edits can be undone") still describes Undo correctly. It no longer justifies skipping the confirmation, and the fold-in (§4) updates that wording.
 
-No code path uses `window.confirm`, `alert` or `prompt`. Every prompt the user sees during a delete is already app-styled; the only native one is the leave-page prompt (§2.6).
+### 2.1 Inventory: today and after this change
+
+| Path | Code | Undoable | Today | After |
+|---|---|---|---|---|
+| Delete / Backspace on canvas selection | `app/shortcuts.ts:106` → `context.deleteSelection` → `EditorScreen.tsx:279` | yes | immediate; toast "Deleted …" + Undo; `announce` | **ConfirmDialog**, then the same deletion, toast and announcement |
+| Toolbar Delete | `toolbar/Toolbar.tsx:297` `onDelete` → `EditorScreen.tsx:363` | yes | same as above | **ConfirmDialog**, then the same |
+| Inspector Delete: component, relationship, multi-selection, and "Delete group (keeps members)" | `inspector/{Component,Relationship,MultiSelection,Group}Inspector.tsx` → `commands.run("deleteSelection")` → `inspectorActions.deleteSelection` (`EditorScreen.tsx:249`) | yes | same as above | **ConfirmDialog**, then the same |
+| Ungroup with groups selected (toolbar Ungroup, `Mod+Shift+G`) | `actions.ungroupSelection` → `deleteElements` with `groupIds` (`EditorScreen.tsx:282, 361`) | yes | immediate; no toast | **ConfirmDialog**, then the same dispatch (no new toast, see O5) |
+| Ungroup with only components selected | `ungroupSelection` → `assignToGroup` | yes | immediate | unchanged. This is not a deletion, so there is no dialog. |
+| React Flow's built-in delete key | `canvas/CanvasView.tsx:467` `deleteKeyCode={null}` | — | disabled | stays disabled. All deletes go through the routes above. |
+| Library row Delete (ok and damaged rows) | `library/LibraryScreen.tsx:333` `ConfirmDialog` | no | app-styled modal; success only announced; failure toast appears behind the modal | **kept**; contract hardened (§2.4) |
+| Tab close or reload with unsaved changes | `persistence/unloadGuard.ts` | — | browser `beforeunload` prompt | unchanged (§2.7) |
+
+Verified: no code in `src` calls `window.confirm`, `alert`, `prompt` or the `Notification` API. (`persistence/tabSync.ts` only uses "Notification" inside its own `BroadcastChannel` identifiers.)
 
 ### 2.2 Policy
 
-| Delete kind | Interaction | Feedback |
+| Delete kind | Interaction | Feedback after Confirm |
 |---|---|---|
-| Undoable editor deletion (anything that dispatches `deleteElements`) | **No confirmation.** Deletes immediately (PC 8.3: "the user sees it happen"; M2: canvas edits can be undone). A modal on every Delete key would break keyboard flow. | Undo toast (§2.4), announced once (§2.5). |
-| Ungroup of selected groups | Same as above. | Toast "Ungrouped {n} group(s). Members kept." + Undo. |
-| Library delete (not undoable) | **App-styled `ConfirmDialog`** (§2.3), always (PC 8.3, M2 "Library deletions are protected by confirmation instead of undo"). | On success: a toast "Deleted '{name}'." with **no** Undo button, because there is nothing to undo. |
-| Any future destructive action that is not undoable | Must use `ConfirmDialog`. | Same as library. |
-| Native `window.confirm` / `alert` / `prompt` | **Forbidden.** Enforce with ESLint core `no-alert` (no new dependency). | — |
+| Editor deletion (any UI action that dispatches `deleteElements`) | **App-styled `ConfirmDialog`, always**, before anything is dispatched (§2.3). There is no size threshold and no "don't ask again" option (O2). | Existing Undo toast "Deleted …" + Undo, and the existing announcement (§2.5). |
+| Ungroup of selected groups | Same dialog, with ungroup copy and the confirm label "Ungroup". | Existing behavior (no toast). The canvas change is visible and `Mod+Z` undoes it. |
+| Library delete (not undoable) | Existing app-styled `ConfirmDialog`, hardened (§2.4). | Existing announcement (unchanged). |
+| Any future destructive action | Must use `ConfirmDialog`. | Toast with Undo if undoable, otherwise none. |
+| `window.alert` / `confirm` / `prompt`, `Notification` | **Forbidden** in application code (D-N3). Enforced with ESLint core rules (§2.6), with no new dependency. | — |
 
-### 2.3 `ConfirmDialog` contract (`src/ui/ConfirmDialog.tsx`, `src/ui/Dialog.tsx`)
+### 2.3 Editor delete confirmation flow (`src/app/EditorScreen.tsx`)
+
+**One entry point.** `EditorScreen` owns a single `requestDelete(target: EditorStore, intent: "delete" | "ungroup")` and one `pendingDelete` state. Every route calls it instead of calling `services.actions.deleteSelection` / `ungroupSelection` directly:
+
+- the shortcut context's `deleteSelection` (Delete, Backspace) and `ungroupSelection` (`Mod+Shift+G`, only when `selection.groupIds.length > 0`; otherwise it keeps calling `ungroupSelection` directly);
+- the Toolbar `onDelete`, and `onUngroup` under the same group rule;
+- `inspectorActions.deleteSelection(target)`, which covers all four inspector Delete buttons.
+
+`shortcuts.ts`, `Toolbar.tsx` and the inspector components therefore stay unchanged: they already call these callbacks.
+
+**Request.**
+
+| # | Rule |
+|---|---|
+| ED1 | If the selection is empty, or the preview deletes nothing, no dialog opens and nothing happens (the same as today's empty-message early return). |
+| ED2 | The request snapshots the selection IDs and computes a **preview** with the pure `previewDeletion(architecture, ids)` (new, in `editor/actions.ts`). The preview runs `applyCommand` with the same `deleteElements` command **without dispatching it**, so its counts always equal the real `summary` (cascaded relationships included). |
+| ED3 | The request remembers the opener: `document.activeElement` at request time (the toolbar button, the inspector button, or the focused canvas node or wrapper for shortcuts). |
+| ED4 | While a dialog is open, no second request opens a second dialog. The shortcut handler already ignores keys while `dialog[open]` exists (`shortcuts.ts:41,54`), and the background is inert, so toolbar and inspector clicks are blocked. |
+
+**Dialog content** (built by the pure `deletionConfirmCopy(preview, intent)`, which reuses `deletionMessage`'s pluralization):
+
+| Case | Title (`aria-labelledby`) | Description (`aria-describedby`) | Confirm label |
+|---|---|---|---|
+| Delete | "Delete {list}?", for example "Delete 1 component and 3 relationships?" | "You can undo this with Undo or ⌘Z / Ctrl+Z." When relationships are removed only because their components are, the description starts with "Connected relationships are deleted with their components." | "Delete" |
+| Delete of groups only | "Delete 1 group?" | "Its components stay on the canvas. You can undo this with Undo or ⌘Z / Ctrl+Z." | "Delete" |
+| Ungroup | "Ungroup 1 group?" / "Ungroup 2 groups?" | "The group is removed. Its components stay on the canvas. You can undo this with ⌘Z / Ctrl+Z." | "Ungroup" |
+
+The copy never includes user-entered names inside markup (React text only, TD 3.4), and it never mentions colors.
+
+**Outcomes.**
+
+| # | Rule |
+|---|---|
+| ED5 | **Cancel** (the Cancel button, Enter or Space on the focused Cancel, or Escape): the dialog closes, **nothing is dispatched**, the architecture, undo history, selection and save status are unchanged, no toast appears and nothing is announced. Focus returns to the opener (ED3) if it is still connected and enabled, otherwise to the canvas focus target. |
+| ED6 | **Confirm** (Delete or Ungroup, by click, Enter or Space): the dialog closes **first**, then `EditorScreen` calls the existing `services.actions.deleteSelection(target, feedback)` (or `ungroupSelection`). The dispatch, the single history entry, the toast copy and the announcement are therefore identical to today. The toast is not rendered behind the modal backdrop. |
+| ED7 | After Confirm, focus moves to the canvas focus target (the React Flow wrapper, `[data-sa-canvas]`), never `<body>`. The opener may be gone (the inspector unmounts) or disabled (toolbar Delete with an empty selection). |
+| ED8 | One Undo (toast or `Mod+Z`) restores everything a confirmed delete removed, in one step (unchanged single history entry). |
+| ED9 | The editor deletion is synchronous, so the dialog never shows a busy state. `ConfirmDialog`'s busy and error states (CD6, CD7) are used only by the library. If the dispatch returns `ok: false`, the existing behavior applies (no toast). |
+
+### 2.4 `ConfirmDialog` contract (`src/ui/ConfirmDialog.tsx`, `src/ui/Dialog.tsx`), shared by editor and library
 
 | # | Rule |
 |---|---|
 | CD1 | Native `<dialog>` opened with `showModal()`: top layer, background inert, Tab and Shift+Tab stay inside (unchanged). |
-| CD2 | `aria-labelledby` = title ("Delete '{name}'?"). The consequence text ("This cannot be undone. Export it to JSON first if you want a backup.") is passed as `description`, so it becomes `aria-describedby` (today it is the body, not described). |
-| CD3 | Buttons are right-aligned: **Cancel** (secondary) then **Delete** (destructive fill), in this DOM order. The confirm label is the specific verb ("Delete"), never "OK" or "Yes". |
-| CD4 | **Initial focus on Cancel**, set explicitly after `showModal()`. Today it works only because Cancel is the first focusable element; React `autoFocus` does not fire when an always-mounted dialog opens later. Enter on the focused Cancel cancels. Nothing submits the destructive action by default. |
+| CD2 | `aria-labelledby` = title. The consequence text is passed as the new `description` prop, so it becomes `aria-describedby` (today the library passes it as `children`, which is not described). Library copy: title "Delete '{name}'?", description "This cannot be undone. Export it to JSON first if you want a backup." (unchanged text). `children` becomes optional. |
+| CD3 | Buttons are right-aligned: **Cancel** (secondary) then the confirm button (destructive fill), in this DOM order. The confirm label is a specific verb ("Delete", "Ungroup"), never "OK" or "Yes". |
+| CD4 | **Initial focus on Cancel**, set explicitly after `showModal()`. Today it works only because Cancel is the first focusable element; React `autoFocus` does not fire when an always-mounted dialog opens later. Nothing confirms by default. |
 | CD5 | **Escape = Cancel.** **Backdrop click does nothing** (no light dismiss), so a stray click cannot cancel or confirm. |
-| CD6 | **Busy** (after Delete is pressed): both buttons are disabled, the confirm label reads "Deleting…", the dialog has `aria-busy="true"`, and the `cancel` event is `preventDefault()`ed so Escape cannot close a dialog mid-operation (today `onClose` → `onCancel` also runs while busy). Repeated confirm clicks are ignored. |
-| CD7 | **Failure:** the dialog stays open, busy clears, and an inline error (`role="alert"`, danger icon + text, `--sa-color-danger` on `--sa-color-danger-soft`) appears above the buttons. No toast while the modal is open, because it would render behind the backdrop. |
-| CD8 | **Cancel:** the dialog closes and focus returns to the control that opened it (the row's "Delete {name}" button). |
-| CD9 | **Success:** the dialog closes, then the toast "Deleted '{name}'." appears (no action). Focus moves to the next row's name link, else the previous row's, else the "New architecture" button (header or empty state). Focus never falls to `<body>`. |
-| CD10 | Visuals: UH §8.4 unchanged (440 px, 24 px padding, `--sa-shadow-dialog`, `--sa-color-backdrop`). Focus ring per UH §9.1. |
+| CD6 | **Busy** (async callers only, i.e. the library): both buttons are disabled, the confirm label reads "Deleting…", the dialog has `aria-busy="true"`, and the `cancel` event is `preventDefault()`ed so Escape cannot close it mid-operation (today `onClose` → `onCancel` also runs while busy). Repeated confirm clicks are ignored. |
+| CD7 | **Failure** (library): the dialog stays open, busy clears, and an inline error (new `error` prop; `role="alert"`, danger icon + text, `--sa-color-danger` on `--sa-color-danger-soft`) appears above the buttons. No toast is shown while the modal is open, because it would render behind the backdrop. |
+| CD8 | **Focus on close** is the caller's job, and it is deterministic. Editor: ED5 and ED7. Library: on Cancel, focus goes back to the row's "Delete {name}" button. On success, focus goes to the next row's name link, else the previous row's, else the "New architecture" button. Focus never falls to `<body>`. |
+| CD9 | Visuals: UH §8.4 unchanged (440 px, 24 px padding, `--sa-shadow-dialog`, `--sa-color-backdrop`, destructive button tokens). Focus ring per UH §9.1. This **is** the app-styled recreation of the browser confirm: the same question-and-two-buttons structure, in the app's typography, color and focus treatment. |
 
-### 2.4 Undo toast contract (`src/ui/Toast.tsx`, `src/editor/actions.ts`, `src/app/EditorScreen.tsx`)
+### 2.5 Toast and announcement: reused as-is
 
-| # | Rule |
-|---|---|
-| UT1 | Message from `deletionMessage` (unchanged copy, for example "Deleted 1 component and 3 relationships."). Action button "Undo" with `aria-keyshortcuts` "Control+Z Meta+Z" and tooltip "Undo (⌘Z / Ctrl+Z)". |
-| UT2 | **It never takes focus** when it appears. Keyboard users reach it by Tab (the region is after the app content) or use `Mod+Z`, which has the same effect. |
-| UT3 | **At most one Undo toast.** A new deletion replaces the previous Undo toast instead of stacking a second one. |
-| UT4 | **It is bound to its own history entry.** The toast is dismissed on the next history change: any successful dispatch, undo or redo, or leaving the editor. The Undo button can therefore never undo a different, later edit (today a 5 s toast can undo an unrelated move). |
-| UT5 | Undo goes through the same `undo` callback as `Mod+Z` in `EditorScreen` (which announces "Undid the last change."), not `store.undo()` directly. |
-| UT6 | Duration **8 s** for toasts with an action (5 s without). The timer **pauses** while the pointer is over the toast or focus is inside it, and restarts at full duration on leave (WCAG 2.2.1). `Escape` with focus inside the toast dismisses it. |
-| UT7 | After Undo is activated, the toast closes and focus moves to the canvas focus target (the React Flow wrapper), never `<body>`. |
-| UT8 | Visuals: UH §7.4 unchanged (toast-bg, toast-text, toast-action 7.3:1). Inside `.sa-toast`, the focus ring uses `--sa-color-toast-text` as its outline color, because the graphite ring is about 1.2:1 on `#2A2723`. |
-| UT9 | Toasts are excluded from PNG export (they are outside the canvas, so this is unchanged). |
+- After Confirm, the existing `deleteSelection` runs unchanged: `feedback.showToast(message, { action: { label: "Undo", onClick: () => store.undo() } })` and `feedback.announce(message)`. The existing copy, the 5 s default duration and the visuals (UH §7.4) stay.
+- **Out of scope for this change** (not requested): one toast at a time, binding the toast to its history entry, pause on hover, longer durations, Escape to dismiss, a toast focus ring, and announcement de-duplication. The earlier report's UT3–UT7 and §2.5 announcement changes are dropped. They can be proposed separately if needed.
+- Cancel produces no toast and no announcement (ED5).
 
-### 2.5 Announcements: exactly once
+### 2.6 No browser-native dialogs or notifications (enforcement)
 
-- `.sa-toast-region` becomes the single persistent live region for toasts (`role="status"`, `aria-live="polite"`), rendered empty at mount so that insertions are announced reliably. Individual `.sa-toast` elements lose their own `role`/`aria-live`.
-- `deleteSelection` stops calling `feedback.announce(message)` separately. Today the same text goes to both the LiveRegion and a `role="status"` toast, which risks a double announcement. TD 12's "LiveRegion for deletions" is updated to say "toast region".
-- Undo, redo and save failure keep using `LiveRegion` (unchanged).
+- Application code must not call `window.alert`, `window.confirm`, `window.prompt`, `new Notification(…)` or `Notification.requestPermission()`. Confirmations use `ConfirmDialog`/`Dialog`, and notices use `Toast` (plus `LiveRegion` for announcements).
+- `eslint.config.js` (core rules only): `"no-alert": "error"`; `"no-restricted-globals": ["error", { name: "Notification", message: "Use Toast (UI_COLOR_CONFIRMATION_DESIGN D-N3)." }]`; `"no-restricted-properties": ["error", { object: "window", property: "Notification" }]`.
 
-### 2.6 `beforeunload` is browser-owned
+### 2.7 `beforeunload` is browser-owned
 
 - The leave-page prompt (`unloadGuard.ts`, active while the save status is `pending`, `saving` or `error`; TD 8.5) is drawn by the browser. **It cannot be styled, its text cannot be changed** (`returnValue` strings are ignored by current Chromium, Firefox and Safari), its buttons cannot be relabelled, and an app dialog cannot replace it, because the handler must decide synchronously. Browsers may also suppress it without prior user interaction.
-- The app keeps the guard as is (`preventDefault()` + `returnValue = ""`) and **does not** add custom copy or an app modal on unload.
+- The app keeps the guard as is (`preventDefault()` + `returnValue = ""`) and **does not** add custom copy or an app modal on unload. It is a browser-level guard on leaving the page, not an application interaction, so D-N3 does not cover it.
 - In-app navigation (Back to library, opening another architecture) never relies on `beforeunload`. It uses `controller.flush()` and the existing app toast (`LEAVE_SAVE_FAILED_MESSAGE`) when the save fails. This is unchanged.
 - The UH, TD and PC copy must not describe the leave prompt as app-styled.
 
@@ -288,18 +323,20 @@ No code path uses `window.confirm`, `alert` or `prompt`. Every prompt the user s
 
 | ID | Criterion | Test |
 |---|---|---|
-| AC-N1 | The library delete dialog opens with Cancel focused. Escape closes it with nothing deleted. A backdrop click leaves it open. The description is exposed via `aria-describedby`. | `LibraryScreen.test.tsx` (extend "requires confirmation") |
-| AC-N2 | While `remove` is pending, both buttons are disabled, Escape does not close the dialog, and a second confirm does not call `repository.remove` twice. | `LibraryScreen.test.tsx` |
-| AC-N3 | When `remove` rejects, the dialog stays open with a `role="alert"` message, and no toast is shown. | `LibraryScreen.test.tsx` |
-| AC-N4 | Success shows the toast "Deleted 'Old'." with no button, and focus is on the next row's name link (or "New architecture" when the list becomes empty). Cancel returns focus to "Delete Old". | `LibraryScreen.test.tsx` |
-| AC-N5 | An editor delete shows one toast with Undo. A second delete replaces it, so there is only one Undo button. | `Toast.test.tsx`, `actions.test.ts` |
-| AC-N6 | After a delete followed by a move, the deletion toast is gone, so Undo cannot revert the move. | `actions.test.ts` or `App.integration.test.tsx` |
-| AC-N7 | The toast timer pauses on hover and focus-within, Escape dismisses the toast, and the actionable duration is 8000 ms (fake timers). | `Toast.test.tsx` |
-| AC-N8 | The deletion text appears in exactly one `aria-live` container. Toast Undo results in the announcement "Undid the last change." | `App.integration.test.tsx` |
-| AC-N9 | Ungroup with a group selected shows "Ungrouped 1 group. Members kept." + Undo. | `actions.test.ts` |
-| AC-N10 | Lint fails on `window.confirm`/`alert`/`prompt` (`no-alert`). | `npm run lint` |
-| AC-N11 | `unloadGuard` behavior is unchanged: it calls `preventDefault` only for `pending`, `saving` and `error`, and sets no custom message. | `unloadGuard.test.ts` (unchanged; it already covers this) |
-| AC-N12 | e2e keyboard: Delete key → toast visible → Tab reaches Undo → Enter restores the component and focus lands in the canvas. | `e2e/a11y-keyboard.spec.ts`, `e2e/scenario-i.spec.ts` |
+| AC-N1 | **Every route opens the dialog and dispatches nothing yet.** For each route: Delete key, Backspace key, toolbar Delete, component inspector Delete, relationship inspector Delete, multi-selection inspector Delete, "Delete group (keeps members)", and toolbar Ungroup and `Mod+Shift+G` with a group selected. After the trigger, a `role="dialog"` is open and the architecture and `canUndo` are unchanged. | `App.integration.test.tsx` (table-driven over the routes) |
+| AC-N2 | **Content and initial focus.** The dialog's accessible name is the title from §2.3 (for example "Delete 1 component and 3 relationships?" for a component with 3 relationships). Its description is exposed via `aria-describedby`. The buttons are Cancel then Delete (or Ungroup), in that order. Cancel has focus when the dialog opens. | `ConfirmDialog.test.tsx` (new), `App.integration.test.tsx`; copy in `actions.test.ts` (`deletionConfirmCopy`) |
+| AC-N3 | **Cancel makes no change**, by the Cancel button, by Enter on the focused Cancel, and by Escape: the architecture deep-equals the state before, the history length and `canUndo` are unchanged, the selection is unchanged, no toast or announcement appears, and focus returns to the opener (the toolbar Delete button, the inspector Delete button, or the focused canvas node for the shortcut route). | `App.integration.test.tsx`, `ConfirmDialog.test.tsx` |
+| AC-N4 | A backdrop click leaves the dialog open and dispatches nothing. | `ConfirmDialog.test.tsx` |
+| AC-N5 | **Confirm performs the same deletion**, by click and by keyboard (Tab to Delete, then Enter; and Space): exactly one `deleteElements` dispatch with the snapshotted IDs. The resulting architecture equals the one today's direct `deleteSelection` produces. The dialog is closed before the toast renders. | `App.integration.test.tsx`; `actions.test.ts` (`previewDeletion` counts equal `result.summary`, including cascaded relationships) |
+| AC-N6 | **Toast and Undo after Confirm.** The existing toast "Deleted 1 component and 3 relationships." with an Undo button is shown, and the deletion text is announced as today. Toast Undo and `Mod+Z` each restore the full pre-delete architecture in one step. | `App.integration.test.tsx` |
+| AC-N7 | After Confirm, focus is on the canvas focus target (`[data-sa-canvas]` wrapper), not `<body>`, including when the inspector that opened the dialog unmounts. | `App.integration.test.tsx` |
+| AC-N8 | While the dialog is open, a second Delete key, `Mod+Z`, arrow keys and toolbar clicks neither open a second dialog nor change the architecture. | `App.integration.test.tsx` |
+| AC-N9 | An empty selection opens no dialog (shortcut no-op; toolbar Delete stays disabled). Ungroup with only components selected opens no dialog and behaves as today. | `App.integration.test.tsx`; `Toolbar.test.tsx` (unchanged) |
+| AC-N10 | Ungroup confirmation uses the title "Ungroup 1 group?" and the confirm label "Ungroup". After Confirm the group is gone, its members remain, and `Mod+Z` restores it. | `App.integration.test.tsx`, `actions.test.ts` |
+| AC-N11 | **Library (kept and hardened):** the dialog opens with Cancel focused. Escape closes it with nothing deleted. A backdrop click leaves it open. The description is exposed via `aria-describedby`. While `remove` is pending, both buttons are disabled, Escape does not close it, and a second confirm does not call `repository.remove` twice. When `remove` rejects, the dialog stays open with a `role="alert"` message and no toast. Cancel returns focus to "Delete Old". On success, focus is on the next row's name link (or "New architecture" when the list becomes empty). | `LibraryScreen.test.tsx` (extend "requires confirmation") |
+| AC-N12 | Lint fails on `window.confirm`/`alert`/`prompt` (`no-alert`) and on `Notification` use (`no-restricted-globals`/`no-restricted-properties`). `npm run lint` passes on the current tree. | `npm run lint` |
+| AC-N13 | `unloadGuard` behavior is unchanged: it calls `preventDefault` only for `pending`, `saving` and `error`, and sets no custom message. | `unloadGuard.test.ts` (unchanged; it already covers this) |
+| AC-N14 | **e2e keyboard and pointer.** (a) Select a component, press Delete: the dialog is visible with Cancel focused. Escape: the component is still there and focus is back on the canvas node. (b) Press Backspace, Tab to Delete, press Enter: the component is gone, the toast is visible, focus is in the canvas. Tab reaches the toast's Undo, and Enter restores the component. (c) Toolbar Delete → click Cancel: no change. Toolbar Delete → click Delete: deleted. | `e2e/a11y-keyboard.spec.ts` (extend at line 77), `e2e/scenario-i.spec.ts:29` and `e2e/scenario-e.spec.ts:77` (add the confirm step to the existing toolbar deletes) |
 
 ---
 
@@ -317,16 +354,18 @@ No code path uses `window.confirm`, `alert` or `prompt`. Every prompt the user s
 | `src/inspector/InspectorHeader.tsx`, `ComponentInspector.test.tsx` | Effective ink in the header (AC-C10) |
 | `src/editor/commandLabels.ts` | "Change accent color" → "Change color" |
 | `src/palette/palette.css`, `src/library/library.css` | Use `data-palette="type-*"` (no visual change) |
-| `src/ui/Dialog.tsx`, `src/ui/ConfirmDialog.tsx` | CD2, CD4–CD7 (`cancel` guard, explicit focus, inline error slot, busy label) |
-| `src/library/LibraryScreen.tsx`, `LibraryScreen.test.tsx` | Inline error, success toast, focus restore (AC-N1–N4) |
-| `src/ui/Toast.tsx`, `Toast.test.tsx`, `src/ui/base.css` | Region live region, single Undo toast, pause, Escape, durations, toast focus ring |
-| `src/editor/actions.ts`, `actions.test.ts` | Drop the duplicate `announce`; toast keyed to the history entry; ungroup feedback |
-| `src/app/EditorScreen.tsx`, `App.integration.test.tsx` | Feedback `undo` uses the announced callback; dismiss on history change |
-| `eslint.config.js` | `"no-alert": "error"` |
-| `e2e/ui-v2.spec.ts`, `e2e/a11y-keyboard.spec.ts`, `e2e/scenario-i.spec.ts` | AC-C11, AC-N12 |
-| `UI_DESIGN_HANDOFF.md` §2.3, §7.4, §8.1, §8.4; `UI_V2_DESIGN.md` §2.3, §4.1–4.2, §6; `TECHNICAL_DESIGN.md` 5.3, 7.1, 11.2, 12 | Fold in this report (canonical update) |
+| `src/ui/Dialog.tsx`, `src/ui/ConfirmDialog.tsx`, `src/ui/ConfirmDialog.test.tsx` (new), `src/ui/base.css` | CD2–CD7: `description` and `error` props, optional `children`, explicit Cancel focus, `cancel` guard while busy, no backdrop dismiss, busy label, inline error styles (AC-N2–N4) |
+| `src/editor/actions.ts`, `actions.test.ts` | New pure `previewDeletion` (via `applyCommand`) and `deletionConfirmCopy`. `deleteSelection` and `ungroupSelection` behavior is **unchanged** (AC-N2, AC-N5, AC-N10). |
+| `src/app/services.ts`, `src/app/defaultServices.ts`, `src/app/placeholders/actions.ts` | Expose the two helpers on `services.actions` if `EditorScreen` reaches actions through services (keep the placeholders in sync) |
+| `src/app/EditorScreen.tsx` | `pendingDelete` state, `requestDelete`, one `<ConfirmDialog>`; route shortcut `deleteSelection`/`ungroupSelection`, Toolbar `onDelete`/`onUngroup` and `inspectorActions.deleteSelection` through it; focus per ED5 and ED7 |
+| `src/app/App.integration.test.tsx` | AC-N1–N3, AC-N5–N10 |
+| `src/library/LibraryScreen.tsx`, `LibraryScreen.test.tsx` | Pass `description`; inline error instead of a toast behind the modal; focus restore (AC-N11) |
+| `eslint.config.js` | `no-alert`, `no-restricted-globals` (`Notification`), `no-restricted-properties` (`window.Notification`) (AC-N12) |
+| `e2e/a11y-keyboard.spec.ts`, `e2e/scenario-e.spec.ts`, `e2e/scenario-i.spec.ts` | AC-N14; the existing toolbar and keyboard deletes gain the confirm step |
+| `e2e/ui-v2.spec.ts` | AC-C11 |
+| `UI_DESIGN_HANDOFF.md` §2.3, §8.1, §8.4; `UI_V2_DESIGN.md` §2.3, §4.1–4.2, §6; `TECHNICAL_DESIGN.md` 5.3, 7.1, 11.2, 12; `PRODUCT_CONCEPT_V1.1.md` 8.3 and M2 wording | Fold in this report (canonical update): editor deletes confirm, then offer Undo; no native dialogs |
 
-**Not touched:** `src/persistence/unloadGuard.ts` (§2.6), the schema, validation, serialization and Markdown export.
+**Not touched:** `src/ui/Toast.tsx` and its tests (§2.5), `src/app/shortcuts.ts`, `src/toolbar/Toolbar.tsx`, the inspector components (they already call the rerouted callbacks), `src/persistence/unloadGuard.ts` (§2.7), the schema, validation, serialization and Markdown export. No new dependencies.
 
 ---
 
@@ -336,17 +375,21 @@ No code path uses `window.confirm`, `alert` or `prompt`. Every prompt the user s
 |---|---|---|---|---|
 | S1 Palette source | §1.2–1.7: resolver, tokens, `canvas.css`, `ComponentNode`, Tomato fix | — | 3 (CSS cascade restructure plus PNG fidelity) | unit AC-C1–C8; `npm run test`; e2e `ui-v2` PNG |
 | S2 Palette surfaces | §1.8: picker copy and swatches, inspector header, palette panel, undo label | S1 | 2 | AC-C9, AC-C10, AC-C11 |
-| S3 ConfirmDialog contract | §2.3 plus library wiring | — (parallel to S1) | 2 | AC-N1–N4, AC-N10 |
-| S4 Undo toast and announcements | §2.4–2.5 plus ungroup feedback | — (shares nothing with S3 except `base.css`, so reserve it to S4 and let S3 avoid it) | 3 (history binding and focus) | AC-N5–N9, AC-N12 |
+| S3 ConfirmDialog contract + library + lint | §2.4, §2.6: `Dialog`/`ConfirmDialog` props and behavior, `base.css` error styles, library wiring, ESLint rules | — (parallel to S1 and S2; S3 owns `base.css`) | 2 | AC-N2–N4 (component level), AC-N11, AC-N12 |
+| S4 Editor delete confirmation | §2.3, §2.5: `previewDeletion`/`deletionConfirmCopy`, `EditorScreen` routing and focus, integration and e2e updates | S3 (uses the hardened `ConfirmDialog`) | 3 (four entry routes into one flow, focus across unmounting inspectors, e2e updates) | AC-N1–N10, AC-N14; `npm run test`; e2e `a11y-keyboard`, `scenario-e`, `scenario-i` |
 | S5 Spec fold-in | §4 doc rows | S1–S4 | 1 | review |
 
-All UI stages route to `stage-ui`. **Commits:** `feat(canvas): drive node fill and ink from one effective palette entry` (S1), `feat(inspector): rename accent to color and match header ink` (S2), `fix(ui): harden delete confirmation focus, busy and error states` (S3), `fix(ui): bind undo toast to its deletion and announce once` (S4), `docs: fold color and confirmation design into handoffs` (S5). Each commit passes `npm run lint`, `npm run test` and the affected e2e specs.
+All UI stages route to `stage-ui`. Reservations: S3 writes `src/ui/{Dialog,ConfirmDialog}.tsx`, `base.css`, `LibraryScreen.*`, `eslint.config.js`. S4 writes `editor/actions.*`, `app/{EditorScreen,services,defaultServices}.tsx/ts`, `app/placeholders/actions.ts`, `App.integration.test.tsx` and the three e2e specs. S1 and S2 touch none of these.
+
+**Commits:** `feat(canvas): drive node fill and ink from one effective palette entry` (S1), `feat(inspector): rename accent to color and match header ink` (S2), `fix(ui): harden confirm dialog focus, busy and error states and forbid native dialogs` (S3), `feat(editor): confirm every delete in an app-styled dialog before undoable deletion` (S4), `docs: fold color and confirmation design into handoffs` (S5). Each commit passes `npm run lint`, `npm run test` and the affected e2e specs. S4's commit must include the e2e updates, because the toolbar and keyboard deletes in `scenario-e`, `scenario-i` and `a11y-keyboard` fail without the confirm step.
 
 ## 6. Open decisions (defaults chosen; none block implementation)
 
 | # | Question | Default |
 |---|---|---|
 | O1 | Rename the persisted `accent` field to `color`? | **No.** That would need a schema bump for no user benefit. Only UI copy changes. |
-| O2 | Confirm large editor deletions (for example ≥ 10 elements)? | **No.** Undo covers them, and a threshold makes the behavior unpredictable (PC 8.3). Revisit only with user evidence. |
+| O2 | Skip the editor confirmation for small deletions, or offer "Don't ask again"? | **No.** The user asked for a confirmation at every delete entry point, and a threshold or opt-out makes the behavior unpredictable. Revisit only on explicit user request. |
 | O3 | Chip plate white vs. ink-filled with a white glyph? | **White plate.** It reads as a logo on every fill, and it keeps the inverted treatment unique to the Orchestrator band. |
 | O4 | Hatch opacity 0.16? | 0.16. Adjust within 0.12–0.20 after a visual check. It is decorative. |
+| O5 | Add an Undo toast after a confirmed Ungroup (there is none today)? | **No** in this change (D-N4: reuse the existing feedback as-is). The canvas change is visible and `Mod+Z` undoes it. |
+| O6 | Toast enhancements from the earlier report (single toast, history binding, pause, 8 s, Escape, focus ring, announcement de-duplication)? | **Deferred.** They were not requested and are out of scope here (§2.5). |
