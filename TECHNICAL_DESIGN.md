@@ -4,7 +4,7 @@
 **Authority:** `PRODUCT_CONCEPT_V1.1.md` (the "product spec") is authoritative. Where this document adds a rule the spec leaves open, it is marked **[Design decision]** and applies to every implementation agent.
 **Scope guard:** No backend, no accounts or authentication, no AI/LLM calls, no collaboration, no runtime, workflow engine, executable conditions or state machine. The app is a static, local-first web app.
 **Date of research:** 2026-10-21.
-**UI v2 update:** Sections 3.1, 3.5, 3.6, 3.7, 5.1, 6.1, 6.3, 6.4, 7.1, 7.3, 10, 12 and 15.3 describe the "ported canvas" as built (`UI_V2_DESIGN.md`): per-type silhouettes, component accent, port pins on relationships, curved edges, schema version 2. **Release note:** schema v2 is *rollback-incompatible* (not destructive): a build that only knows v1 rejects v2 files and shows v2 IndexedDB records as damaged; no data is deleted and everything opens again after rolling forward.
+**UI v2 update:** Sections 3.1, 3.5, 3.6, 3.7, 5.1, 6.1, 6.3, 6.4, 7.1, 7.3, 10, 12 and 15.3 describe the "ported canvas" as built (`UI_V2_DESIGN.md`): per-type silhouettes, component accent, port pins on relationships, curved edges, schema version 2. **Release note:** schema v2 is *rollback-incompatible* (not destructive): a build that only knows v1 rejects v2 files and shows v2 IndexedDB records as damaged; no data is deleted and everything opens again after rolling forward. **UI v2 refinement (2026-10-21):** curves carry a minimum bow and tangent-aligned arrowheads, edge labels are placed clear of nodes (callout fallback), and the PNG margin is exact (§6.4, §10, §17.5). Render-only: the schema stays v2 and the saved JSON is unchanged.
 
 ---
 
@@ -611,17 +611,18 @@ The dragged-from node is always the source; port choice is purely visual.
 - **Ports and curved paths [UI v2, replaces the v1 floating straight edge]:** every end attaches to a *port anchor on the node silhouette* (`portAnchor(kind, w, h, side)` in `canvas/shapes.ts`; never the bounding-box intersection). Sides come from `visual.ports` when valid, else from the deterministic automatic rule (`autoPorts`, evaluated against the live node rects at render time, so automatic edges re-route when a node moves):
   - *Rule A (both ends automatic):* compare the horizontal and vertical gaps between the rects; the larger gap (horizontal wins ties) decides: right→left / left→right, or bottom→top / top→bottom, by the sign of the centre distance, with the ID order as a tie-breaker only at exact alignment. Swapping source and target yields the same physical sides, so stored order is never visible.
   - *Rule B (one end pinned):* the automatic end uses the port of its node nearest to the pinned anchor (ties: right, bottom, left, top).
-  - The path is a cubic `M P0 C P1 P2 P3` (`cubicEdgeGeometry`, `canvas/floating.ts`): `P0` is the source anchor pushed out by `TERMINAL_RADIUS` (3.5) along its normal, control distance `clamp(0.4 × chord, 32, 120)` along each port normal, so the curve leaves and enters perpendicular to the outline. React Flow's `getBezierPath` is not used.
+  - The path is a cubic `M P0 C P1 P2 P3` (`cubicEdgeGeometry`, `canvas/floating.ts`): `P0` is the source anchor pushed out by `TERMINAL_RADIUS` (3.5) along its normal, control distance `clamp(0.4 × chord, 32, 120)` along each port normal, so the curve leaves and enters perpendicular to the outline. **[UI v2 refinement]** A minimum bow (`CURVE_BOW_MAX` 24, `CURVE_BOW_FACTOR` 0.15, `CURVE_BOW_MIN_CHORD` 24) keeps every relationship visibly curved, including aligned facing ports; it fades to zero once the curve already bends. Undirected edges are built in canonical (code-point) id order, so the stored order is never visible. React Flow's `getBezierPath` is not used. The full algorithm is UI_V2_DESIGN §8.5.
   - **Terminal rings** (`circle.sa-edge-terminal`, `data-terminal`, `data-side`) are drawn on *both* ends of every edge, so they carry no direction.
-- **Parallel edges** keep the unordered-pair index; both inner control points shift along the chord's normal in `PARALLEL_STEP` = 20 px steps (ends stay on the ports). Labels sit at the cubic point `B(labelPosition)`.
-- Nothing handle-related besides the optional port pins is stored in the domain; edges never animate.
-- **Directed:** a closed arrowhead at the **target** end only. It is an inline path (`path.sa-edge-arrow`; no SVG `<marker>`, no `url(#…)`, so PNG export needs no ID resolution) whose tip touches the target terminal ring and whose direction is `-n_target`. The projection still sets `markerEnd` only for directed relationships and the edge uses it as the on/off switch.
+- **Parallel edges** keep the unordered-pair index; both inner control points shift along the bow-adjusted normal in `PARALLEL_STEP` = 20 px steps (ends stay on the ports). **[UI v2 refinement]** On top of the minimum bow the fan has no straight edge, and midpoints of neighbouring edges stay at least 15 px apart (UI_V2_DESIGN §8.5). Labels are placed by the layout described under *Label* below.
+- Nothing handle-related besides the optional port pins is stored in the domain; edges never animate. **[UI v2 refinement]** Label layout and the curve bow are render-only: they are computed from live geometry each render, never stored, and not part of the saved JSON or the Markdown export.
+- **Directed:** a closed arrowhead at the **target** end only. It is an inline path (`path.sa-edge-arrow`; no SVG `<marker>`, no `url(#…)`, so PNG export needs no ID resolution) whose tip touches the target terminal ring. **[UI v2 refinement]** Its direction is the curve's end tangent, `u = normalize(T − P2)`, and the last curve segment is aligned to it, so the arrowhead never kinks against the curve (this replaces the earlier `-n_target` rule, which broke on parallel edges). The projection still sets `markerEnd` only for directed relationships and the edge uses it as the on/off switch.
 - **Undirected:** no arrowheads at either end, plus a dashed stroke as a second, non-color cue. **[Design decision]** The stored source/target order is never shown as a direction anywhere (canvas, inspector, aria-labels, exports).
-- **Label** (rendered as SVG text through `BaseEdge`'s `label`/`labelShowBg`/`labelBgPadding` so it is part of the SVG and always included in PNG export):
+- **Label** (rendered by the edge itself as SVG, inside its own `<g>`, so it is part of the SVG and always included in PNG export; `BaseEdge` draws only the path). **[UI v2 refinement]** Markup: `rect.react-flow__edge-textbg` (radius 3) and `text.react-flow__edge-text` with one or two `tspan`s 15 px apart; the group carries `data-mode` (`path`, `path-wrapped` or `callout`). Callouts add a dashed leader and a 1 px plate border (`.sa-edge-label__plate--callout`). Text:
   - predefined type without label → type verb, e.g. "reads from";
   - predefined type with label → "reads from · {label}";
   - `generic` with label → "{label}"; without label → "relates to".
   - Labels truncate to 40 characters with "…" on the canvas (full text in inspector and aria-label).
+  - **[UI v2 refinement] Placement** (`canvas/edgeLabels.ts`, pure): on the path in one line, then on the path in two lines, then as a callout with a leader, and finally a guaranteed fallback callout above the pair, so a label is never dropped or covered by a node. Obstacles are the component boxes, group header strips, arrowhead boxes, terminal rings and earlier plates, each inflated by `LABEL_CLEARANCE` (4 px). The canvas computes it once per render for all edges (`layoutDiagramLabels`, from the live node rects) and hands each edge its placement through `EdgeLabelLayoutContext` (`EdgeLabelLayoutProvider` in `CanvasView`). An edge rendered outside the canvas lays out only against its own nodes. Plate padding is `LABEL_PAD_X` 6 and `LABEL_PAD_Y` 2; text is 12 px. Text measurement uses `canvas` `measureText`, with a 7 px per code point fallback where that is unavailable (jsdom).
 - Parallel relationships between the same pair are allowed; the second and later ones bulge to alternating sides (index-based, 20 px steps) so labels do not overlap. **[Design decision]**
 - Selected edge: thicker stroke + selection color; focus ring for keyboard focus.
 
@@ -890,16 +891,16 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void>;
 ```
 
 1. If there are no components and no groups → button disabled ("Nothing to export").
-2. `bounds = api.getDiagramBounds()`: the React Flow `getNodesBounds` over all nodes (including group nodes, so group containers are inside the image) **united with every relationship's extent**. Curves can bulge up to `CURVE_MAX` (120 px) plus the parallel offset outside the nodes, so for each edge the bounds include the four cubic control points (a cubic lies inside their convex hull), both terminal rings, the arrow tip and the label plate (`edgeBounds`, `canvas/bounds.ts`). The label plate is a deterministic estimate centred on the label point (8 px per character plus 6 px padding per side, 24 px tall; deliberately generous so it never under-estimates), not a DOM measurement, so the function stays pure and independent of render timing.
-3. Image size = bounds + 48 px padding on each side; scale so neither side exceeds 4096 CSS px; `pixelRatio: 2` (final ≤ 8192 px).
-4. `const vp = getViewportForBounds(bounds, width, height, 0.1, 2, 0.05)` (signature checked: bounds, width, height, minZoom, maxZoom, padding).
+2. `bounds = api.getDiagramBounds()` (`computeDiagramBounds`, `canvas/bounds.ts`). **[UI v2 refinement]** `B` is the union of: every component and group box, inflated by 1 px; every edge's exact cubic bounding box (per axis, the curve at `t = 0`, `1` and the interior roots of `B′(t)`), inflated by 0.75 px, not the control-point hull; every arrowhead's three vertices and both terminal rings (`R + 0.75`); and every label plate and leader end point from the same `layoutDiagramLabels` the canvas draws. With nothing to draw it is a zero rect. The label layout is pure and independent of render timing.
+3. Frame (`computeExportFrame`, `io/exportPng.ts`). **[UI v2 refinement]** `PAD = 48`. `s = min(1, 4096 / (B.width + 96), 4096 / (B.height + 96))`, with no lower clamp. Image size `ceil((B + 96)·s)` CSS px, capped at 4096 (the small epsilon keeps floating-point noise from adding a pixel). `pixelRatio: 2`, so the final image is at most 8192 px.
+4. Transform: `transform = { x: (48 − B.x)·s, y: (48 − B.y)·s, zoom: s }`. **[UI v2 refinement]** `getViewportForBounds` is no longer used. It fits the bounds with its own padding (about 2.4 %) and zooms up to 2×, which removed the margin. The margin is `48·s` CSS px on every side, so it shrinks with the diagram when the 4096 px cap applies, and it is `96·s` device px on the exported PNG.
 5. Add class `sa-exporting` to the React Flow root for the duration (CSS hides ports/handles, resize controls, focus rings and the selection outline and halo, `.sa-node__selection` / `.sa-node__halo`), then:
    ```ts
    toPng(api.getViewportElement()!, {
      backgroundColor: <canvas background token>,
      width, height, pixelRatio: 2,
      style: { width: `${width}px`, height: `${height}px`,
-              transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})` },
+              transform: `translate(${frame.transform.x}px, ${frame.transform.y}px) scale(${frame.transform.zoom})` },
      filter: (node) => !(node instanceof HTMLElement && node.classList.contains("react-flow__handle")),
    })
    ```
@@ -1025,7 +1026,7 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 
 ### 15.3 End-to-end (Playwright, Chromium required; Firefox and WebKit run in CI if available)
 
-One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, accent persistence/undo/duplicate/round trip, schema v1 → v2 import, PNG bounds for a bulging curve), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
+One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, accent persistence/undo/duplicate/round trip, schema v1 → v2 import, PNG bounds for a bulging curve, and the UI v2 refinement checks E1–E4: curve bow, label clearance and PNG margins at 48 CSS px and at the 4096 px cap), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
 
 - **H (PNG):** export, read the downloaded file, assert PNG signature, dimensions and a clean frame (no content cropped at the edge), no selection-colored pixels, and the presence of both terminal rings and the arrowhead in the DOM before export. There is no stored image baseline: the check is pixel-statistical against the v2 canvas background `#F7F6F3`. Set `SA_E2E_PNG_DIR=<dir>` to also write the exported PNGs for human review.
 - **J (no external services):** `page.route("**/*", ...)` aborts and records any request whose host is not the preview server; run the full A–I flow; assert zero recorded requests. No login screens exist.
@@ -1060,7 +1061,7 @@ Approve the runtime dependency `react-markdown@^10.1.0` for the Notes preview; t
 
 ## 17. Implementation plan
 
-The repository is currently **not a Git repository** (only `PRODUCT_CONCEPT_V1.1.md` exists). The coordinator decides whether to `git init` before Stage 0; this design does not assume it. Commit guidance below applies once a repository exists.
+The project is a Git repository (branch `sa-canvas-v2`, branched from `main`). The commit guidance below applies to it. §17.5 lists the commit sequence, including the UI v2 refinement commits.
 
 ### 17.1 Stages and product phases
 
@@ -1153,6 +1154,8 @@ All five can start immediately after S0. Hard integration order: A → (B, C, D)
 
 Commits 2–6 may land in any order that keeps the build green (each workstream's placeholders/test doubles make this possible); 6 lands after 4 and 5 so the shell mounts real components. Each commit message ends with the coordinator's attribution trailer.
 
+**UI v2 refinement commits (2026-10-21, on `sa-canvas-v2`, in order):** `2fb60a4` `feat(canvas): bow every relationship curve and align arrowheads to the tangent`; `91198a6` `fix(export): keep a 48 px PNG margin with an explicit export transform`; `17bad54` `feat(canvas): place edge labels clear of nodes with callout fallback`; `eb89a20` `fix(export): bound the PNG by painted extents including label callouts`. The plan required each commit to keep typecheck, lint, unit tests, build and e2e (Scenario K excluded) green; the final state passed all of them (542 unit tests, 26 e2e). **Persistence:** the schema stays v2 and the saved JSON is unchanged; label layout and curve bow are render-only and never persisted. **Rollback:** revert these commits in reverse order. No data migration is needed.
+
 ---
 
 ## 18. Traceability
@@ -1202,7 +1205,7 @@ Scenario K is out of the release gate; S-INT provides the Lead Hunting Engine fi
 - Edge fields: `markerStart`, `markerEnd`, `label`, `ariaLabel`, `focusable`, `selectable`, `deletable`, `reconnectable`, `interactionWidth`, `domAttributes`, `type`, `data`.
 - Accessibility: `nodesFocusable`, `edgesFocusable`, `disableKeyboardA11y` (disables arrow-key movement; Tab focus and selection still work), `ariaLabelConfig`, node `ariaRole`, `domAttributes`; Enter/Space select, Escape clears selection.
 - `NodeResizer` props: `minWidth`, `minHeight`, `isVisible`, `keepAspectRatio`, `onResizeStart`, `onResizeEnd`.
-- `getViewportForBounds(bounds, width, height, minZoom, maxZoom, padding)`.
+- `getViewportForBounds(bounds, width, height, minZoom, maxZoom, padding)`. Verified as a library signature; the app no longer calls it (UI v2 refinement, §10 step 4).
 - React Flow "Download Image" example uses `html-to-image` pinned to 1.11.11 because later versions did not export correctly (per the example page); npm latest is 1.11.13.
 - Floating-edges example uses `internals.positionAbsolute` and `measured` of internal nodes.
 - Removing the React Flow attribution is requested only for Pro subscribers.
@@ -1216,7 +1219,7 @@ Scenario K is out of the release gate; S-INT provides the Lead Hunting Engine fi
 | Assumption | Check | Owner |
 |---|---|---|
 | Edge `zIndex` above group nodes renders edges over group fills | Canvas spike; fallback in 16 | WS-C |
-| `BaseEdge` `label` renders SVG text included in `toPng` output | Canvas spike PNG | WS-C |
+| Edge label SVG (`rect.react-flow__edge-textbg` and `text.react-flow__edge-text`, drawn by the edge itself since the UI v2 refinement, not `BaseEdge`'s `label`) is included in `toPng` output | Canvas spike PNG | WS-C |
 | `html-to-image@1.11.11` works with React 19 / current Chromium, Firefox, WebKit | Spike + `scenario-h` | WS-C / S-INT |
 | `NodeResizer.onResizeEnd` provides final `x, y, width, height` (type `OnResizeEnd`, params not documented on the page) | Read the type in `node_modules` | WS-C |
 | `dragHandle` node option limits dragging to the group header selector | Spike | WS-C |

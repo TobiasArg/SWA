@@ -85,7 +85,13 @@ The type ink and fill tokens (UH §2.3) are **unchanged**. Their contrast agains
 | `TERMINAL_RADIUS` | 3.5 | Edge terminal ring radius (stroke 1.5) |
 | `ARROW_LENGTH` / `ARROW_HALF_WIDTH` | 10 / 4.5 | Unchanged from v1 `arrowheadGeometry` |
 | `CURVE_MIN` / `CURVE_MAX` / `CURVE_FACTOR` | 32 / 120 / 0.4 | Control-point distance `clamp(0.4 · chord, 32, 120)` |
+| `CURVE_BOW_MAX` | 24 | Largest minimum bow (px), perpendicular to the chord; every curve bends at least this much unless it already does (§8.5 step 5) |
+| `CURVE_BOW_FACTOR` | 0.15 | Bow target as a fraction of the chord length |
+| `CURVE_BOW_MIN_CHORD` | 24 | Below this chord length no bow is added (touching or overlapping nodes; §8.5 step 10) |
 | `PARALLEL_STEP` | 20 (was 12) | Perpendicular bulge step for parallel relationships |
+| `LABEL_PAD_X` / `LABEL_PAD_Y` | 6 / 2 | Edge label plate padding (px); equals the v1 `labelBgPadding` |
+| `LABEL_LINE_HEIGHT` | 15 | Baseline spacing of a two-line label (px) |
+| `LABEL_CLEARANCE` | 4 | Gap kept between a label plate and any obstacle (px); §8.5 "Labels" |
 | `CONNECTION_RADIUS` | 20 | React Flow `connectionRadius` (snaps to a port within 20 px) |
 
 ### 2.3 Accent palette (16 fixed IDs)
@@ -355,7 +361,7 @@ The path never animates (C4). React Flow's `animated` stays `false`.
 ### 8.1 Pointer connection (replaces the TD 6.3 "Connect (pointer)" bullet; picker behavior unchanged)
 
 1. **Start:** press on a port of component S. The pressed port's side becomes `sourcePort` (always pinned).
-2. **Drag:** the ports of every component appear. The connection line is a **preview cubic** (§8.5 formula) from S's anchor along S's port normal to the pointer. When React Flow snaps to a port within `CONNECTION_RADIUS` 20 px, the preview ends at that port's anchor and uses that port's normal; otherwise the end tangent points straight at the pointer. The line is dashed `6 4`, 1.5 px `--sa-port-active` (danger over invalid targets, v1), with the v1 end dot.
+2. **Drag:** the ports of every component appear. The connection line is a **preview cubic** (§8.5 formula) from S's anchor along S's port normal to the pointer. When React Flow snaps to a port within `CONNECTION_RADIUS` 20 px, the preview is the undirected §8.5 curve from S's pressed port to that port's anchor (the same bow the final edge will have, no parallel offset, no arrowhead), so the user sees the curve they will get; otherwise the end tangent points straight at the pointer. The line is dashed `6 4`, 1.5 px `--sa-port-active` (danger over invalid targets, v1), with the v1 end dot.
 3. **Release on a port of T** (`connection.targetHandle` set, T ≠ S, T is a component): `targetPort` = that side (pinned).
 4. **Release on T's body** (not near a port): `targetPort` stays **automatic** (not stored). The highlighted port during the hover is the automatic choice from §8.3, so what the user saw is what they get.
 5. **Release elsewhere:** nothing happens (v1: no picker).
@@ -408,15 +414,22 @@ For each relationship:
 1. Resolve the sides (pins or §8.3). Anchors `A_s`, `A_t` are the absolute node position plus `portAnchor(kind, w, h, side)`. Normals `n_s`, `n_t` come from `portNormal(side)` (top `(0,-1)`, right `(1,0)`, bottom `(0,1)`, left `(-1,0)`).
 2. **Terminal rings:** circles of radius `TERMINAL_RADIUS` centered on `A_s` and `A_t`, drawn on **both** ends of **every** edge. They are symmetric, so they add no direction cue.
 3. **Line start:** `P0 = A_s + n_s · TERMINAL_RADIUS` (the outer edge of the ring).
-4. **Line end:**
-   - Directed: tip `T = A_t + n_t · (TERMINAL_RADIUS + 0.75)` (the arrow tip touches the ring). Arrow direction `u = -n_t` (pointing into the node). Arrow base `B = T + n_t · ARROW_LENGTH`. The curve ends at `P3 = B - n_t · 2`, which is 2 px inside the arrowhead, as in v1 (`lineEnd`).
-   - Undirected: `P3 = A_t + n_t · TERMINAL_RADIUS`.
-5. **Controls:** `d = clamp(CURVE_FACTOR · |P3 − P0|, CURVE_MIN, CURVE_MAX)`. `P1 = P0 + n_s · d`, `P2 = P3 + n_t · d`. Because `P2` lies on the target normal, the curve arrives along `-n_t`, so the arrowhead (drawn along `-n_t`) lines up with the curve's tangent.
-6. **Parallel relationships:** keep `computeParallelInfo` (unordered pair, canonical side) with `PARALLEL_STEP = 20`. Shift **both** `P1` and `P2` by `parallelOffset` along the left-hand normal of the chord `P0 → P3`. Endpoints stay on the ports, so parallel edges share terminals and fan out in the middle (midpoint separation ≈ 0.75 × 20 = 15 px per step).
-7. **Path:** `M P0 C P1 P2 P3`, built by a pure `cubicEdgeGeometry(...)` in `floating.ts` (renamed or extended). Do not use React Flow's `getBezierPath`; its curvature rules are not this specification.
-8. **Label:** placed at the cubic point `B(t)` with `t = labelPosition` (0.5, 0.65, 0.35, …; v1 spreading rule unchanged), using the v1 text, truncation and plate. It is SVG text, so it is exported.
-9. **Arrowhead geometry:** `arrowheadGeometry` takes the tip and direction (`T`, `u`) instead of deriving them from a straight segment. It returns the same triangle path format.
-10. **Degenerate cases:** if `|P3 − P0| < ARROW_LENGTH` (overlapping nodes), draw the path without an arrowhead *only* for undirected edges. For directed edges, still draw the arrowhead at `T`, because the direction must never disappear (C2). Coincident anchors give a zero-length path plus terminals and arrowhead; nothing is thrown.
+4. **Provisional end:** directed `E = A_t + n_t · (TERMINAL_RADIUS + 0.75 + ARROW_LENGTH − 2)`; undirected `E = A_t + n_t · TERMINAL_RADIUS`. Chord `c = E − P0`, `ℓ = |c|`.
+5. **Controls and minimum bow:** `d = clamp(CURVE_FACTOR · ℓ, CURVE_MIN, CURVE_MAX)`, base controls `C1 = P0 + n_s · d`, `C2 = E + n_t · d`. Bow normal `b̂` is geometric (independent of IDs and stored order): with `ĉ = c/ℓ` and `p = (−ĉ.y, ĉ.x)`, a horizontal-dominant chord (`|ĉ.x| ≥ |ĉ.y|`, 45° counts as horizontal) takes `b̂ = ±p` with `b̂.y < 0` (bows up); otherwise `b̂ = ±p` with `b̂.x > 0` (bows right). If `ℓ < CURVE_BOW_MIN_CHORD`, skip the bow (`b̂ = (0, −1)` for the label rule, shift = parallel only). Otherwise the existing bend is `h = max(|(C1 − P0)·b̂|, |(C2 − P0)·b̂|)`, the bow target is `B = min(CURVE_BOW_MAX, CURVE_BOW_FACTOR · ℓ)`, and the bow is `β = max(0, B − h)`. The bow is largest for aligned facing ports and fades to 0 once the curve already bends by `B`, so it is continuous in node positions.
+6. **Parallel shift and bow as one scalar on `b̂`:** `π = parallelOffset · (leftNormal(c) · b̂)` with `leftNormal(c) = (c.y, −c.x)/ℓ` (the V2 sign convention). Total shift `σ = π + sgn(π) · β` with `sgn(0) = +1`, so the bow always pushes away from the straight line on the side the parallel offset chose. `P1 = C1 + b̂ · σ`, `P2 = C2 + b̂ · σ`. For aligned facing ports, the totals for parallel indexes are `σ = β, +20 + β, −20 − β, …`, so no edge of a fan is straight and midpoints stay ≥ 15 px apart. When `h ≥ B` (nodes already offset), `β = 0` and the fan is exactly V2's.
+7. **Path:** `M P0 C P1 P2 P3`, built by the pure `cubicEdgeGeometry(...)` in `floating.ts`. Do not use React Flow's `getBezierPath`; its curvature rules are not this specification.
+8. **Undirected canonical order (step 0, before any arithmetic):** if the edge is undirected and `sourceId > targetId` (code-point order), the geometry swaps the anchors and normals, negates `parallelOffset`, and uses `1 − labelPosition`. Directed edges are never swapped. The `d` string, the terminal rings and the label point are therefore identical whatever the stored order, which also keeps the `6 4` dash phase identical. The DOM still exposes the stored roles on the terminal rings (`data-terminal`, `data-side`).
+9. **Directed end and arrowhead:** tip `T = A_t + n_t · (TERMINAL_RADIUS + 0.75)` (the arrow tip touches the ring). The arrow direction is the unit `u = normalize(T − P2)` (or `−n_t` if that is zero), so `P3 = T − u · (ARROW_LENGTH − 2)` lies on the segment `P2 → T` and the curve's end tangent `P3 − P2` is **exactly parallel to `u`**. The arrowhead therefore never kinks against the curve. This replaces the V2 rule "end tangent equals `−n_t`", which broke on parallel edges whose shifted `P2` pulled the tangent away from `−n_t`. The triangle is `arrowheadGeometry(T, u)`, the same path format as before. Undirected: `P3 = E`, no arrowhead. The arrowhead enters at an angle of at most about 18°; its corners stay outside the target node box (U4 sweep), and the bow side is geometric, so it adds no direction cue.
+10. **Degenerate cases:** if the chord is shorter than `CURVE_BOW_MIN_CHORD` (overlapping or touching nodes), no bow is added and only the parallel shift applies. For directed edges, the arrowhead is still drawn at `T`, because the direction must never disappear (C2). Coincident anchors give a zero-length path plus terminals and arrowhead; nothing is thrown.
+
+**Labels (replaces the V2 "label at B(t)" rule).** The label point is `B(t)` with `t = labelPosition` after step 0. Its text is the v1 canvas label (40-character truncation). Placement is **collision-aware** and computed once per render for every edge (`layoutDiagramLabels` in `canvas/edgeLabels.ts`, from the live node rects), in ascending relationship `id` order. Each label is tried in this order, and the first free candidate wins:
+
+- **Path, one line:** centered on `B(t)` for `t = clamp(baseT + k, 0.2, 0.8)`, `k = 0, +0.1, −0.1, +0.2, −0.2, +0.3, −0.3`.
+- **Path, two lines:** the same `t` list with a two-line plate. The text splits at the first `" · "` (line 1 keeps the `·`), otherwise at the space nearest the middle code point (`floor(n/2)`; the earlier space wins ties).
+- **Callout:** a one-line plate away from the curve, joined to `B(baseT)` by a leader. Directions are tried in the order `b̂, −b̂, up, down, left, right`, at radii `12 + 12·j` px for `j = 0…19`. The leader must not cross any node box.
+- **Fallback:** a callout directly above `B(baseT)` that moves strictly upward past whatever it would cover. It always terminates, and a label is never dropped or hidden. Its leader may pass behind nodes, which the edge layer paints beneath (node fills are opaque).
+
+Obstacles are the component boxes, group header strips, arrowhead boxes and terminal rings, and earlier plates, each inflated by `LABEL_CLEARANCE`. Edge paths are not obstacles. Plates are 12 px text, `(max line width + 2·LABEL_PAD_X) × (15·lines + 2·LABEL_PAD_Y)`. The leader is a 1 px `--sa-edge-stroke` dashed (`2 2`) line, with no markers, never animated and not pointer-active. A callout plate also has a 1 px `--sa-edge-stroke` border. Together these tell a callout apart from a node and from an undirected (`6 4`) edge. Labels are SVG, so they export.
 
 **Boundary geometry rule:** endpoints are **port anchors on the silhouette** (§3.2), never the bounding-rectangle intersection. This fixes the v1 gap where floating edges stopped on the invisible box corner of chamfered Decision nodes. Every anchor must lie on the outline within 0.5 px; this is unit-tested by a point-on-segment or point-on-ellipse check for each `ShapeKind` and side, at `MIN_SIZE`, the default size and `MAX_SIZE`.
 
@@ -439,8 +452,9 @@ Add a read-only **Ports** row:
 | Terminals and arrowheads | Included (part of the edge SVG). The arrow tip touches the terminal ring, so with ports removed nothing appears detached. |
 | Selection, halo, focus, resize | Hidden by `.sa-exporting` (extend the CSS rule to `.sa-node__selection`, `.sa-node__halo`). |
 | Accents | Included as rendered. |
-| **Export bounds (behavior change)** | Curves can bulge up to `CURVE_MAX` (120 px) plus the parallel offset outside the node bounds, beyond the 48 px padding. Add `CanvasApi.getDiagramBounds()` = union of `getNodesBounds()` and, for every edge, the bounding box of its four cubic control points (a cubic lies inside the convex hull of its control points) and its label plate. `exportPng` uses it instead of `getNodesBounds()`. The 4096 px cap and `pixelRatio: 2` are unchanged. |
-| Baseline | The Scenario H stored export baseline must be regenerated once and reviewed by a human. |
+| **Export bounds (behavior change)** | `B` is the union, in flow coordinates, of: every component and group box, inflated by 1 px (the 2 px Orchestrator outline); for every edge, the **exact** bounding box of its cubic (per axis, the curve at `t = 0`, `1` and at the interior roots of `B′(t)`) inflated by 0.75 px, not the control-point hull; every arrowhead's three vertices and both terminal rings (`R + 0.75`); and every label plate and leader end point, from the same layout the canvas draws (§8.5 "Labels"). `CanvasApi.getDiagramBounds()` returns this union (`computeDiagramBounds` in `canvas/bounds.ts`), and `exportPng` uses it instead of `getNodesBounds()`. |
+| **Export frame (behavior change)** | `PAD = 48`, `MAX = 4096`, `RATIO = 2`. `s = min(1, MAX / (B.width + 2·PAD), MAX / (B.height + 2·PAD))`, with no lower clamp. Image size is `ceil((B + 2·PAD)·s)` CSS px, capped at 4096. Transform `{ x: (PAD − B.x)·s, y: (PAD − B.y)·s, zoom: s }`. `getViewportForBounds` is **not** used: it fits with its own padding and zooms up to 2×, which removed the margin. The margin is `48·s` CSS px on the left and top (`96·s` device px at `pixelRatio: 2`); right and bottom are within one pixel of that. Implemented as `computeExportFrame` in `io/exportPng.ts`. |
+| Baseline | Scenario H has no stored image baseline; its check is pixel-statistical and it passes. The export margin is checked by e2e E3 and E4 and by the reviewed fixture (§12 M2). |
 
 ---
 
@@ -461,7 +475,7 @@ Add a read-only **Ports** row:
 
 ## 11. Accessibility criteria (v2 additions to TD 12 and UH §9.3)
 
-1. **Not color alone:** in a grayscale screenshot, the six component variants are distinguishable by silhouette, header band, dash and hatch, icon and label, both **with and without** any accent.
+1. **Not color alone:** in a grayscale screenshot, the six component variants are distinguishable by silhouette, header band, dash and hatch, icon and label, both **with and without** any accent. **Status: completed (2026-10-21).** Coordinator manual review of the default-style grayscale screenshot, then an implementation re-check of a new color and grayscale capture of all six types, each in default style and with an accent (the capture used tomato, mustard, teal, plum, coral and cocoa). In grayscale all six are distinguishable with and without accents: rounded rectangle (Agent); rounded rectangle with a solid dark header band (Orchestrator); chamfered octagon (Tool); cylinder with a lid rim (Data Store); dashed, hatched parallelogram (External); hexagon (Decision). Each also has its icon chip and type label. Accents change only the border stroke, the chip tint and the glyph color. The Data Store name line is visible at default height. The screenshots are review artifacts kept outside the repository.
 2. **Non-text contrast:** silhouette strokes (type ink or accent ink) ≥ 3:1 against the canvas and their own fill (actual ≥ 4.97:1). The selection outline ≥ 3:1 (6.34). Port ring ≥ 3:1 (5.34). Edge stroke and terminals ≥ 3:1 (5.34). Picker swatch rings ≥ 3:1 on white.
 3. **Text contrast:** unchanged (≥ 4.5:1), because accents never color text.
 4. **Selection is not only a color:** an extra outline at a 4 px offset plus the halo, distinct from the rectangular focus ring.
@@ -480,8 +494,8 @@ Add a read-only **Ports** row:
 2. For each `ShapeKind` × side × size in {`MIN_SIZE`, default, `MAX_SIZE`}, `portAnchor` lies on the outline from `shapePath` within 0.5 px.
 3. `autoPorts` matches a table of at least 12 placements (all four quadrants, aligned, overlapping, equal gaps). Swapping source and target gives the same physical sides. Calls with identical input return identical output.
 4. Rule B nearest-port selection, including the tie order.
-5. `cubicEdgeGeometry`: for directed edges the end tangent equals `-n_t` and the arrow tip is `TERMINAL_RADIUS + 0.75` from the anchor. Undirected edges return no arrowhead. Parallel index 1 and 2 bulge to opposite sides. The label point equals `B(labelPosition)`.
-6. `getDiagramBounds` contains every control point and every label plate.
+5. `cubicEdgeGeometry`: for directed edges the arrow tip is `TERMINAL_RADIUS + 0.75` from the anchor, and the arrow direction is parallel to the end tangent `P3 − P2` (angle below 1e-9 rad; U4). Every edge with chord ≥ `CURVE_BOW_MIN_CHORD` bows as §8.5 (U1, U2, U5). Undirected edges return no arrowhead. Parallel index 1 and 2 bulge to opposite sides. Swapping the stored ends of an undirected edge gives an identical path, terminals and label point (U3). The label point equals `B(labelT)`.
+6. `getDiagramBounds` contains the exact extent of every curve (not the control-point hull; U9), every arrowhead vertex, every terminal ring, every label plate and every leader end point (§9).
 7. Domain: `setComponentAccent` (single undo entry, no-op on an unchanged value, `E_COMPONENT_NOT_FOUND` for unknown and group IDs, `E_INVALID_ACCENT` for unknown accents), `setRelationshipPorts` (keeps other `visual` keys, `null` removes `ports`), `reverseRelationship` swaps pins, `duplicateComponents` copies `accent`.
 8. Validation: an unknown accent gives `E_INVALID_ACCENT`. Malformed `visual.ports` is valid and preserved verbatim.
 9. Migration: a v1 file migrates to v2 unchanged. A v2 round trip is byte-stable with `accent` after `size`. Version 3 is rejected. A stored v1 IndexedDB record is rewritten as v2.
@@ -499,11 +513,19 @@ Add a read-only **Ports** row:
 15. Drag from Agent A's right port to Tool B's left port and choose "Uses". The relationship persists `visual.ports = {source: "right", target: "left"}`. The path starts at A's right anchor. The arrowhead points into B's left port.
 16. Drag from a port and release on B's body. Only `ports.source` is persisted. The highlighted port before release equals the rendered target port.
 17. Connect dialog: no `visual` is written. Moving B from the right of A to below A re-routes the edge to bottom → top.
-18. An undirected `shares_context_with` relationship shows no arrowhead and two identical terminal rings. Reversing the stored order in a fixture renders identical pixels.
+18. An undirected `shares_context_with` relationship shows no arrowhead and two identical terminal rings. Reversing the stored order in a fixture renders identical pixels. The canonical order of §8.5 step 8 applies before any arithmetic, so the path, terminals and label are identical.
 19. Reset ports in the inspector removes the pins in one undo step.
-20. PNG export (Scenario H, regenerated baseline): it contains shapes, accents, labels, terminals and arrowheads, and no ports or selection. A curve that bulges beyond the node bounds is fully inside the image.
-21. Grayscale screenshot check (manual review, recorded): the six variants can be told apart with and without accents.
+20. PNG export (Scenario H pixel check, plus E3 and E4 below): it contains shapes, accents, labels, terminals and arrowheads, and no ports or selection. A curve that bulges beyond the node bounds is fully inside the image, with a 48 CSS px margin on every side (§9 "Export frame").
+21. Grayscale screenshot check (manual review, recorded): the six variants can be told apart with and without accents. **Completed 2026-10-21** (§11 item 1).
 22. Scenarios A–J stay green. Scenario K is not run or prioritized.
+
+**Refinement acceptance status (2026-10-21).** The curve, label and export rules above are verified by these tests. Commits: `2fb60a4` (curves), `91198a6` (export frame), `17bad54` (labels), `eb89a20` (export bounds).
+
+- **Unit (Vitest), passing:** U1, U2, U5 and U6 in `src/canvas/floating.test.ts`; U3 and U4 in `floating.test.ts`; U7 (stages a–f) in `src/canvas/edgeLabels.test.ts`; U8 (frame vectors, no `getViewportForBounds` import) in `src/io/exportPng.test.ts`; U9 in `src/canvas/bounds.test.ts`.
+- **End-to-end (Playwright), passing:** E1 (every path bows at least 5 px from its chord), E2 (no label plate intersects a node, full label text, A→B has a `.sa-edge-leader`), E3 (uncapped export margin) and E4 (capped export margin) in `e2e/ui-v2.spec.ts`.
+- **E5 (regression), passing:** items 15–19 above and Scenarios A–J are green. Scenario K is not run.
+- **Manual, recorded:** M1 is item 21 (completed). M2 is complete: the review fixture (A → B "delegates to · coordinates", B → C, and an undirected `shares_context_with`) was re-exported at 1836 × 436 device px. All curves bow visibly, the A → B label is a callout above the pair with a dashed leader, and the margins are equal. Measured margins are left 96, top 95, right 96 and bottom 98 device px (expected 96). The capped fixture (E4: 8192 × 250 device px) has margins 64, 64, 64 and 65 device px (expected 64.48).
+- **Shipped validation:** typecheck, lint, 542 unit tests, build and 26 e2e tests (Scenario K excluded) pass.
 
 ---
 

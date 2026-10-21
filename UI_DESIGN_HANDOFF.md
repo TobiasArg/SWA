@@ -202,18 +202,20 @@ A group is a **container, not a component** (PC 6.6, PC 14), so it gets none of 
 
 All relationship types share one neutral ink. The **type is read from the label**, not from color. With ten types, color coding would add a legend to learn (low cognitive load, PC 14) and would fail for color-blind readers.
 
-**Geometry (UI v2).** Edges are **cubic curves** between port anchors on the node silhouettes (TD 6.4): the line leaves and enters perpendicular to the outline, with control distance `clamp(0.4 × chord, 32, 120)`. **Both ends of every edge carry an identical terminal ring** (radius 3.5, 1.5 px `--sa-edge-stroke`, `--sa-edge-terminal-fill` inside), so the rings add no direction cue. Only the arrowhead shows direction. Edges never animate; there are no flow dots, gradients, tapering or step markers.
+**Geometry (UI v2).** Edges are **cubic curves** between port anchors on the node silhouettes (TD 6.4): the line leaves and enters perpendicular to the outline, with control distance `clamp(0.4 × chord, 32, 120)`. Every curve also has a minimum bow (up to 24 px, perpendicular to the chord), so even aligned facing ports never draw a straight line; the bow fades out once the curve already bends. **Both ends of every edge carry an identical terminal ring** (radius 3.5, 1.5 px `--sa-edge-stroke`, `--sa-edge-terminal-fill` inside), so the rings add no direction cue. Only the arrowhead shows direction. Edges never animate; there are no flow dots, gradients, tapering or step markers.
 
 | Property | Directed | Undirected |
 |---|---|---|
 | Stroke | 1.5 px **solid** `--sa-edge-stroke` | 1.5 px **dashed** `--sa-edge-stroke`, `stroke-dasharray: 6 4` |
-| Arrowhead | Closed inline arrowhead at the **target only**, 10 px long, filled with the stroke color; its tip touches the target ring and it points into the node along the port normal | **None at either end** |
+| Arrowhead | Closed inline arrowhead at the **target only**, 10 px long, filled with the stroke color; its tip touches the target ring and it points along the curve's end tangent, so it never kinks against the line | **None at either end** |
 | Terminal rings | Both ends | Both ends |
 | Label | As defined in TD 6.4 | As defined in TD 6.4 |
 
 Both cues (dash pattern and arrowhead) are always present together. Never style an undirected edge to suggest an order: no gradient, no tapering, no start marker.
 
-**Label styling:** `--sa-text-xs` in `--sa-edge-label-text` on an `--sa-edge-label-bg` rounded rectangle (`labelBgPadding` [6, 2], radius 3), at the cubic point `B(labelPosition)` (0.5 for a single edge). Labels are SVG text, so they appear in the PNG export (TD 6.4). Truncation follows TD 6.4.
+**Label styling:** 12 px text (`.react-flow__edge-text`) in `--sa-edge-label-text` on an `--sa-edge-label-bg` rounded rectangle (padding 6 px across and 2 px down, radius 3). A label is one line, or two lines 15 px apart when it must wrap. When it fits, it sits on its curve at `B(labelPosition)` (0.5 for a single edge). Otherwise it moves to free space as a callout with a leader (below). A label never covers a node. Labels are SVG text, so they appear in the PNG export (TD 6.4). Truncation follows TD 6.4.
+
+**Callout (label moved off its curve):** the label plate gets a 1 px `--sa-edge-stroke` border (`.sa-edge-label__plate--callout`). A leader, `line.sa-edge-leader`, runs from the curve point to the nearest edge of the plate. It is 1 px `--sa-edge-stroke`, dashed `2 2`, has no markers, takes no pointer events, and is never animated. It follows the hover and selected stroke colors, like the terminal rings. The dashed leader and the plate border tell a callout apart from a node and from an undirected (`6 4`) edge.
 
 **Edge states:**
 
@@ -222,12 +224,13 @@ Both cues (dash pattern and arrowhead) are always present together. Never style 
 | Rest | as above |
 | Hover | stroke `--sa-edge-stroke-hover`; the label text stays the same |
 | Selected | stroke `--sa-edge-stroke-selected`, width `--sa-stroke-selected`, arrowhead and terminal rings in accent; label background gets a 1 px accent border |
+| Callout | plate border and dashed leader as above; the leader follows hover and selected colors |
 | Keyboard focus | the focus ring (9.1) drawn around the label rectangle, plus the selected stroke if the edge is also selected |
 | Exporting (`.sa-exporting`) | rest style only; selection and focus hidden (TD 10) |
 
-**Connection line (while dragging from a port):** a dashed preview cubic (6 4, 1.5 px accent) from the pressed port along its normal, ending in a small accent dot; when snapped to a port within 20 px it ends at that port's anchor and arrives along its normal, otherwise its end tangent points at the pointer. The port that would be used on release (the snapped port, or the automatic choice on a body hover) is filled and enlarged 1.2×. Over an invalid target (a group, the pane, the same node; TD 6.3, 13) the line switches to `--sa-color-danger` and the cursor to `not-allowed`. The red color is reinforced by the cursor change and by the fact that no picker opens on release.
+**Connection line (while dragging from a port):** a dashed preview cubic (6 4, 1.5 px accent) from the pressed port along its normal, ending in a small accent dot; when snapped to a port within 20 px it is the undirected curve (with the same bow the edge will have) ending at that port's anchor, otherwise its end tangent points at the pointer. The port that would be used on release (the snapped port, or the automatic choice on a body hover) is filled and enlarged 1.2×. Over an invalid target (a group, the pane, the same node; TD 6.3, 13) the line switches to `--sa-color-danger` and the cursor to `not-allowed`. The red color is reinforced by the cursor change and by the fact that no picker opens on release.
 
-**Parallel edges:** the 20 px steps from TD 6.4 (ends stay on the ports, the middles fan out). No extra styling.
+**Parallel edges:** the 20 px steps from TD 6.4 (ends stay on the ports, the middles fan out). The minimum bow keeps every edge of the fan curved. No extra styling.
 
 ---
 
