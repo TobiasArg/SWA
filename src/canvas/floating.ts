@@ -6,8 +6,19 @@
  * the same pair are shifted perpendicular to the line in 12 px steps.
  */
 import type { Position, Rect, Relationship } from "../domain/types";
+import {
+  ARROW_HALF_WIDTH,
+  ARROW_LENGTH,
+  CURVE_FACTOR,
+  CURVE_MAX,
+  CURVE_MIN,
+  PARALLEL_STEP,
+  TERMINAL_RADIUS,
+  portNormal,
+  type PortSide,
+} from "./shapes";
 
-export const PARALLEL_STEP = 12;
+export { PARALLEL_STEP };
 
 export interface EdgeGeometry {
   sourceX: number;
@@ -42,7 +53,7 @@ export function rectCenter(rect: Rect): Position {
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 }
 
-/** Index-based offset magnitude/side for the canonical pair direction: 0, +12, -12, +24, -24, … */
+/** Index-based offset magnitude/side for the canonical pair direction: 0, +step, -step, +2*step, ..., … */
 export function canonicalOffset(index: number): number {
   if (index <= 0) return 0;
   const step = Math.ceil(index / 2) * PARALLEL_STEP;
@@ -174,27 +185,161 @@ export function internalNodeRect(node: InternalNodeLike): Rect {
   };
 }
 
-/** Arrowhead triangle (tip at the target endpoint) as an SVG path, plus where the line should stop. */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+export interface ArrowheadResult {
+  path: string;
+  lineEndX: number;
+  lineEndY: number;
+}
+
+/**
+ * Arrowhead triangle (tip at `tip`, pointing along unit `direction`) as an SVG
+ * path, plus where the line should stop (2 px inside the head).
+ */
 export function arrowheadGeometry(
-  geometry: EdgeGeometry,
-  length = 10,
-  halfWidth = 4.5,
-): { path: string; lineEndX: number; lineEndY: number } | null {
-  const dx = geometry.targetX - geometry.sourceX;
-  const dy = geometry.targetY - geometry.sourceY;
-  const segment = Math.hypot(dx, dy);
-  if (segment < length) return null;
-  const ux = dx / segment;
-  const uy = dy / segment;
-  const baseX = geometry.targetX - ux * length;
-  const baseY = geometry.targetY - uy * length;
+  tip: Position,
+  direction: Position,
+  length?: number,
+  halfWidth?: number,
+): ArrowheadResult;
+/** @deprecated Straight-edge form kept for the v1 RelationshipEdge until S4. Returns null for short segments. */
+export function arrowheadGeometry(geometry: EdgeGeometry, length?: number, halfWidth?: number): ArrowheadResult | null;
+export function arrowheadGeometry(
+  first: Position | EdgeGeometry,
+  second?: Position | number,
+  third?: number,
+  fourth?: number,
+): ArrowheadResult | null {
+  if ("sourceX" in first) {
+    const length = typeof second === "number" ? second : ARROW_LENGTH;
+    const halfWidth = third ?? ARROW_HALF_WIDTH;
+    const dx = first.targetX - first.sourceX;
+    const dy = first.targetY - first.sourceY;
+    const segment = Math.hypot(dx, dy);
+    if (segment < length) return null;
+    return arrowheadGeometry(
+      { x: first.targetX, y: first.targetY },
+      { x: dx / segment, y: dy / segment },
+      length,
+      halfWidth,
+    );
+  }
+  const direction = second as Position;
+  const length = third ?? ARROW_LENGTH;
+  const halfWidth = fourth ?? ARROW_HALF_WIDTH;
+  const mag = Math.hypot(direction.x, direction.y);
+  const ux = mag > 0 ? direction.x / mag : 1;
+  const uy = mag > 0 ? direction.y / mag : 0;
+  const baseX = first.x - ux * length;
+  const baseY = first.y - uy * length;
   const nx = -uy * halfWidth;
   const ny = ux * halfWidth;
-  const f = (n: number) => Math.round(n * 100) / 100;
   return {
-    path: `M ${f(geometry.targetX)} ${f(geometry.targetY)} L ${f(baseX + nx)} ${f(baseY + ny)} L ${f(baseX - nx)} ${f(baseY - ny)} Z`,
-    // Stop the stroke slightly inside the arrowhead so it never pokes past the tip.
-    lineEndX: geometry.targetX - ux * (length - 2),
-    lineEndY: geometry.targetY - uy * (length - 2),
+    path: `M ${round2(first.x)} ${round2(first.y)} L ${round2(baseX + nx)} ${round2(baseY + ny)} L ${round2(baseX - nx)} ${round2(baseY - ny)} Z`,
+    lineEndX: first.x - ux * (length - 2),
+    lineEndY: first.y - uy * (length - 2),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Curved edges (UI_V2_DESIGN.md 8.5)
+// ---------------------------------------------------------------------------
+
+export interface CubicEdgeInput {
+  /** Absolute port anchors on the silhouettes. */
+  sourceAnchor: Position;
+  targetAnchor: Position;
+  sourceSide: PortSide;
+  targetSide: PortSide;
+  directed: boolean;
+  /** Signed px along the left-hand normal of the chord P0 -> P3 (computeParallelInfo). */
+  parallelOffset?: number;
+  /** t in 0..1 for the label point (computeParallelInfo.labelPosition). */
+  labelPosition?: number;
+}
+
+export interface CubicEdgeGeometry {
+  p0: Position;
+  p1: Position;
+  p2: Position;
+  p3: Position;
+  /** `M P0 C P1 P2 P3` */
+  path: string;
+  /** Terminal ring centers (the anchors) and radius; drawn on both ends of every edge. */
+  sourceTerminal: Position;
+  targetTerminal: Position;
+  terminalRadius: number;
+  /** Directed only: arrow tip, unit direction (-n_t) and triangle path. Null when undirected. */
+  arrow: { tip: Position; direction: Position; path: string } | null;
+  /** Cubic point B(labelPosition). */
+  labelX: number;
+  labelY: number;
+}
+
+export function cubicPoint(p0: Position, p1: Position, p2: Position, p3: Position, t: number): Position {
+  const m = 1 - t;
+  const a = m * m * m;
+  const b = 3 * m * m * t;
+  const c = 3 * m * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+  };
+}
+
+/** Pure; never throws, including for coincident anchors. */
+export function cubicEdgeGeometry(input: CubicEdgeInput): CubicEdgeGeometry {
+  const { sourceAnchor: As, targetAnchor: At, directed } = input;
+  const ns = portNormal(input.sourceSide);
+  const nt = portNormal(input.targetSide);
+  const t = Math.min(1, Math.max(0, input.labelPosition ?? 0.5));
+
+  const p0 = { x: As.x + ns.x * TERMINAL_RADIUS, y: As.y + ns.y * TERMINAL_RADIUS };
+  let p3: Position;
+  let arrow: CubicEdgeGeometry["arrow"] = null;
+  if (directed) {
+    const tipDist = TERMINAL_RADIUS + 0.75;
+    const tip = { x: At.x + nt.x * tipDist, y: At.y + nt.y * tipDist };
+    const direction = { x: -nt.x, y: -nt.y };
+    const head = arrowheadGeometry(tip, direction);
+    arrow = { tip, direction, path: head.path };
+    // 2 px inside the arrowhead base.
+    p3 = { x: head.lineEndX, y: head.lineEndY };
+  } else {
+    p3 = { x: At.x + nt.x * TERMINAL_RADIUS, y: At.y + nt.y * TERMINAL_RADIUS };
+  }
+
+  const chordX = p3.x - p0.x;
+  const chordY = p3.y - p0.y;
+  const chord = Math.hypot(chordX, chordY);
+  const d = Math.min(CURVE_MAX, Math.max(CURVE_MIN, CURVE_FACTOR * chord));
+  let p1 = { x: p0.x + ns.x * d, y: p0.y + ns.y * d };
+  let p2 = { x: p3.x + nt.x * d, y: p3.y + nt.y * d };
+
+  const offset = input.parallelOffset ?? 0;
+  if (offset !== 0 && chord > 0) {
+    // Left-hand normal of travel in screen coordinates (y down).
+    const sx = (chordY / chord) * offset;
+    const sy = (-chordX / chord) * offset;
+    p1 = { x: p1.x + sx, y: p1.y + sy };
+    p2 = { x: p2.x + sx, y: p2.y + sy };
+  }
+
+  const label = cubicPoint(p0, p1, p2, p3, t);
+  const f = round2;
+  return {
+    p0,
+    p1,
+    p2,
+    p3,
+    path: `M ${f(p0.x)} ${f(p0.y)} C ${f(p1.x)} ${f(p1.y)} ${f(p2.x)} ${f(p2.y)} ${f(p3.x)} ${f(p3.y)}`,
+    sourceTerminal: { x: As.x, y: As.y },
+    targetTerminal: { x: At.x, y: At.y },
+    terminalRadius: TERMINAL_RADIUS,
+    arrow,
+    labelX: label.x,
+    labelY: label.y,
   };
 }

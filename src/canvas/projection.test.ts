@@ -101,7 +101,7 @@ describe("toFlowEdges", () => {
     const second = byId("rel_uses_2").data!;
     expect(first).toMatchObject({ parallelIndex: 0, parallelCount: 2, parallelOffset: 0, labelPosition: 0.5 });
     expect(second.parallelIndex).toBe(1);
-    expect(Math.abs(second.parallelOffset)).toBe(12);
+    expect(Math.abs(second.parallelOffset)).toBe(20);
     expect(byId("rel_reads").data).toMatchObject({ parallelCount: 1, parallelOffset: 0 });
   });
 });
