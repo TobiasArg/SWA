@@ -4,6 +4,7 @@
 **Authority:** `PRODUCT_CONCEPT_V1.1.md` (the "product spec") is authoritative. Where this document adds a rule the spec leaves open, it is marked **[Design decision]** and applies to every implementation agent.
 **Scope guard:** No backend, no accounts or authentication, no AI/LLM calls, no collaboration, no runtime, workflow engine, executable conditions or state machine. The app is a static, local-first web app.
 **Date of research:** 2026-10-21.
+**UI v2 update:** Sections 3.1, 3.5, 3.6, 3.7, 5.1, 6.1, 6.3, 6.4, 7.1, 7.3, 10, 12 and 15.3 describe the "ported canvas" as built (`UI_V2_DESIGN.md`): per-type silhouettes, component accent, port pins on relationships, curved edges, schema version 2. **Release note:** schema v2 is *rollback-incompatible* (not destructive): a build that only knows v1 rejects v2 files and shows v2 IndexedDB records as damaged; no data is deleted and everything opens again after rolling forward.
 
 ---
 
@@ -99,10 +100,10 @@ All of section 3 is the contract every workstream codes against. It lives in `sr
 ### 3.1 Types (`src/domain/types.ts`) — exactly the product schema
 
 ```ts
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export interface ArchitectureFile {
-  schemaVersion: 1;
+  schemaVersion: 2;
   architecture: Architecture;
 }
 
@@ -137,6 +138,7 @@ export interface Component {
   links?: ExternalLink[];
   position: Position;                  // absolute canvas coordinates, top-left of node
   size?: Size;                         // set only after a user resize
+  accent?: AccentId;                   // v2: decoration only (border and details); absent = type default
   properties?: Record<string, string>; // type-specific fields (3.3)
   behavior?: AgentBehavior;            // only when type === "agent"
 }
@@ -168,7 +170,7 @@ export interface Relationship {
   direction: Direction;
   label?: string;
   description?: string;
-  visual?: Record<string, unknown>; // preserved verbatim; unused by MVP UI
+  visual?: Record<string, unknown>; // preserved verbatim; v2 reads only `visual.ports` (port pins, below)
 }
 
 export interface Group {
@@ -188,6 +190,10 @@ export interface Selection {
 ```
 
 Rules carried over verbatim from the spec: components have no `groupId` and no association lists; Orchestrator = `type: "agent"`, `subtype: "orchestrator"` with the same schema as Agent.
+
+**Accent [UI v2]:** `AccentId` is one of the 16 fixed IDs in `ACCENT_IDS` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; display names, ink and tint in `ACCENTS`, `src/domain/constants.ts`). The accent recolors only the node's border and icon chip, never the fill, text or the Orchestrator band. IDs are persisted, so they are never renamed or removed; adding one is a schema bump. Components only: groups have no `accent` (an `accent` key on a group is stripped on import). `accent` is not exported to Markdown (9.3) and does not appear in aria-labels.
+
+**Port pins [UI v2]:** a relationship may carry `visual: { ports: { source?: "top"|"right"|"bottom"|"left", target?: … } }` (`readPortPins`, `src/domain/ports.ts`). An absent key means *automatic* for that end (6.4). A malformed value is treated as automatic and preserved verbatim. No schema field was added for this; ports are not typed (no input/output roles) and never change which end is the source.
 
 **Optional-field normalization [Design decision]:** An empty string or empty array in an optional field is stored as *absent* (the key is removed). Setting a field to `""` in the inspector removes it. This keeps exported JSON clean and comparisons stable. `name` is never empty (3.5).
 
@@ -270,6 +276,8 @@ Pipeline order (stop after a stage that produced issues, otherwise continue and 
 4. **Semantic/referential** (`validate.ts`).
 5. **Normalization** (`normalize.ts`): recompute group bounds (6.5). Normalization never fails.
 
+`accent` is a string in the shape schema (like `subtype`) and checked against `ACCENT_IDS` in the semantic stage. `visual.ports` is never validated: any value is valid and preserved.
+
 Shape schemas use plain `z.object` (unknown keys are **stripped**, the Zod 4 default) **except** `properties` (`z.record(z.string(), z.string())`) and `visual` (`z.record(z.string(), z.unknown())`), which are preserved. Dropping unknown top-level keys is silent. **[Design decision]**
 
 Timestamps: `createdAt`/`updatedAt` must be strings matching `^\d{4}-\d{2}-\d{2}T` and `Number.isFinite(Date.parse(value))`. (Deliberately lenient instead of a strict ISO validator.)
@@ -288,7 +296,7 @@ Messages are plain English, include IDs (truncated to 80 characters with "…") 
 | `E_JSON_PARSE` | Not valid JSON | "The file is not valid JSON ({parser message})." |
 | `E_NOT_ARCHITECTURE_FILE` | Not an object / no `architecture` | "This file is not a Swarm Architecturer architecture file." |
 | `E_SCHEMA_VERSION_MISSING` | No numeric `schemaVersion` | "The file has no schemaVersion, so its format cannot be determined." |
-| `E_SCHEMA_VERSION_UNSUPPORTED` | `schemaVersion !== 1` | "The file uses format version {v}. This version of Swarm Architecturer supports format version 1 only." |
+| `E_SCHEMA_VERSION_UNSUPPORTED` | `schemaVersion` not an integer in 1–2 | "The file uses format version {v}. This version of Swarm Architecturer supports format versions 1 to 2." |
 | `E_SHAPE` | Zod issue (missing field, wrong type, bad enum) | "{path}: {reason}" e.g. "architecture.components[3].name: expected a non-empty text value." |
 | `E_LIMIT_EXCEEDED` | Safety caps exceeded (below) | "{path}: too many items ({n}; the maximum is {max})." / "…text is longer than {max} characters." |
 | `E_DUPLICATE_ID` | ID repeated across components, relationships and groups | "ID {id} is used more than once ({kinds})." |
@@ -296,6 +304,7 @@ Messages are plain English, include IDs (truncated to 80 characters with "…") 
 | `E_GROUP_AS_ENDPOINT` | endpoint is a group ID | "Relationship {relId} uses group {id} as its {field}. Groups cannot be relationship endpoints." |
 | `E_SELF_RELATIONSHIP` | `sourceId === targetId` | "Relationship {relId} connects component {id} to itself." **[Design decision: self-relationships are not allowed]** |
 | `E_INVALID_DIRECTION` | direction not allowed for type | "Relationship {relId} of type {Type} must be {allowed}." |
+| `E_INVALID_ACCENT` | `accent` not in `ACCENT_IDS` | "Component {id}: accent must be one of {ACCENT_IDS joined by ', '}." |
 | `E_INVALID_SUBTYPE` | `subtype` on non-agent, or unknown value | "Component {id}: subtype \"orchestrator\" is only allowed on agents." / "…unknown subtype \"{value}\"." |
 | `E_BEHAVIOR_NOT_ALLOWED` | `behavior` on non-agent | "Component {id} ({Type}) cannot have agent behavior fields." |
 | `E_INVALID_PROPERTY_VALUE` | `storeKind`/`accessScope` not in enum | "Component {id}: {key} must be one of {values}." |
@@ -311,19 +320,22 @@ UI shows at most 20 issues, then "…and {n} more problems."
 ### 3.6 Migration (`src/domain/validation/migrate.ts`)
 
 ```ts
-const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string, unknown>> = {};
-// Future: MIGRATIONS[1] upgrades v1 → v2, etc. Applied in sequence up to SCHEMA_VERSION.
+const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string, unknown>> = {
+  1: (raw) => raw, // v2 only adds the optional `component.accent`; v1 content is valid as is.
+};
+// Applied in sequence up to SCHEMA_VERSION; each step sets schemaVersion to fromVersion + 1.
 ```
 
-- `schemaVersion === 1` → unchanged.
-- Higher than `SCHEMA_VERSION` → `E_SCHEMA_VERSION_UNSUPPORTED`.
+- `schemaVersion === 1` → migrated by the identity step to 2 (content unchanged). A v1 file therefore imports without loss and is exported as `schemaVersion: 2`.
+- `schemaVersion === 2` → unchanged.
+- Higher than `SCHEMA_VERSION` (for example 3) → `E_SCHEMA_VERSION_UNSUPPORTED`.
 - Lower than 1, non-integer, or missing → `E_SCHEMA_VERSION_MISSING` / `E_SCHEMA_VERSION_UNSUPPORTED`.
 
-The same function runs on records read from IndexedDB, so a future format bump migrates stored data on open.
+The same function runs on records read from IndexedDB, so a stored v1 record is read as v2 and rewritten as v2 by the opportunistic rewrite on first read. **Rollback:** the v2 bump is not destructive, but a v1-only build rejects every v2 file and treats v2 IndexedDB rows as damaged until the app is rolled forward (record this in release notes).
 
 ### 3.7 Canonical serialization (`src/domain/serialize.ts`)
 
-`toArchitectureFile(a: Architecture): ArchitectureFile` builds a new object with a fixed key order (the order in 3.1), omits absent optional fields, and preserves array order. Export uses `JSON.stringify(file, null, 2) + "\n"`. IndexedDB stores the same object. This makes exports diff-friendly in version control and makes round trips byte-stable.
+`toArchitectureFile(a: Architecture): ArchitectureFile` builds a new object with a fixed key order (the order in 3.1; `accent` is written right after `size`), writes `schemaVersion: SCHEMA_VERSION` (2), omits absent optional fields, and preserves array order. Export uses `JSON.stringify(file, null, 2) + "\n"`. IndexedDB stores the same object. This makes exports diff-friendly in version control and makes round trips byte-stable.
 
 ---
 
@@ -424,11 +436,13 @@ export type Command =
   | { kind: "setComponentProperty"; id: string; key: string; value: string | undefined }
   | { kind: "updateBehavior"; id: string; patch: Partial<AgentBehavior> }
   | { kind: "setSubtype"; id: string; subtype: "orchestrator" | undefined }
+  | { kind: "setComponentAccent"; ids: string[]; accent: AccentId | undefined }          // UI v2
   | { kind: "addRelationship"; relationship: Relationship }
   | { kind: "updateRelationship"; id: string; patch: { label?: string; description?: string } }
   | { kind: "retypeRelationship"; id: string; type: RelationshipType }
   | { kind: "setRelationshipDirection"; id: string; direction: Direction }  // generic only
   | { kind: "reverseRelationship"; id: string }                              // generic + directed only
+  | { kind: "setRelationshipPorts"; id: string; ports: { source?: PortSide; target?: PortSide } | null } // UI v2
   | { kind: "createGroup"; group: { id: string; name: string }; memberIds: string[] }
   | { kind: "updateGroup"; id: string; patch: { name?: string; description?: string; notes?: string } }
   | { kind: "assignToGroup"; componentIds: string[]; groupId: string | null };
@@ -448,7 +462,7 @@ export function applyCommand(a: Architecture, c: Command): CommandResult; // pur
 | Command | Effect | Invariants / errors |
 |---|---|---|
 | `addComponent` | Append component. | ID unique; `subtype`/`behavior` only on agents. |
-| `duplicateComponents` | For each source: copy all fields except `id`; `name` = `"{name} (copy)"`; position + `DUPLICATE_OFFSET`. **Relationships are not copied; the copy joins no group.** **[Design decision]** | Source must exist. |
+| `duplicateComponents` | For each source: copy all fields except `id` (including `accent`); `name` = `"{name} (copy)"`; position + `DUPLICATE_OFFSET`. **Relationships are not copied; the copy joins no group.** **[Design decision]** | Source must exist. |
 | `deleteElements` | Remove listed groups (members are kept, i.e. ungrouped). Remove listed relationships. Remove listed components, **plus every relationship whose source or target is a removed component**, plus their IDs from every `memberComponentIds`. Recompute bounds of groups that lost members (empty groups keep their last bounds). Returns `summary`. | Unknown IDs are ignored. |
 | `moveElements` | Set absolute positions for listed components. Translate `bounds` of each group in `groupDeltas`. Then, for every group containing a moved component **or** listed in `groupDeltas`, recompute bounds from members if it has members (6.5). | Positions finite. |
 | `resizeComponent` | Set `position` and `size` (clamped to MIN/MAX). Recompute the bounds of its group. | — |
@@ -457,7 +471,9 @@ export function applyCommand(a: Architecture, c: Command): CommandResult; // pur
 | `addRelationship` | Append. Direction must be allowed for the type. | Endpoints must be existing components (not groups), distinct. |
 | `retypeRelationship` | Change `type`. New direction: fixed types → their fixed direction; to `generic` → keep current direction. `label`/`description`/endpoints unchanged. | — |
 | `setRelationshipDirection` | Change direction. | `type === "generic"` only. |
-| `reverseRelationship` | Swap `sourceId`/`targetId`. | `type === "generic"` and `direction === "directed"` only. |
+| `setComponentAccent` | Set or remove `accent` on the listed components (one undo entry, "Change accent color"; no-op when nothing changes). | Components only: unknown or group IDs → `E_COMPONENT_NOT_FOUND`; unknown accent → `E_INVALID_ACCENT`. |
+| `setRelationshipPorts` | Replace only `visual.ports`, keeping other `visual` keys; `null` removes `ports` (an empty `visual` becomes absent). Undo label "Reset relationship ports". | Unknown ID → `E_RELATIONSHIP_NOT_FOUND`; a side outside `top|right|bottom|left` → `E_INVALID_PORT`. |
+| `reverseRelationship` | Swap `sourceId`/`targetId` **and** `visual.ports.source`/`target`, so the line keeps its physical attachment and only the arrowhead moves. | `type === "generic"` and `direction === "directed"` only. |
 | `createGroup` | Remove `memberIds` from any current group (explicit reassignment), create group with those members, compute bounds. | ≥ 1 member; members are components. |
 | `updateGroup` | Patch name/description/notes. | — |
 | `assignToGroup` | Remove each component from its current group; if `groupId` not null, append to that group. Recompute affected bounds. | Target group exists. |
@@ -539,7 +555,8 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 | `onNodesChange` | apply only `position` (while dragging), `dimensions`, `select` changes to local transient state via `applyNodeChanges`; ignore `remove` | Domain is changed only through commands. |
 | `onEdgesChange` | apply only `select`; ignore `remove` | Same. |
 | `deleteKeyCode` | `null` | Deletion is handled by `app/shortcuts.ts` → `actions.deleteSelection`. |
-| `connectionMode` | `ConnectionMode.Loose` | Every handle is a `source` handle; the node you drag from is the source. |
+| `connectionMode` | `ConnectionMode.Loose` | Every port is a `source` handle; the node you drag from is the source. |
+| `connectionRadius` | `20` | Snaps to a port within 20 px (`CONNECTION_RADIUS`). |
 | `isValidConnection` | both ends are component nodes and `source !== target` | Groups can never be endpoints; no self-relationships. |
 | `onConnect` | open `RelationshipTypePicker` (6.3) | Type chosen explicitly. |
 | `edgesReconnectable` | `false` | Changing endpoints is not in scope; delete and reconnect instead. |
@@ -555,7 +572,7 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 | `proOptions` | not set (attribution visible) | 2.3. |
 | Children | `<Background/>`, `<MiniMap/>` (optional, hidden < 900px width) | Zoom buttons live in the toolbar, not in `<Controls/>`. |
 
-`canvasApi.ts` exposes, via a React context set by `CanvasView`, `{ zoomIn, zoomOut, fitView, screenToFlowPosition, getViewportElement(): HTMLElement | null, getNodesBounds(): Rect }` so the toolbar, palette and PNG export never import React Flow directly.
+`canvasApi.ts` exposes, via a React context set by `CanvasView`, `{ zoomIn, zoomOut, fitView, screenToFlowPosition, getViewportElement(): HTMLElement | null, getNodesBounds(): Rect, getDiagramBounds(): Rect }` so the toolbar, palette and PNG export never import React Flow directly. `getDiagramBounds()` (UI v2) is the union of the node bounds and, for every relationship, the bounds of its cubic (four control points, terminal rings, arrow tip) plus an estimated label plate (10).
 
 ### 6.2 Projection (`canvas/projection.ts`, pure, unit-tested)
 
@@ -565,8 +582,8 @@ toFlowEdges(a: Architecture, selection: Selection): Edge[]
 ```
 
 - **Group nodes first**, then component nodes (array order). Group node: `id = group.id`, `type: "group-container"`, `position = {bounds.x, bounds.y}`, `width/height = bounds`, `draggable: true`, `dragHandle: ".sa-group-header"`, `connectable: false`, `selectable: true`, `zIndex: 0`, `data: { group }`.
-- Component node: `id = component.id`, `type: "component"`, `position`, `width/height` = effective size, `zIndex: 10`, `data: { component, groupName? }`, `domAttributes: { "aria-roledescription": "component" }`, `ariaLabel`/`aria-label` = "{Type display}: {name}. {description}".
-- Edge: `id = rel.id`, `type: "relationship"`, `source = rel.sourceId`, `target = rel.targetId`, `markerEnd = { type: MarkerType.ArrowClosed }` **only if directed**, no `markerStart` ever, `zIndex: 5`, `interactionWidth: 16`, `ariaLabel = describeRelationship(...)`, `data: { relationship }`.
+- Component node: `id = component.id`, `type: "component"`, `position`, `width/height` = effective size, `zIndex: 10`, `data: { component, groupName? }` (the node renders `data-type`, `data-subtype` and, only for a validated accent, `data-accent`; its silhouette is an inline SVG per `ShapeKind`, `canvas/shapes.ts`), `domAttributes: { "aria-roledescription": "component" }`, `ariaLabel`/`aria-label` = "{Type display}: {name}. {description}".
+- Edge: `id = rel.id`, `type: "relationship"`, `source = rel.sourceId`, `target = rel.targetId`, `markerEnd = { type: MarkerType.ArrowClosed }` **only if directed**, no `markerStart` ever, `zIndex: 5`, `interactionWidth: 16`, `ariaLabel = describeRelationship(...)`, `data: { relationship, parallelOffset, labelPosition }` (parallel-pair spreading, 6.4). The edge component resolves ports and geometry itself from the live node rects.
 - No `parentId` is used. Positions are absolute. Groups are siblings, not parents.
 
 ### 6.3 Creating components and relationships
@@ -577,26 +594,35 @@ toFlowEdges(a: Architecture, selection: Selection): Edge[]
 - Palette items: Orchestrator, Agent, Tool, Memory / Data Store, External System, Decision / Routing Rule.
 - Adding never changes group membership, even when dropped inside a group's bounds (spec 6.6).
 
-**Connect (pointer):** each component node renders four `Handle type="source"` (top/right/bottom/left), visible on hover, focus and selection. Dragging from a handle to another component → `onConnect` → `RelationshipTypePicker` opens anchored near the drop point:
-- A `role="listbox"` of the 10 types (display name + one-line "reads as" hint), arrow keys to move, Enter to choose, Escape / outside click to cancel.
-- Choosing a type dispatches **one** `addRelationship` with `direction = defaultDirection(type)` and selects the new relationship (inspector opens it).
-- Cancelling creates nothing.
-- Dropping on a group, the pane, or the same node is rejected by `isValidConnection` (no picker).
+**Connect (pointer) [UI v2 ports]:** each component node renders four ports (`Handle type="source"`, ids `top|right|bottom|left`) positioned on the silhouette outline (`portAnchor`), hidden at rest and shown on node hover, focus-within, selection and on every component while a connection drag is active. They are not keyboard tab stops.
+1. Pressing a port makes its side the **source port**, always pinned. The connection line is a dashed preview cubic from that anchor along its normal.
+2. Releasing on a port of another component (within the 20 px snap radius) pins the **target port** too. Releasing on a component body leaves the target port *automatic*; while hovering, the port that the automatic rule would pick (Rule B, 6.4) is highlighted (`.sa-port--active`), so what is shown is what is rendered. The highlight is delivered to the node through `ConnectHintContext` (`canvas/nodeContext.ts`).
+3. `onConnect` → `RelationshipTypePicker` opens anchored near the drop point:
+   - A `role="listbox"` of the 10 types (display name + one-line "reads as" hint), arrow keys to move, Enter to choose, Escape / outside click to cancel.
+   - Choosing a type dispatches **one** `addRelationship` with `direction = defaultDirection(type)` and `visual: { ports: { source, target? } }`, and selects the new relationship (inspector opens it).
+   - Cancelling creates nothing.
+   - Dropping on a group, the pane, or the same node is rejected by `isValidConnection` (no picker).
+The dragged-from node is always the source; port choice is purely visual.
 
-**Connect (keyboard alternative):** with exactly one component selected, toolbar/inspector action **"Connect…"** (shortcut `C` when focus is not in a text field) opens `ConnectDialog`: a `<dialog>` with *Relationship type* select and *Target component* select (all components except the source, sorted by name). OK dispatches `addRelationship`. **[Design decision; keeps relationship creation keyboard-accessible]** The read-only Relationships list in the inspector does *not* create relationships (spec 5.5).
+**Connect (keyboard alternative):** with exactly one component selected, toolbar/inspector action **"Connect…"** (shortcut `C` when focus is not in a text field) opens `ConnectDialog`: a `<dialog>` with *Relationship type* select and *Target component* select (all components except the source, sorted by name) and the note "Ports are chosen automatically from the components' positions." OK dispatches `addRelationship` **without** `visual`, so the edge re-routes when nodes move. Keyboard port pinning is out of scope; pins can be reset (not set) from the relationship inspector (7.3). **[Design decision; keeps relationship creation keyboard-accessible]** The read-only Relationships list in the inspector does *not* create relationships (spec 5.5).
 
 ### 6.4 Edge rendering and direction semantics (`canvas/edges/RelationshipEdge.tsx`, `canvas/floating.ts`)
 
-- **Floating edges:** path endpoints are the intersections of the center-to-center line with each node's rectangle (React Flow "floating edges" example technique, using `internals.positionAbsolute` and `measured` of the internal nodes). Handles do not determine the path, so nothing handle-related is stored in the domain.
-- Path: straight line by default (`getStraightPath`); readable in dense diagrams.
-- **Directed:** arrowhead (`MarkerType.ArrowClosed`) at the **target** end only.
+- **Ports and curved paths [UI v2, replaces the v1 floating straight edge]:** every end attaches to a *port anchor on the node silhouette* (`portAnchor(kind, w, h, side)` in `canvas/shapes.ts`; never the bounding-box intersection). Sides come from `visual.ports` when valid, else from the deterministic automatic rule (`autoPorts`, evaluated against the live node rects at render time, so automatic edges re-route when a node moves):
+  - *Rule A (both ends automatic):* compare the horizontal and vertical gaps between the rects; the larger gap (horizontal wins ties) decides: right→left / left→right, or bottom→top / top→bottom, by the sign of the centre distance, with the ID order as a tie-breaker only at exact alignment. Swapping source and target yields the same physical sides, so stored order is never visible.
+  - *Rule B (one end pinned):* the automatic end uses the port of its node nearest to the pinned anchor (ties: right, bottom, left, top).
+  - The path is a cubic `M P0 C P1 P2 P3` (`cubicEdgeGeometry`, `canvas/floating.ts`): `P0` is the source anchor pushed out by `TERMINAL_RADIUS` (3.5) along its normal, control distance `clamp(0.4 × chord, 32, 120)` along each port normal, so the curve leaves and enters perpendicular to the outline. React Flow's `getBezierPath` is not used.
+  - **Terminal rings** (`circle.sa-edge-terminal`, `data-terminal`, `data-side`) are drawn on *both* ends of every edge, so they carry no direction.
+- **Parallel edges** keep the unordered-pair index; both inner control points shift along the chord's normal in `PARALLEL_STEP` = 20 px steps (ends stay on the ports). Labels sit at the cubic point `B(labelPosition)`.
+- Nothing handle-related besides the optional port pins is stored in the domain; edges never animate.
+- **Directed:** a closed arrowhead at the **target** end only. It is an inline path (`path.sa-edge-arrow`; no SVG `<marker>`, no `url(#…)`, so PNG export needs no ID resolution) whose tip touches the target terminal ring and whose direction is `-n_target`. The projection still sets `markerEnd` only for directed relationships and the edge uses it as the on/off switch.
 - **Undirected:** no arrowheads at either end, plus a dashed stroke as a second, non-color cue. **[Design decision]** The stored source/target order is never shown as a direction anywhere (canvas, inspector, aria-labels, exports).
 - **Label** (rendered as SVG text through `BaseEdge`'s `label`/`labelShowBg`/`labelBgPadding` so it is part of the SVG and always included in PNG export):
   - predefined type without label → type verb, e.g. "reads from";
   - predefined type with label → "reads from · {label}";
   - `generic` with label → "{label}"; without label → "relates to".
   - Labels truncate to 40 characters with "…" on the canvas (full text in inspector and aria-label).
-- Parallel relationships between the same pair are allowed; the second and later ones are offset with a small perpendicular offset (index-based, 12px steps) so labels do not overlap. **[Design decision]**
+- Parallel relationships between the same pair are allowed; the second and later ones bulge to alternating sides (index-based, 20 px steps) so labels do not overlap. **[Design decision]**
 - Selected edge: thicker stroke + selection color; focus ring for keyboard focus.
 
 **Direction actions (enforced in domain, mirrored in UI):**
@@ -694,13 +720,16 @@ All inputs have visible `<label>`s. Text edits dispatch on change with a coalesc
 | | Group (`Group.memberComponentIds`) | select: "None" + groups by name → `assignToGroup` |
 | **Responsibilities** | Responsibilities (`behavior.responsibilities`), Boundaries (`behavior.boundaries`) | `ListField`: textarea, one item per line; committed as trimmed non-empty lines |
 | **Behavior** | Activation, Behavioral Rules (`rules`, ListField), Delegation, Outputs, Failure Handling | textareas |
+| **Appearance** (UI v2) | Accent color (`accent`) | `AccentPicker`: `<fieldset>` with legend "Accent color" and 17 native radios ("Type default" + the 16 accents in `ACCENT_IDS` order, accessible names = display names) and a text caption "Accent: {name}". A change dispatches `setComponentAccent` immediately (one undo entry per change; nothing is announced beyond the radio). Placed after the type-specific fields and before Relationships, **open by default** (as built). Present for every component type; not in the group, relationship, architecture or multi-selection inspectors. |
 | **Relationships** | read-only `RelationshipList` (7.4) | — |
 | **Documentation** | Notes (`notes`, Markdown source), External links (`links`) | `NotesField`: textarea (monospace hint "Markdown") with an Edit/Preview toggle (two `aria-pressed` buttons; Preview renders `ui/MarkdownPreview`, see 14); `LinksField` rows of label + URL with add/remove buttons |
 | Footer actions | Connect…, Duplicate, Delete | buttons → `actions.*` |
 
-Sections are collapsible (`<details>`/`<summary>`); Identity open by default.
+Sections are collapsible (`<details>`/`<summary>`); Identity and Appearance open by default.
 
 ### 7.2 Component inspector — other types
+
+All component types get the same **Appearance** section as 7.1 (the accent picker).
 
 Identity (Name, Description, Group), then **type fields** (`TypeFields.tsx`), then Relationships, then Documentation (Notes, Links).
 
@@ -716,6 +745,7 @@ Identity (Name, Description, Group), then **type fields** (`TypeFields.tsx`), th
 - Header sentence: directed → "**From** {source name} **to** {target name}"; undirected → "**Between** {A} **and** {B}". Each name is a button that selects that component.
 - Type: select of the 10 types → `retypeRelationship`.
 - Direction: per table in 6.4.
+- **Ports** (read-only row, UI v2): "{Source name}: {Right side | Automatic} · {Target name}: {Left side | Automatic}" (component names for both directed and undirected, no arrow glyph). A secondary button **"Reset ports to automatic"** appears only while a pin exists; it dispatches `setRelationshipPorts(id, null)` (one undo step) and moves focus to the row.
 - Label (text), Description (textarea).
 - Delete button.
 
@@ -846,7 +876,7 @@ Error UI: an `ImportErrorDialog` (`<dialog>`) titled "This file can't be importe
 
 - `exportArchitectureMarkdown(a)` → a deterministic documentation document (`text/markdown`), filename `{slug(name) || "architecture"}.md`. Available from the editor **Export ▾** menu ("Markdown document") and as **Export Markdown** on each healthy library row (not on damaged rows). Export only; there is no Markdown import.
 - Content: title and description, summary counts, Groups (description, members, notes, plus an "Ungrouped" list), Components (type, orchestrator subtype, groups, description, agent behavior, type properties, safe links, notes), Relationships (source, verb, direction arrow, target, label, description). The Relationships section states that relationships are semantic documentation, not execution order, control flow or data flow.
-- Determinism: groups and components sort by name then id (codepoint order), relationships by source name, target name, type, label, id. Timestamps and canvas geometry are never emitted. Empty fields and empty sections are omitted.
+- Determinism: groups and components sort by name then id (codepoint order), relationships by source name, target name, type, label, id. Timestamps, canvas geometry, the component `accent` and relationship `visual` (port pins) are never emitted (output is identical with and without accents). Empty fields and empty sections are omitted.
 - Escaping: single-line structured fields are backslash-escaped; multi-line fields are escaped per line; notes are embedded verbatim with any unclosed code fence closed. Only `safeLink` URLs become Markdown links; others are shown as code spans.
 
 ---
@@ -860,10 +890,10 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void>;
 ```
 
 1. If there are no components and no groups → button disabled ("Nothing to export").
-2. `bounds = api.getNodesBounds()` (React Flow `getNodesBounds` over all nodes, including group nodes, so group containers are inside the image).
+2. `bounds = api.getDiagramBounds()`: the React Flow `getNodesBounds` over all nodes (including group nodes, so group containers are inside the image) **united with every relationship's extent**. Curves can bulge up to `CURVE_MAX` (120 px) plus the parallel offset outside the nodes, so for each edge the bounds include the four cubic control points (a cubic lies inside their convex hull), both terminal rings, the arrow tip and the label plate (`edgeBounds`, `canvas/bounds.ts`). The label plate is a deterministic estimate centred on the label point (8 px per character plus 6 px padding per side, 24 px tall; deliberately generous so it never under-estimates), not a DOM measurement, so the function stays pure and independent of render timing.
 3. Image size = bounds + 48 px padding on each side; scale so neither side exceeds 4096 CSS px; `pixelRatio: 2` (final ≤ 8192 px).
 4. `const vp = getViewportForBounds(bounds, width, height, 0.1, 2, 0.05)` (signature checked: bounds, width, height, minZoom, maxZoom, padding).
-5. Add class `sa-exporting` to the React Flow root for the duration (CSS hides handles, resize controls, focus rings and selection highlighting), then:
+5. Add class `sa-exporting` to the React Flow root for the duration (CSS hides ports/handles, resize controls, focus rings and the selection outline and halo, `.sa-node__selection` / `.sa-node__halo`), then:
    ```ts
    toPng(api.getViewportElement()!, {
      backgroundColor: <canvas background token>,
@@ -874,6 +904,8 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void>;
    })
    ```
 6. Remove `sa-exporting` in `finally`; download as `{slug}.png`.
+
+**UI v2 rendering notes:** node silhouettes, accents, terminal rings and inline arrowheads are plain SVG with CSS-variable fills (no `url(#…)` references), so they export as rendered. Ports are excluded (`exportFilter` drops `react-flow__handle`). `<Background>` dots sit outside `.react-flow__viewport`, so the PNG has a flat `--sa-color-canvas` (`#F7F6F3`) background by design.
 
 Why this satisfies Scenario H: group nodes and edges (with SVG-text labels, 6.4) are all inside `.react-flow__viewport`; MiniMap, attribution and toolbar are outside it. System fonts avoid web-font embedding issues.
 
@@ -926,10 +958,11 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 - **Dialogs:** native `<dialog>` with `showModal()` (built-in focus containment and Escape); focus returns to the opener on close.
 - **Live announcements:** one polite `LiveRegion` (`ui/LiveRegion.tsx`) for deletions, undo/redo ("Undid: Delete component"), save failures, import results.
 - **Canvas:** nodes and edges focusable; node `aria-label` = "{Type}: {name}. {description}"; edge `aria-label` = `describeRelationship`; `ariaLabelConfig` overrides React Flow's default help text to mention our shortcuts. Arrow-key nudge and Connect dialog give keyboard-only paths for move and connect.
-- **Not color alone:** each component type differs by shape/border treatment **and** icon **and** type text; Orchestrator differs from Agent by a distinct border treatment + icon + "Orchestrator" type label; External System uses a dashed "outside boundary" border; undirected edges are dashed and have no arrowheads.
-- **Selection:** ≥ 2 px outline with ≥ 3:1 contrast against the canvas, plus a focus ring distinct from selection.
+- **Not color alone:** each component type differs by silhouette **and** icon **and** type text (Agent/Orchestrator rounded rectangle, Tool chamfered octagon, Memory cylinder, External System dashed hatched parallelogram, Decision hexagon); the Orchestrator differs from the Agent by a solid header band + hub icon + "ORCHESTRATOR" label (a marker, not a shape); undirected edges are dashed and have no arrowheads. The accent color carries no meaning: it is not announced, not in aria-labels and not in Markdown export. The accent picker is a native radio group with text names and a visible text caption.
+- **Ports:** not keyboard tab stops; the Connect dialog (automatic ports) is the keyboard path for every relationship the pointer can make. Node and edge aria-labels contain no color or port wording.
+- **Selection:** a 2 px outline that follows the silhouette, inflated 4 px, plus an 8 px halo, with ≥ 3:1 contrast against the canvas; the keyboard focus ring stays on the rectangular node wrapper, distinct from selection.
 - **Contrast:** text ≥ 4.5:1; tokens validated by design agents.
-- **Motion:** no animations needed; respect `prefers-reduced-motion` if any are added.
+- **Motion:** no animations needed; port fade-in uses `--sa-duration-fast`, which is 0 under `prefers-reduced-motion`.
 - **Panels:** logical Tab order toolbar → palette → canvas → inspector; panel landmarks labelled.
 
 ---
@@ -992,9 +1025,9 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 
 ### 15.3 End-to-end (Playwright, Chromium required; Firefox and WebKit run in CI if available)
 
-One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts`, fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
+One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, accent persistence/undo/duplicate/round trip, schema v1 → v2 import, PNG bounds for a bulging curve), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
 
-- **H (PNG):** export, read the downloaded file, assert PNG signature and dimensions ≥ the diagram bounds; visual check that group header text and edge labels are present (screenshot comparison of the exported image with a stored baseline, threshold-tolerant).
+- **H (PNG):** export, read the downloaded file, assert PNG signature, dimensions and a clean frame (no content cropped at the edge), no selection-colored pixels, and the presence of both terminal rings and the arrowhead in the DOM before export. There is no stored image baseline: the check is pixel-statistical against the v2 canvas background `#F7F6F3`. Set `SA_E2E_PNG_DIR=<dir>` to also write the exported PNGs for human review.
 - **J (no external services):** `page.route("**/*", ...)` aborts and records any request whose host is not the preview server; run the full A–I flow; assert zero recorded requests. No login screens exist.
 - **Performance check (spec 18):** with the performance fixture, measure time for: select (click → inspector shows) < 100 ms, drag of a group with 10 members stays smooth (record frame times via `requestAnimationFrame` sampling during a scripted drag; target median ≤ 32 ms), zoom/pan responsive. These are the established targets for "dozens" (with headroom) **[Design decision]**; failures are reported, tuned (memoized node components, `onlyRenderVisibleElements`), and re-measured.
 

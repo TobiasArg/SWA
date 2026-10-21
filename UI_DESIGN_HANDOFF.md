@@ -2,6 +2,7 @@
 
 **Status:** Visual design handoff, written before implementation starts.
 **Authority:** `PRODUCT_CONCEPT_V1.1.md` and `TECHNICAL_DESIGN.md` are authoritative. This document only sets visual values and the visual treatment of behavior those two documents already define. It adds no features, screens, controls or dependencies. If this document conflicts with either of them, they win.
+**UI v2 update:** sections 2.1 (canvas rows), 2.3 (accent), 2.4, 5.1–5.3, 6, 7 (node and edge states), 8.1 (Appearance), 9.3 and 12 describe the "ported canvas" as built; the full rationale, contrast tables and acceptance criteria are in `UI_V2_DESIGN.md`. Where the two differ, the code and this document describe what ships.
 **Implements into:** `src/ui/tokens.css` (all `--sa-*` tokens below), `src/ui/base.css`, and the per-module CSS files (TD 4.1). "TD x.y" refers to sections of `TECHNICAL_DESIGN.md`; "PC x.y" refers to `PRODUCT_CONCEPT_V1.1.md`.
 
 ---
@@ -33,8 +34,8 @@ All contrast ratios below were computed with the WCAG 2.x formula against the st
 
 | Token | Hex | Use | Contrast |
 |---|---|---|---|
-| `--sa-color-canvas` | `#F5F3EE` | Canvas background (also the PNG export `backgroundColor`, TD 10) | — |
-| `--sa-color-canvas-grid` | `#DDD8CD` | Canvas dot grid (React Flow `<Background variant="dots">`, gap 20, size 1) | decorative |
+| `--sa-color-canvas` | `#F7F6F3` (v2; was `#F5F3EE`) | Canvas background (also the PNG export `backgroundColor`, TD 10) | — |
+| `--sa-color-canvas-grid` | `#C9C4B8` (v2; was `#DDD8CD`) | Canvas dot grid (React Flow `<Background variant="dots">`, gap 20, size 1.5; 1.61:1, decorative). The dots are outside the exported viewport, so the PNG is flat. | decorative |
 | `--sa-color-surface` | `#FFFFFF` | Toolbar, palette, inspector, dialogs, library | — |
 | `--sa-color-surface-sunken` | `#EFECE6` | Inspector section headers, skeleton rows, table header, input disabled | — |
 | `--sa-color-surface-hover` | `#F5F3EE` | Hover background for rows, list entries, ghost buttons | — |
@@ -81,22 +82,30 @@ Each type has an **ink** (border, icon, type label) and a **fill** (node backgro
 | Decision / Routing Rule | `--sa-type-decision-ink` `#6C3D74` | `--sa-type-decision-fill` `#F5EEF6` | 7.2 / 7.4 |
 | External hatch | `--sa-type-external-hatch` `#E4E0D7` | — | decorative |
 
+**Component accent (UI v2).** A component may carry one of 16 fixed accent IDs (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; values `ACCENTS` in `src/domain/constants.ts`, CSS `--sa-accent-{id}-ink` / `--sa-accent-{id}-tint`, every ink ≥ 4.97:1 on the canvas and every type fill). The accent recolors **only** the silhouette stroke, the icon chip ring and glyph, the chip fill (tint) and the Memory lid rim, through `.sa-node[data-accent="{id}"]`. It never changes the node fill, any text, the Orchestrator band, the External hatch, edges, ports or groups. Accents carry no meaning and are not announced.
+
 Agent and Orchestrator share a hue family on purpose: an Orchestrator *is* an Agent (PC 6.2). They are told apart by structure (section 5), not by hue.
 
 ### 2.4 Canvas structure
 
 | Token | Value | Use |
 |---|---|---|
-| `--sa-edge-stroke` | `#6B655B` | Default relationship stroke and arrowhead (5.2:1 on canvas) |
+| `--sa-edge-stroke` | `#6B655B` | Default relationship stroke, arrowhead and terminal ring (5.3:1 on canvas) |
 | `--sa-edge-stroke-hover` | `#1F1D1A` | Hovered edge |
-| `--sa-edge-stroke-selected` | `var(--sa-color-accent)` | Selected edge and its arrowhead |
-| `--sa-edge-label-text` | `#3A3631` | Edge label text (10.8:1 on canvas) |
-| `--sa-edge-label-bg` | `#F5F3EE` | Edge label background (equal to the canvas, so labels "cut" the line) |
-| `--sa-group-border` | `#857F72` | Group outline (3.6:1 on canvas) |
+| `--sa-edge-stroke-selected` | `var(--sa-color-accent)` | Selected edge, arrowhead and terminals |
+| `--sa-edge-label-text` | `#3A3631` | Edge label text (11.1:1 on canvas) |
+| `--sa-edge-label-bg` | `var(--sa-color-canvas)` | Edge label background (follows the canvas, so labels "cut" the line) |
+| `--sa-edge-terminal-fill` | `var(--sa-color-canvas)` | Inside of the terminal rings |
+| `--sa-port-fill` | `#FFFFFF` | Port disc fill |
+| `--sa-port-border` | `#6B655B` | Port ring at rest (5.3:1 on canvas) |
+| `--sa-port-active` | `var(--sa-color-accent)` | Hovered, snapped, source or would-be-used port |
+| `--sa-port-invalid` | `var(--sa-color-danger)` | Connection line over an invalid target |
+| `--sa-node-surface` | `#FFFFFF` | Icon chip background in the default (type) style |
+| `--sa-group-border` | `#857F72` | Group outline (3.7:1 on canvas) |
 | `--sa-group-fill` | `rgba(87, 83, 76, 0.05)` | Group body (alpha ≤ 0.12 per TD 6.5) |
 | `--sa-group-header-fill` | `rgba(87, 83, 76, 0.10)` | Group header bar |
-| `--sa-handle-fill` | `#FFFFFF` | Connection handle fill |
-| `--sa-handle-border` | `var(--sa-color-accent)` | Connection handle ring |
+
+The v1 `--sa-handle-*` tokens are replaced by `--sa-port-*`. Silhouette geometry constants (stroke 1.5, corner radius 12, chamfer 12, cap `min(8, h/7)`, skew 14, hexagon point 20, Orchestrator band 24, selection inflate 4, port radius 5, port hit area 24, terminal radius 3.5, curve `clamp(0.4 × chord, 32, 120)`, parallel step 20, connection radius 20) are exported from `src/canvas/shapes.ts` and `floating.ts`.
 
 **React Flow mapping.** Where `@xyflow/react` v12 exposes `--xy-*` CSS variables (for example edge stroke, handle colors, selection box, minimap and attribution background), set them to the `--sa-*` tokens above in `canvas.css` instead of overriding React Flow class rules. *Assumption:* check the exact variable names against the installed `@xyflow/react/dist/style.css`, and fall back to class overrides for any that do not exist.
 
@@ -150,30 +159,31 @@ Nodes and panels have **no** shadow. Panels are separated from the canvas by a `
 
 ### 5.1 Shared node anatomy
 
-Nodes use the default sizes from TD 3.3, with `--sa-radius-md` corners unless a type overrides them and 10 px × 12 px padding. The content stacks top to bottom:
+Nodes use the default sizes from TD 3.3. Each node draws its **silhouette as one inline SVG** that fills the node box (`svg.sa-node__shape`: halo, selection outline, body, type details; no `url(#…)` references, so PNG export needs no ID resolution). The React Flow box stays a rectangle for drag, box selection and resizing. HTML content sits above the SVG, inset per shape so text never crosses the outline (Agent 10/12/8/12, Orchestrator 0/12/6/12, Tool 10/14/8/14, Memory `2·ry+4`/12/`ry+4`/12, External 10/26/8/26, Decision 10/28/8/28 px). The content stacks top to bottom:
 
-1. **Type row:** a 16 px type icon in ink color, then the type label (`--sa-text-2xs`, mono, uppercase, ink color): "AGENT", "ORCHESTRATOR", "TOOL", "DATA STORE", "EXTERNAL", "DECISION".
+1. **Type row:** a 24 px **icon chip** (6 px radius, 1 px ring in the node border color, white fill by default, 16 px type icon) then the type label (`--sa-text-2xs`, mono, uppercase, ink color): "AGENT", "ORCHESTRATOR", "TOOL", "DATA STORE", "EXTERNAL", "DECISION". The Orchestrator has no chip; its icon and label are white inside the band.
 2. **Name:** `--sa-text-md`, `--sa-color-text`, one line with ellipsis.
-3. **Description** (if present): `--sa-text-xs`, `--sa-color-text-muted`, at most 2 lines, then ellipsis. Omit the row when there is no description; do not render a placeholder.
+3. **Description** (if present): `--sa-text-xs`, `--sa-color-text-muted`, at most 2 lines, then ellipsis. Omit the row when there is no description.
 
 Nothing else is shown on a node (PC 14). If a node belongs to a group, the group container already shows that, so do not add a group badge.
 
-### 5.2 Per-type treatments (each one combines a shape cue, an icon and a label)
+### 5.2 Per-type treatments (each one combines a silhouette, an icon and a label)
 
-| Type | Border / shape (primary cue) | Fill | Icon (inline SVG, `ui/icons.tsx`) |
+| Type | Silhouette and details (primary cue) | Fill | Icon (inline SVG, `ui/icons.tsx`) |
 |---|---|---|---|
-| **Agent** | 1.5 px solid ink border, 6 px radius. The plain baseline. | agent-fill | Simple person-in-circle glyph |
-| **Orchestrator** | 2 px solid ink border **plus a solid ink header band** behind the type row (full width, 24 px tall). Inside the band, the type label and icon are white (`--sa-color-on-accent`, 12.4:1 on the ink). It is the only node type with a filled header, so it reads as "in charge" at any zoom level. | orchestrator-fill (body) | Hub glyph: a center dot with three spokes ending in small dots |
-| **Tool** | 1.5 px solid ink border, **4 px radius (tighter, more mechanical)**, plus a 4 px ink bar along the left edge, inside the border. | tool-fill | Wrench glyph |
-| **Memory / Data Store** | 1.5 px solid ink border. The top corners use an **elliptical radius (`50% / 10px`)**, which gives a "disk lid" curve, and a second 1 px ink rule runs 6 px below the top, so the node reads as a storage cylinder seen from the side. The bottom corners use 6 px. | memory-fill | Stacked-disk (database) glyph |
-| **External System** | 1.5 px **dashed** ink border (dash 6, gap 4) and a **45° diagonal hatch** fill (`repeating-linear-gradient` of `--sa-type-external-hatch` 1 px lines every 8 px over the fill), meaning "outside the modeled boundary" (PC 14, TD 12). | external-fill + hatch | Box with an arrow leaving it |
-| **Decision / Routing Rule** | 1.5 px solid ink border with **chamfered corners** (10 px 45° cuts, drawn with `clip-path: polygon(...)`; draw the border with an inset outline or an inner element so the cuts are stroked), a nod to the flowchart decision diamond without the unreadable diamond shape. | decision-fill | Fork glyph (one line splitting into two) |
+| **Agent** | Rounded rectangle, radius 12, 1.5 px solid ink stroke. The plain baseline. | agent-fill | Person-in-circle |
+| **Orchestrator** | **Same rounded rectangle as Agent** (an Orchestrator is an Agent), 2 px stroke, plus a **solid ink header band** (24 px, clipped to the top) holding the white type row. The band is a marker, not a shape, and never takes an accent. | orchestrator-fill (body) | Hub: a center dot with three spokes |
+| **Tool** | **Chamfered octagon**, 12 px 45° cuts on all four corners, 1.5 px solid stroke. (The v1 left ink bar is gone.) | tool-fill | Wrench |
+| **Memory / Data Store** | **Cylinder** seen from the side (elliptical lid and base, `ry = min(8, h/7)`) plus a 1 px **lid rim** arc in the border color. | memory-fill | Stacked disks |
+| **External System** | Right-leaning **parallelogram** (skew 14), **dashed** stroke (6 4) and a 45° **hatch** of `--sa-type-external-hatch` 1 px lines every 8 px, computed as explicit segments clipped to the shape ("outside the modeled boundary", PC 14, TD 12). | external-fill + hatch | Box with an arrow leaving it |
+| **Decision / Routing Rule** | Horizontal **hexagon** (pointed left and right, point depth 20), 1.5 px solid stroke. (v1 used chamfered corners; chamfers now belong to Tool.) | decision-fill | Fork |
 
-**Grayscale check (acceptance):** in a grayscale screenshot, all six types must remain distinguishable by border style, header band, corner shape or hatch, and icon. This is the "not color alone" requirement for nodes.
+**Grayscale check (acceptance):** in a grayscale screenshot, all six types must remain distinguishable by silhouette, header band, dash and hatch, and icon, **with and without an accent**. This is the "not color alone" requirement for nodes.
 
-### 5.3 Handles and resize
+### 5.3 Ports and resize
 
-- **Handles:** four 8 px circles (`--sa-handle-fill`, 1.5 px `--sa-handle-border`) centered on the node edges. They are hidden at rest and shown on node hover, keyboard focus and selection (TD 6.3). Each has a 16 px invisible hit area.
+- **Ports** (replace v1 handles; React Flow `Handle type="source"`, ids `top|right|bottom|left`, Loose mode): a 10 px disc (`--sa-port-fill`, 1.5 px `--sa-port-border`) placed **on the silhouette outline** at `portAnchor` (the External side ports sit on the slanted sides, the Memory top/bottom ports on the lid and base apexes). 24 × 24 px hit area. Hidden at rest; shown on node hover, `:focus-within`, selection, and on **every** component while a connection drag is active (`[data-connecting]`). Hover: ring and fill `--sa-port-active`, `cursor: crosshair`. They are not keyboard tab stops and are excluded from the PNG. Ports have no in/out meaning, no count limit and no order.
+- **Hover:** stroke 2.25 px (the accent stays visible). **Selected:** a second outline that follows the silhouette 4 px outside, 2 px accent, plus an 8 px `--sa-color-accent-soft` halo; hidden while exporting.
 - **Resize:** `NodeResizer` on selected nodes. Use 8 px square corner handles in accent with white fill, and a selection-colored line.
 
 ### 5.4 Group container
@@ -192,15 +202,18 @@ A group is a **container, not a component** (PC 6.6, PC 14), so it gets none of 
 
 All relationship types share one neutral ink. The **type is read from the label**, not from color. With ten types, color coding would add a legend to learn (low cognitive load, PC 14) and would fail for color-blind readers.
 
+**Geometry (UI v2).** Edges are **cubic curves** between port anchors on the node silhouettes (TD 6.4): the line leaves and enters perpendicular to the outline, with control distance `clamp(0.4 × chord, 32, 120)`. **Both ends of every edge carry an identical terminal ring** (radius 3.5, 1.5 px `--sa-edge-stroke`, `--sa-edge-terminal-fill` inside), so the rings add no direction cue. Only the arrowhead shows direction. Edges never animate; there are no flow dots, gradients, tapering or step markers.
+
 | Property | Directed | Undirected |
 |---|---|---|
 | Stroke | 1.5 px **solid** `--sa-edge-stroke` | 1.5 px **dashed** `--sa-edge-stroke`, `stroke-dasharray: 6 4` |
-| Arrowhead | Closed arrowhead at the **target only**, about 10 px, filled with the current stroke color | **None at either end** |
+| Arrowhead | Closed inline arrowhead at the **target only**, 10 px long, filled with the stroke color; its tip touches the target ring and it points into the node along the port normal | **None at either end** |
+| Terminal rings | Both ends | Both ends |
 | Label | As defined in TD 6.4 | As defined in TD 6.4 |
 
 Both cues (dash pattern and arrowhead) are always present together. Never style an undirected edge to suggest an order: no gradient, no tapering, no start marker.
 
-**Label styling:** `--sa-text-xs` in `--sa-edge-label-text` on an `--sa-edge-label-bg` rounded rectangle (`labelBgPadding` [6, 2], radius 3), at the midpoint of the path. Labels are SVG text, so they appear in the PNG export (TD 6.4). Truncation follows TD 6.4.
+**Label styling:** `--sa-text-xs` in `--sa-edge-label-text` on an `--sa-edge-label-bg` rounded rectangle (`labelBgPadding` [6, 2], radius 3), at the cubic point `B(labelPosition)` (0.5 for a single edge). Labels are SVG text, so they appear in the PNG export (TD 6.4). Truncation follows TD 6.4.
 
 **Edge states:**
 
@@ -208,13 +221,13 @@ Both cues (dash pattern and arrowhead) are always present together. Never style 
 |---|---|
 | Rest | as above |
 | Hover | stroke `--sa-edge-stroke-hover`; the label text stays the same |
-| Selected | stroke `--sa-edge-stroke-selected`, width `--sa-stroke-selected`, arrowhead in accent; label background gets a 1 px accent border |
+| Selected | stroke `--sa-edge-stroke-selected`, width `--sa-stroke-selected`, arrowhead and terminal rings in accent; label background gets a 1 px accent border |
 | Keyboard focus | the focus ring (9.1) drawn around the label rectangle, plus the selected stroke if the edge is also selected |
 | Exporting (`.sa-exporting`) | rest style only; selection and focus hidden (TD 10) |
 
-**Connection line (while dragging from a handle):** 1.5 px accent dashed line ending in a small accent dot. Over an invalid target (a group, the pane, the same node; TD 6.3, 13) the line switches to `--sa-color-danger` and the cursor to `not-allowed`. The red color is reinforced by the cursor change and by the fact that no picker opens on release.
+**Connection line (while dragging from a port):** a dashed preview cubic (6 4, 1.5 px accent) from the pressed port along its normal, ending in a small accent dot; when snapped to a port within 20 px it ends at that port's anchor and arrives along its normal, otherwise its end tangent points at the pointer. The port that would be used on release (the snapped port, or the automatic choice on a body hover) is filled and enlarged 1.2×. Over an invalid target (a group, the pane, the same node; TD 6.3, 13) the line switches to `--sa-color-danger` and the cursor to `not-allowed`. The red color is reinforced by the cursor change and by the fact that no picker opens on release.
 
-**Parallel edges:** the 12 px perpendicular offsets from TD 6.4. No extra styling.
+**Parallel edges:** the 20 px steps from TD 6.4 (ends stay on the ports, the middles fan out). No extra styling.
 
 ---
 
@@ -222,8 +235,8 @@ Both cues (dash pattern and arrowhead) are always present together. Never style 
 
 | State | Visual treatment | Non-color cue |
 |---|---|---|
-| **Node hover** | border darkens to `--sa-color-text`; handles appear | handles appear |
-| **Node selected** | a 2 px accent outline drawn 2 px outside the border, plus a 4 px `--sa-color-accent-soft` halo; resize handles | outline thickness and halo; resize handles |
+| **Node hover** | stroke thickens to 2.25 px in the same color; ports appear | thicker stroke, ports |
+| **Node selected** | a silhouette-following 2 px accent outline 4 px outside the border, plus an 8 px `--sa-color-accent-soft` halo; ports and resize handles | second outline and halo; ports; resize handles |
 | **Node focused (keyboard)** | focus ring (9.1) | double-ring shape, distinct from the selection outline |
 | **Multi-selected** | each element shows the selected state; the box-select rectangle uses accent at 8% fill with a 1 px accent border | — |
 | **Group selected** | outline becomes **solid** 2 px accent; header fill becomes `--sa-color-accent-soft` | dashed → solid |
@@ -278,6 +291,7 @@ Empty states are text-first and calm, with no illustrations or mascots.
 
 - **Header:** a sticky bar at the top of the panel with the type icon and mono type label (or "RELATIONSHIP", "GROUP", "ARCHITECTURE", "SELECTION"), then the element name in `--sa-text-lg` on the next line.
 - **Sections** (`<details>`): the summary row is 36 px tall on `--sa-color-surface-sunken`, `--sa-text-sm` semibold, with a chevron that rotates on open and a 1 px `--sa-color-border` below. The section body has 16 px padding and 16 px gaps between fields.
+- **Appearance** (component inspectors, UI v2): a collapsible section (open by default) after the type-specific fields and before Relationships. It holds a `<fieldset>` "Accent color" with 17 native radios: a full-width "Type default" row (28 px swatch with the type fill and ink ring + visible text) and a 4 × 4 grid of 28 px swatches (8 px gaps; tint fill, 2 px ink ring, 6 px radius; checked = 16 px check glyph + 2 px text-color outer ring; hover = 1 px `--sa-color-border-strong` ring; focus = the standard ring outermost), each with a hidden label and `title` of its name. A caption "Accent: {name}" shows the value as text. Changes apply immediately (one undo entry each). Relationship inspectors get a read-only **Ports** row and a secondary "Reset ports to automatic" button (only while a pin exists).
 - **Footer actions** (Connect…, Duplicate, Delete): a row of secondary buttons at the end of the scroll content. Delete uses the destructive *outline* variant there; the solid destructive fill is reserved for confirmation dialogs.
 
 ### 8.2 Fields
@@ -339,11 +353,11 @@ A single focus style used everywhere through `:focus-visible`: `outline: 2px sol
 
 1. All text meets 4.5:1 against its actual background (values in section 2).
 2. Control boundaries, selection outlines, group outlines and edges meet 3:1 against the canvas or surface.
-3. Component types differ by shape, icon and label (5.2); the grayscale check passes.
-4. Directed and undirected edges differ by arrowhead and dash pattern.
+3. Component types differ by silhouette, icon and label (5.2); the grayscale check passes with and without accents. Accent inks, port rings and edge strokes are ≥ 3:1 against the canvas.
+4. Directed and undirected edges differ by arrowhead and dash pattern (terminal rings are identical on both).
 5. Save status, errors and warnings always pair an icon with words.
 6. Selection and focus differ in shape, not only in color.
-7. **Forced colors** (`@media (forced-colors: active)`): borders and dash patterns carry the meaning. Use `CanvasText` for strokes, `Highlight` for selection outlines and keep `border-style: dashed` for External Systems, groups and undirected edges. The hatch and the fills may disappear; that is acceptable because the shape cues remain.
+7. **Forced colors** (`@media (forced-colors: active)`): borders and dash patterns carry the meaning. Use `CanvasText` for strokes, `Highlight` for selection outlines and keep the dash patterns for External Systems, groups and undirected edges. The hatch, accents and fills may disappear; that is acceptable because the silhouettes remain.
 
 ---
 
@@ -405,7 +419,7 @@ All tokens are declared on `:root` with the `--sa-` prefix:
 
 - `--sa-color-*` (neutrals, interaction, status, toast)
 - `--sa-type-{agent|orchestrator|tool|memory|external|decision}-{ink|fill}`, plus `--sa-type-external-hatch`
-- `--sa-edge-*`, `--sa-group-*`, `--sa-handle-*`
+- `--sa-edge-*`, `--sa-group-*`, `--sa-port-*`, `--sa-node-surface`, `--sa-accent-{id}-{ink|tint}` (16 accents)
 - `--sa-font-*`, `--sa-text-*` (set the size and line height through paired `--sa-text-{step}-size` / `--sa-text-{step}-lh` tokens if a single shorthand token is awkward), `--sa-weight-*`
 - `--sa-space-1` … `--sa-space-8`, `--sa-control-*`, `--sa-icon-*`, `--sa-radius-*`, `--sa-stroke-*`, `--sa-shadow-*`, `--sa-duration-*`, `--sa-ease`
 - `--sa-toolbar-h`, `--sa-palette-w`, `--sa-palette-w-collapsed`, `--sa-inspector-w`
