@@ -378,4 +378,65 @@ test.describe("UI v2 refinement — curves and labels (UI_V2_REFINEMENT 3.5)", (
     expect(Object.fromEntries(result.edges.map((edge) => [edge.id, edge.text]))).toEqual(expectedLabels);
     expect(result.edges.find((edge) => edge.id === "rel_ab")!.leader).toBe(1);
   });
+
+  test("E3: the PNG keeps 48 CSS px (96 device px) of margin on every side of the review layout", async ({ page }) => {
+    await openImported(page, "UI v2 review layout", reviewFixture());
+    await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("menuitem", { name: "PNG image" }).click();
+    const png = await downloadBuffer(await download);
+    await maybeSavePng(png, "ui-v2-review-layout.png");
+    const analysis = await analyzePng(page, png);
+    const c = analysis.content!;
+    expect(analysis.touchesEdge).toBe(false);
+    const margins = {
+      left: c.left,
+      top: c.top,
+      right: analysis.width - 1 - c.right,
+      bottom: analysis.height - 1 - c.bottom,
+    };
+    expect(margins.left).toBeGreaterThanOrEqual(94);
+    expect(margins.left).toBeLessThanOrEqual(98);
+    expect(margins.top).toBeGreaterThanOrEqual(94);
+    expect(margins.top).toBeLessThanOrEqual(98);
+    expect(margins.right).toBeGreaterThanOrEqual(94);
+    expect(margins.right).toBeLessThanOrEqual(100);
+    expect(margins.bottom).toBeGreaterThanOrEqual(94);
+    expect(margins.bottom).toBeLessThanOrEqual(100);
+  });
+});
+
+test.describe("UI v2 refinement — PNG margin at the 4096 px cap (UI_V2_REFINEMENT 4.2)", () => {
+  test("E4: a 5780 px wide diagram is scaled to 4096 CSS px and keeps 96·s device px of margin", async ({ page }) => {
+    // Two unconnected 220 x 88 agents: B = (-1, -1, 6002, 90), so s = 4096 / 6098 and the image is 8192 x 250 device px.
+    await openImported(page, "UI v2 margin cap", buildV2File("UI v2 margin cap", [
+      { id: "cmp_cap_l", type: "agent", name: "Left Agent", x: 0, y: 0 },
+      { id: "cmp_cap_r", type: "agent", name: "Right Agent", x: 5780, y: 0 },
+    ]));
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("menuitem", { name: "PNG image" }).click();
+    const png = await downloadBuffer(await download);
+    await maybeSavePng(png, "ui-v2-margin-cap.png");
+    const analysis = await analyzePng(page, png);
+    expect(analysis.width).toBe(8192);
+    expect(analysis.height).toBe(250);
+    expect(analysis.touchesEdge).toBe(false);
+    const c = analysis.content!;
+    // 96 * s = 96 * 4096 / 6098 = 64.48 device px; right and bottom may gain up to 2 px from the ceil.
+    const expected = (96 * 4096) / 6098;
+    const margins = {
+      left: c.left,
+      top: c.top,
+      right: analysis.width - 1 - c.right,
+      bottom: analysis.height - 1 - c.bottom,
+    };
+    expect(Math.abs(margins.left - expected)).toBeLessThanOrEqual(2);
+    expect(Math.abs(margins.top - expected)).toBeLessThanOrEqual(2);
+    expect(margins.right - expected).toBeGreaterThanOrEqual(-2);
+    expect(margins.right - expected).toBeLessThanOrEqual(4);
+    expect(margins.bottom - expected).toBeGreaterThanOrEqual(-2);
+    expect(margins.bottom - expected).toBeLessThanOrEqual(4);
+  });
 });
