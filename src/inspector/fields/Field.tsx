@@ -7,7 +7,13 @@ export interface FieldProps {
   hint?: string;
   error?: string;
   trailing?: ReactNode;
+  /** False while the labelled control is swapped out, so the label never points at a missing element. */
+  controlRendered?: boolean;
   children: ReactNode;
+}
+
+export function labelIdFor(id: string): string {
+  return `${id}-label`;
 }
 
 export function describedBy(id: string, hint?: string, error?: string): string | undefined {
@@ -16,11 +22,11 @@ export function describedBy(id: string, hint?: string, error?: string): string |
 }
 
 /** Label above the control, then hint and error text below it (UI 8.2). */
-export function Field({ id, label, hint, error, trailing, children }: FieldProps) {
+export function Field({ id, label, hint, error, trailing, controlRendered = true, children }: FieldProps) {
   return (
     <div className="sa-field">
       <div className="sa-field__label-row">
-        <label className="sa-field__label" htmlFor={id}>
+        <label className="sa-field__label" id={labelIdFor(id)} htmlFor={controlRendered ? id : undefined}>
           {label}
         </label>
         {trailing}

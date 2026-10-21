@@ -1,13 +1,21 @@
 import { useId, type ReactNode } from "react";
-import { describedBy, Field } from "./Field";
+import { describedBy, Field, labelIdFor } from "./Field";
 import { optionalText, textDraft, useDraft } from "./useDraft";
+
+export interface PreviewLabelling {
+  "aria-labelledby": string;
+  "aria-describedby": string | undefined;
+}
 
 interface BaseProps {
   label: string;
   hint?: string;
   trailing?: ReactNode;
-  /** When set, shown in place of the control; the draft stays mounted so it survives the swap. */
-  preview?: ReactNode;
+  /**
+   * When set, rendered in place of the control; the draft stays mounted so it survives the swap.
+   * Receives the attributes that name the preview by the field label (and describe it by the hint).
+   */
+  preview?: (labelling: PreviewLabelling) => ReactNode;
   multiline?: boolean;
   rows?: number;
   monospace?: boolean;
@@ -68,9 +76,9 @@ export function TextField(props: TextFieldProps) {
   };
 
   return (
-    <Field id={id} label={label} hint={hint} error={error} trailing={trailing}>
+    <Field id={id} label={label} hint={hint} error={error} trailing={trailing} controlRendered={preview === undefined}>
       {preview !== undefined ? (
-        preview
+        preview({ "aria-labelledby": labelIdFor(id), "aria-describedby": describedBy(id, hint, error) })
       ) : multiline ? (
         <textarea {...controlProps} rows={rows} onChange={(event) => handleChange(event.target.value)} />
       ) : (

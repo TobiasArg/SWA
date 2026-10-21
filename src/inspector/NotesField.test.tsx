@@ -26,10 +26,11 @@ describe("Notes Edit / Preview", () => {
   it("defaults to Edit with a labelled textarea", () => {
     renderInspector(withNotes("Hello"), { componentIds: ["cmp_tool"] });
 
-    expect(screen.getByLabelText("Notes")).toHaveValue("Hello");
+    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("Hello");
+    expect(screen.getByText("Notes", { selector: "label" })).toHaveAttribute("for");
     expect(toggle().edit).toHaveAttribute("aria-pressed", "true");
     expect(toggle().preview).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByRole("region", { name: "Notes preview" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Notes" })).toBeNull();
   });
 
   it("previews component notes and returns to Edit with the draft intact", async () => {
@@ -39,16 +40,36 @@ describe("Notes Edit / Preview", () => {
     await user.type(screen.getByLabelText("Notes"), "## Plan{enter}{enter}- first");
     await user.click(toggle().preview);
 
-    const region = screen.getByRole("region", { name: "Notes preview" });
+    const region = screen.getByRole("region", { name: "Notes" });
     expect(await within(region).findByRole("heading", { name: "Plan" })).toBeInTheDocument();
     expect(within(region).getByRole("listitem")).toHaveTextContent("first");
     expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull();
     expect(toggle().preview).toHaveAttribute("aria-pressed", "true");
 
     await user.click(toggle().edit);
-    expect(screen.getByLabelText("Notes")).toHaveValue("## Plan\n\n- first");
+    expect(screen.getByRole("textbox", { name: "Notes" })).toHaveValue("## Plan\n\n- first");
     const keys = new Set(store.dispatched.map((entry) => entry.coalesceKey));
     expect(keys).toEqual(new Set(["cmp_tool:notes"]));
+  });
+
+  it("names the preview by the Notes label and never points the label at a missing control", async () => {
+    const user = userEvent.setup();
+    renderInspector(withNotes("Hello"), { componentIds: ["cmp_tool"] });
+
+    await user.click(toggle().preview);
+    const label = screen.getByText("Notes", { selector: "label" });
+    expect(label).not.toHaveAttribute("for");
+    const region = screen.getByRole("region", { name: "Notes" });
+    expect(region).toHaveAttribute("aria-labelledby", label.id);
+    expect(region).toHaveAccessibleDescription("Markdown");
+    expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull();
+
+    await user.click(toggle().edit);
+    expect(screen.getByText("Notes", { selector: "label" })).toHaveAttribute(
+      "for",
+      screen.getByRole("textbox", { name: "Notes" }).id,
+    );
+    expect(screen.queryByRole("region", { name: "Notes" })).toBeNull();
   });
 
   it("previews group notes", async () => {
@@ -56,7 +77,7 @@ describe("Notes Edit / Preview", () => {
     renderInspector(withNotes(undefined, "Team **notes**"), { groupIds: ["grp_a"] });
 
     await user.click(toggle().preview);
-    const region = screen.getByRole("region", { name: "Notes preview" });
+    const region = screen.getByRole("region", { name: "Notes" });
     expect((await within(region).findByText("notes")).tagName).toBe("STRONG");
 
     await user.click(toggle().edit);
@@ -79,7 +100,7 @@ describe("Notes Edit / Preview", () => {
     await user.tab({ shift: true });
     expect(toggle().preview).toHaveFocus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("region", { name: "Notes preview" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Notes" })).toBeInTheDocument();
     expect(toggle().preview).toHaveFocus();
 
     await user.tab({ shift: true });

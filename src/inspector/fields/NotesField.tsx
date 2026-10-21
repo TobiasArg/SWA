@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { Icon } from "../../ui/icons";
-import { TextAreaField } from "./TextField";
+import { TextAreaField, type PreviewLabelling } from "./TextField";
 
 // Loaded on first preview so the Markdown renderer stays out of the initial bundle.
 const MarkdownPreview = lazy(() => import("../../ui/MarkdownPreview"));
@@ -40,13 +40,15 @@ export function NotesField({ value, onChange, onBlur }: NotesFieldProps) {
   );
 
   const preview =
-    mode === "preview" ? (
-      <div className="sa-notes-preview" role="region" aria-label="Notes preview">
-        <Suspense fallback={<p className="sa-field__hint">Loading preview…</p>}>
-          <MarkdownPreview source={value} />
-        </Suspense>
-      </div>
-    ) : undefined;
+    mode === "preview"
+      ? (labelling: PreviewLabelling) => (
+          <div className="sa-notes-preview" role="region" {...labelling}>
+            <Suspense fallback={<p className="sa-field__hint">Loading preview…</p>}>
+              <MarkdownPreview source={value} />
+            </Suspense>
+          </div>
+        )
+      : undefined;
 
   return (
     <TextAreaField
