@@ -4,8 +4,11 @@
  */
 import { RELATIONSHIP_TYPES } from "../domain/constants";
 import { createRelationship } from "../domain/factories";
-import type { RelationshipType } from "../domain/types";
+import { isPortSide, type PortPins, type PortSide } from "../domain/ports";
+import type { Relationship, RelationshipType } from "../domain/types";
 import type { EditorStore } from "../editor/storeTypes";
+import type { Position, Rect } from "../domain/types";
+import { autoPortFor, type ShapeKind } from "./shapes";
 
 /** The 10 relationship types in their canonical order (TD 3.2). */
 export const RELATIONSHIP_TYPE_ORDER = Object.keys(RELATIONSHIP_TYPES) as RelationshipType[];
@@ -36,12 +39,27 @@ export function addRelationshipAndSelect(
   type: RelationshipType,
   sourceId: string,
   targetId: string,
+  pins?: PortPins,
 ): string | null {
-  const relationship = createRelationship(type, sourceId, targetId);
+  const relationship: Relationship = createRelationship(type, sourceId, targetId);
+  // Only pointer connections carry pins (UI v2 8.1); the Connect dialog stores no `visual`.
+  if (pins && (pins.source || pins.target)) relationship.visual = { ports: { ...pins } };
   const result = store.dispatch({ kind: "addRelationship", relationship }, { label: "Add relationship" });
   if (!result.ok) return null;
   store.setSelection({ componentIds: [], relationshipIds: [relationship.id], groupIds: [] });
   return relationship.id;
+}
+
+/**
+ * Pins captured by a pointer connection (UI v2 8.1). The pressed port always
+ * pins the source; the release handle pins the target only when the pointer was
+ * released on (or snapped to) a port, never for a body drop.
+ */
+export function capturePins(sourceHandle: string | null | undefined, targetHandle: string | null | undefined): PortPins {
+  return {
+    ...(isPortSide(sourceHandle) ? { source: sourceHandle } : {}),
+    ...(isPortSide(targetHandle) ? { target: targetHandle } : {}),
+  };
 }
 
 export type ConnectionStatus = "valid" | "invalid";
@@ -76,4 +94,20 @@ export function eventClientPoint(event: MouseEvent | TouchEvent): { x: number; y
     return touch ? { x: touch.clientX, y: touch.clientY } : null;
   }
   return { x: event.clientX, y: event.clientY };
+}
+
+/**
+ * The port highlighted on the hovered target (UI v2 8.2): the snapped port when
+ * the pointer is within the connection radius of one, otherwise the automatic
+ * choice for a body hover, `autoPortFor(T, pinned source anchor)`. This is the
+ * same function the edge uses for an automatic end next to a pinned one, so
+ * the preview equals the final render.
+ */
+export function activeTargetPort(input: {
+  snappedSide: PortSide | null;
+  targetKind: ShapeKind;
+  targetRect: Rect;
+  sourceAnchor: Position;
+}): PortSide {
+  return input.snappedSide ?? autoPortFor(input.targetKind, input.targetRect, input.sourceAnchor);
 }

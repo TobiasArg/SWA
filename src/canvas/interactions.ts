@@ -32,7 +32,9 @@ import { MAX_SIZE, MIN_SIZE } from "../domain/constants";
 import { effectiveSize } from "../domain/geometry";
 import type { Position } from "../domain/types";
 import type { EditorStore } from "../editor/storeTypes";
+import type { PortPins } from "../domain/ports";
 import {
+  capturePins,
   eventClientPoint,
   resolveConnectionTarget,
   type ConnectionStatus,
@@ -53,6 +55,8 @@ export interface PendingConnection {
   targetId: string;
   /** Client coordinates of the release point; the picker is anchored here. */
   anchor: Position;
+  /** Port pins captured by the gesture: source = pressed port, target only for a port release. */
+  pins: PortPins;
 }
 
 /** `data-connecting` value on the canvas host while a connection is dragged. */
@@ -67,6 +71,8 @@ export interface CanvasInteractions {
   onConnect: (connection: Connection) => void;
   onConnectEnd: (event: MouseEvent | TouchEvent, state: FinalConnectionState) => void;
   connecting: ConnectingState;
+  /** Component under the pointer while a connection is dragged (valid targets only). */
+  connectTargetId: string | null;
   pendingConnection: PendingConnection | null;
   clearPendingConnection: () => void;
   /** Re-applies the active drag's transient layout (used when the projection changes mid-drag). */
@@ -89,6 +95,10 @@ function clamp(value: number, min: number, max: number): number {
 
 interface ActiveConnection {
   sourceId: string;
+  /** Handle (port side) the drag started from; always pinned. */
+  sourceHandle: string | null;
+  /** Handle the pointer was released on; absent for a body drop. */
+  targetHandle: string | null;
   status: ConnectionStatus;
   targetId: string | null;
   cancelled: boolean;
@@ -174,6 +184,7 @@ export function useCanvasInteractions({
   // ---- Connect --------------------------------------------------------------
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [connecting, setConnecting] = useState<ConnectingState>(null);
+  const [connectTargetId, setConnectTargetId] = useState<string | null>(null);
   const activeConnection = useRef<ActiveConnection | null>(null);
   const [listening, setListening] = useState(false);
 
@@ -190,6 +201,7 @@ export function useCanvasInteractions({
       active.status = target.status;
       active.targetId = target.targetId;
       setConnecting(target.status);
+      setConnectTargetId(target.targetId);
     },
     [store],
   );
@@ -220,8 +232,16 @@ export function useCanvasInteractions({
 
   const onConnectStart = useCallback((_event: MouseEvent | TouchEvent, params: OnConnectStartParams) => {
     if (!params.nodeId) return;
-    activeConnection.current = { sourceId: params.nodeId, status: "invalid", targetId: null, cancelled: false };
+    activeConnection.current = {
+      sourceId: params.nodeId,
+      sourceHandle: params.handleId,
+      targetHandle: null,
+      status: "invalid",
+      targetId: null,
+      cancelled: false,
+    };
     setPendingConnection(null);
+    setConnectTargetId(null);
     setConnecting("invalid");
     setListening(true);
   }, []);
@@ -233,6 +253,8 @@ export function useCanvasInteractions({
     if (connection.source === active.sourceId && connection.target && connection.target !== active.sourceId) {
       active.status = "valid";
       active.targetId = connection.target;
+      // Released on (or snapped to) a port: pin it. A body drop never reaches here.
+      active.targetHandle = connection.targetHandle ?? null;
     }
   }, []);
 
@@ -247,9 +269,15 @@ export function useCanvasInteractions({
       }
       activeConnection.current = null;
       if (active && !active.cancelled && point && active.status === "valid" && active.targetId) {
-        setPendingConnection({ sourceId: active.sourceId, targetId: active.targetId, anchor: point });
+        setPendingConnection({
+          sourceId: active.sourceId,
+          targetId: active.targetId,
+          anchor: point,
+          pins: capturePins(active.sourceHandle, active.targetHandle),
+        });
       }
       setConnecting(null);
+      setConnectTargetId(null);
     },
     [updateStatus],
   );
@@ -265,6 +293,7 @@ export function useCanvasInteractions({
     onConnect,
     onConnectEnd,
     connecting,
+    connectTargetId,
     pendingConnection,
     clearPendingConnection,
     withActiveDrag,

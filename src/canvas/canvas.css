@@ -504,6 +504,15 @@
   transition: fill var(--sa-duration-fast) var(--sa-ease);
 }
 
+/* Terminal rings: identical at both ends of every edge (no direction cue). */
+.sa-edge-terminal {
+  fill: var(--sa-edge-terminal-fill);
+  stroke: var(--sa-edge-stroke);
+  stroke-width: var(--sa-stroke);
+  pointer-events: none;
+  transition: stroke var(--sa-duration-fast) var(--sa-ease);
+}
+
 .sa-flow .react-flow__edge-text {
   font-family: var(--sa-font-sans);
   font-size: 12px;
@@ -523,6 +532,10 @@
   fill: var(--sa-edge-stroke-hover);
 }
 
+.sa-flow .react-flow__edge:hover .sa-edge-terminal {
+  stroke: var(--sa-edge-stroke-hover);
+}
+
 /* React Flow paints focused edges as selected; we use a focus ring instead. */
 .sa-flow .react-flow__edge.selectable:focus:not(.selected) .sa-edge-path,
 .sa-flow .react-flow__edge.selectable:focus-visible:not(.selected) .sa-edge-path {
@@ -537,6 +550,10 @@
 
 .sa-flow .react-flow__edge.selected .sa-edge-arrow {
   fill: var(--sa-edge-stroke-selected);
+}
+
+.sa-flow .react-flow__edge.selected .sa-edge-terminal {
+  stroke: var(--sa-edge-stroke-selected);
 }
 
 .sa-flow .react-flow__edge.selected .react-flow__edge-textbg {
@@ -556,23 +573,23 @@
  * itself) it turns danger and the cursor becomes not-allowed.
  */
 .sa-flow .react-flow__connection-path {
-  stroke: var(--sa-color-accent);
+  stroke: var(--sa-port-active);
   stroke-dasharray: 6 4;
   stroke-width: var(--sa-stroke);
 }
 
 .sa-connection-line__dot {
-  fill: var(--sa-color-accent);
+  fill: var(--sa-port-active);
 }
 
 .sa-canvas[data-connecting="invalid"] .react-flow__connection-path,
 .sa-flow .react-flow__connection.invalid .react-flow__connection-path {
-  stroke: var(--sa-color-danger);
+  stroke: var(--sa-port-invalid);
 }
 
 .sa-canvas[data-connecting="invalid"] .sa-connection-line__dot,
 .sa-flow .react-flow__connection.invalid .sa-connection-line__dot {
-  fill: var(--sa-color-danger);
+  fill: var(--sa-port-invalid);
 }
 
 .sa-canvas[data-connecting="invalid"],
@@ -632,6 +649,11 @@
   fill: var(--sa-edge-stroke) !important;
 }
 
+.sa-exporting .react-flow__edge .sa-edge-terminal,
+.sa-exporting .react-flow__edge:hover .sa-edge-terminal {
+  stroke: var(--sa-edge-stroke) !important;
+}
+
 .sa-exporting .react-flow__edge .react-flow__edge-textbg {
   stroke: none !important;
 }
@@ -650,6 +672,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sa-edge-arrow,
+  .sa-edge-terminal,
   .sa-flow .react-flow__edge-path.sa-edge-path,
   .sa-flow .react-flow__handle.sa-port {
     transition: none;
@@ -693,6 +716,11 @@
     fill: CanvasText;
   }
 
+  .sa-edge-terminal {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+
   .sa-flow .react-flow__connection-path {
     stroke: Highlight;
   }
@@ -708,5 +736,9 @@
 
   .sa-flow .react-flow__edge.selected .sa-edge-arrow {
     fill: Highlight;
+  }
+
+  .sa-flow .react-flow__edge.selected .sa-edge-terminal {
+    stroke: Highlight;
   }
 }

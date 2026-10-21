@@ -1,10 +1,9 @@
 /**
- * Pure geometry for floating relationship edges (TD 6.4).
- *
- * Endpoints are where the line between the two node centers leaves each node's
- * rectangle, so handles never determine the path. Parallel relationships between
- * the same pair are shifted perpendicular to the line in 12 px steps.
+ * Pure geometry for relationship edges (UI_V2_DESIGN.md 8.5, TD 6.4): cubic
+ * curves between port anchors on the node silhouettes, terminal rings, inline
+ * arrowheads, and the parallel-relationship fan-out.
  */
+import { readPortPins } from "../domain/ports";
 import type { Position, Rect, Relationship } from "../domain/types";
 import {
   ARROW_HALF_WIDTH,
@@ -14,21 +13,15 @@ import {
   CURVE_MIN,
   PARALLEL_STEP,
   TERMINAL_RADIUS,
+  absolutePortAnchor,
   portNormal,
+  resolvePorts,
+  type PortPair,
   type PortSide,
+  type ShapeKind,
 } from "./shapes";
 
 export { PARALLEL_STEP };
-
-export interface EdgeGeometry {
-  sourceX: number;
-  sourceY: number;
-  targetX: number;
-  targetY: number;
-  /** Label anchor on the drawn segment (midpoint by default). */
-  labelX: number;
-  labelY: number;
-}
 
 export type ParallelInfo = {
   /** Position of this relationship among all relationships of the same unordered pair (array order). */
@@ -48,10 +41,6 @@ export type ParallelInfo = {
    */
   labelPosition: number;
 };
-
-export function rectCenter(rect: Rect): Position {
-  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-}
 
 /** Index-based offset magnitude/side for the canonical pair direction: 0, +step, -step, +2*step, ..., … */
 export function canonicalOffset(index: number): number {
@@ -101,72 +90,6 @@ export function computeParallelInfo(relationships: readonly Relationship[]): Map
   return result;
 }
 
-function clampPointToRect(point: Position, rect: Rect): Position {
-  return {
-    x: Math.min(rect.x + rect.width, Math.max(rect.x, point.x)),
-    y: Math.min(rect.y + rect.height, Math.max(rect.y, point.y)),
-  };
-}
-
-/**
- * The point where the ray from `from` (inside `rect`) toward `toward` leaves the
- * rectangle. Points outside the rectangle are clamped onto it first.
- */
-export function rayExit(rect: Rect, from: Position, toward: Position): Position {
-  const start = clampPointToRect(from, rect);
-  const dx = toward.x - start.x;
-  const dy = toward.y - start.y;
-  if (dx === 0 && dy === 0) return start;
-
-  let t = Number.POSITIVE_INFINITY;
-  if (dx > 0) t = Math.min(t, (rect.x + rect.width - start.x) / dx);
-  else if (dx < 0) t = Math.min(t, (rect.x - start.x) / dx);
-  if (dy > 0) t = Math.min(t, (rect.y + rect.height - start.y) / dy);
-  else if (dy < 0) t = Math.min(t, (rect.y - start.y) / dy);
-  if (!Number.isFinite(t)) t = 0;
-
-  return { x: start.x + dx * t, y: start.y + dy * t };
-}
-
-/**
- * Floating edge endpoints between two rectangles, with an optional perpendicular
- * offset (px) relative to the source → target direction.
- */
-export function getFloatingEdgeGeometry(
-  source: Rect,
-  target: Rect,
-  offset = 0,
-  labelPosition = 0.5,
-): EdgeGeometry {
-  const sc = rectCenter(source);
-  const tc = rectCenter(target);
-  const dx = tc.x - sc.x;
-  const dy = tc.y - sc.y;
-  const length = Math.hypot(dx, dy);
-
-  let shiftX = 0;
-  let shiftY = 0;
-  if (offset !== 0 && length > 0) {
-    // Left-hand normal of the travel direction in screen coordinates (y down).
-    shiftX = (dy / length) * offset;
-    shiftY = (-dx / length) * offset;
-  }
-
-  const sFrom = { x: sc.x + shiftX, y: sc.y + shiftY };
-  const tFrom = { x: tc.x + shiftX, y: tc.y + shiftY };
-  const start = rayExit(source, sFrom, tFrom);
-  const end = rayExit(target, tFrom, sFrom);
-
-  return {
-    sourceX: start.x,
-    sourceY: start.y,
-    targetX: end.x,
-    targetY: end.y,
-    labelX: start.x + (end.x - start.x) * labelPosition,
-    labelY: start.y + (end.y - start.y) * labelPosition,
-  };
-}
-
 /** Structural subset of React Flow's InternalNode that the edge geometry needs. */
 export interface InternalNodeLike {
   internals: { positionAbsolute: Position };
@@ -200,45 +123,20 @@ export interface ArrowheadResult {
 export function arrowheadGeometry(
   tip: Position,
   direction: Position,
-  length?: number,
-  halfWidth?: number,
-): ArrowheadResult;
-/** @deprecated Straight-edge form kept for the v1 RelationshipEdge until S4. Returns null for short segments. */
-export function arrowheadGeometry(geometry: EdgeGeometry, length?: number, halfWidth?: number): ArrowheadResult | null;
-export function arrowheadGeometry(
-  first: Position | EdgeGeometry,
-  second?: Position | number,
-  third?: number,
-  fourth?: number,
-): ArrowheadResult | null {
-  if ("sourceX" in first) {
-    const length = typeof second === "number" ? second : ARROW_LENGTH;
-    const halfWidth = third ?? ARROW_HALF_WIDTH;
-    const dx = first.targetX - first.sourceX;
-    const dy = first.targetY - first.sourceY;
-    const segment = Math.hypot(dx, dy);
-    if (segment < length) return null;
-    return arrowheadGeometry(
-      { x: first.targetX, y: first.targetY },
-      { x: dx / segment, y: dy / segment },
-      length,
-      halfWidth,
-    );
-  }
-  const direction = second as Position;
-  const length = third ?? ARROW_LENGTH;
-  const halfWidth = fourth ?? ARROW_HALF_WIDTH;
+  length: number = ARROW_LENGTH,
+  halfWidth: number = ARROW_HALF_WIDTH,
+): ArrowheadResult {
   const mag = Math.hypot(direction.x, direction.y);
   const ux = mag > 0 ? direction.x / mag : 1;
   const uy = mag > 0 ? direction.y / mag : 0;
-  const baseX = first.x - ux * length;
-  const baseY = first.y - uy * length;
+  const baseX = tip.x - ux * length;
+  const baseY = tip.y - uy * length;
   const nx = -uy * halfWidth;
   const ny = ux * halfWidth;
   return {
-    path: `M ${round2(first.x)} ${round2(first.y)} L ${round2(baseX + nx)} ${round2(baseY + ny)} L ${round2(baseX - nx)} ${round2(baseY - ny)} Z`,
-    lineEndX: first.x - ux * (length - 2),
-    lineEndY: first.y - uy * (length - 2),
+    path: `M ${round2(tip.x)} ${round2(tip.y)} L ${round2(baseX + nx)} ${round2(baseY + ny)} L ${round2(baseX - nx)} ${round2(baseY - ny)} Z`,
+    lineEndX: tip.x - ux * (length - 2),
+    lineEndY: tip.y - uy * (length - 2),
   };
 }
 
@@ -342,4 +240,99 @@ export function cubicEdgeGeometry(input: CubicEdgeInput): CubicEdgeGeometry {
     labelX: label.x,
     labelY: label.y,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Connection preview (UI_V2_DESIGN.md 8.1)
+// ---------------------------------------------------------------------------
+
+export interface ConnectionPreviewInput {
+  /** Absolute anchor of the pressed (source) port and its side. */
+  sourceAnchor: Position;
+  sourceSide: PortSide;
+  /** Pointer in flow coordinates. */
+  pointer: Position;
+  /** When snapped to a port: that port's anchor and side. */
+  snapped?: { anchor: Position; side: PortSide } | null;
+}
+
+export interface ConnectionPreviewGeometry {
+  path: string;
+  /** Where the end dot sits. */
+  end: Position;
+}
+
+/**
+ * Preview cubic from the source anchor along its normal. Snapped to a port: ends
+ * at that anchor and arrives along its normal; otherwise the end tangent points
+ * straight at the pointer (the direction of the chord). Pure, never throws.
+ */
+export function connectionPreviewGeometry(input: ConnectionPreviewInput): ConnectionPreviewGeometry {
+  const p0 = input.sourceAnchor;
+  const ns = portNormal(input.sourceSide);
+  const p3 = input.snapped ? input.snapped.anchor : input.pointer;
+  const chordX = p3.x - p0.x;
+  const chordY = p3.y - p0.y;
+  const chord = Math.hypot(chordX, chordY);
+  const d = Math.min(CURVE_MAX, Math.max(CURVE_MIN, CURVE_FACTOR * chord));
+  const p1 = { x: p0.x + ns.x * d, y: p0.y + ns.y * d };
+  let p2: Position;
+  if (input.snapped) {
+    const nt = portNormal(input.snapped.side);
+    p2 = { x: p3.x + nt.x * d, y: p3.y + nt.y * d };
+  } else if (chord > 0) {
+    p2 = { x: p3.x - (chordX / chord) * d, y: p3.y - (chordY / chord) * d };
+  } else {
+    p2 = { x: p3.x, y: p3.y };
+  }
+  const f = round2;
+  return {
+    path: `M ${f(p0.x)} ${f(p0.y)} C ${f(p1.x)} ${f(p1.y)} ${f(p2.x)} ${f(p2.y)} ${f(p3.x)} ${f(p3.y)}`,
+    end: { x: p3.x, y: p3.y },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Relationship layout (sides + cubic) from node rects
+// ---------------------------------------------------------------------------
+
+export interface RelationshipLayoutInput {
+  relationship: Pick<Relationship, "sourceId" | "targetId" | "direction" | "visual">;
+  sourceRect: Rect;
+  targetRect: Rect;
+  sourceKind: ShapeKind;
+  targetKind: ShapeKind;
+  parallelOffset?: number;
+  labelPosition?: number;
+}
+
+export interface RelationshipLayout extends CubicEdgeGeometry {
+  sides: PortPair;
+}
+
+/**
+ * Resolves the sides (valid pins win, Rule B for a single pin, else Rule A) from
+ * the actual node rects, then builds the cubic. Pure.
+ */
+export function layoutRelationship(input: RelationshipLayoutInput): RelationshipLayout {
+  const { relationship } = input;
+  const sides = resolvePorts({
+    sourceRect: input.sourceRect,
+    targetRect: input.targetRect,
+    sourceKind: input.sourceKind,
+    targetKind: input.targetKind,
+    sourceId: relationship.sourceId,
+    targetId: relationship.targetId,
+    pins: readPortPins(relationship.visual),
+  });
+  const geometry = cubicEdgeGeometry({
+    sourceAnchor: absolutePortAnchor(input.sourceKind, input.sourceRect, sides.source),
+    targetAnchor: absolutePortAnchor(input.targetKind, input.targetRect, sides.target),
+    sourceSide: sides.source,
+    targetSide: sides.target,
+    directed: relationship.direction === "directed",
+    ...(input.parallelOffset === undefined ? {} : { parallelOffset: input.parallelOffset }),
+    ...(input.labelPosition === undefined ? {} : { labelPosition: input.labelPosition }),
+  });
+  return { ...geometry, sides };
 }

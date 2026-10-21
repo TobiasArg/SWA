@@ -34,3 +34,9 @@ export function isComponentNode(node: CanvasNode): node is ComponentFlowNode {
 export function isGroupNode(node: CanvasNode): node is GroupFlowNode {
   return node.type === GROUP_NODE_TYPE;
 }
+
+/** The component of a node (plain or React Flow internal node), or null for groups and unknown nodes. */
+export function nodeComponent(node: { type?: string; data: object } | null | undefined): Component | null {
+  if (!node || node.type !== COMPONENT_NODE_TYPE) return null;
+  return (node.data as ComponentNodeData).component;
+}

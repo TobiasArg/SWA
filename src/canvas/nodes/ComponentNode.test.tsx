@@ -1,5 +1,11 @@
 import { render } from "@testing-library/react";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+const hintMock = vi.hoisted(() => ({ value: { targetId: null as string | null, activeSide: null as string | null } }));
+vi.mock("../nodeContext", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../nodeContext")>()),
+  useConnectHint: () => hintMock.value,
+}));
 import { ACCENTS, ACCENT_IDS } from "../../domain/constants";
 import type { Component } from "../../domain/types";
 import { EditorProvider } from "../../editor/context";
@@ -210,5 +216,27 @@ describe("ComponentNode accent", () => {
     expect(resolveToken(bandRule.fill!)).toBe("#1D3557");
     const hatchRule = declarations(ruleBody(canvasCss, ".sa-node__detail--hatch"));
     expect(hatchRule.stroke).toBe("var(--sa-type-external-hatch)");
+  });
+});
+
+describe("ComponentNode connect hint", () => {
+  it("marks the hovered target and fills only the port that would be used", () => {
+    hintMock.value = { targetId: "cmp_crm", activeSide: "left" };
+    const store = createFakeStore(buildFixtureArchitecture());
+    const { container } = render(
+      <EditorProvider store={store}>
+        <div style={{ width: 800, height: 600 }}>
+          <CanvasView />
+        </div>
+      </EditorProvider>,
+    );
+    const crm = container.querySelector('.react-flow__node[data-id="cmp_crm"]')!;
+    expect(crm.querySelector(".sa-node")).toHaveAttribute("data-connect-target", "true");
+    const active = crm.querySelectorAll(".sa-port--active");
+    expect(active).toHaveLength(1);
+    expect(active[0]).toHaveAttribute("data-port", "left");
+    expect(container.querySelectorAll('[data-connect-target="true"]')).toHaveLength(1);
+    expect(container.querySelectorAll(".sa-port--active")).toHaveLength(1);
+    hintMock.value = { targetId: null, activeSide: null };
   });
 });

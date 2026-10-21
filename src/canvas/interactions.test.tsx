@@ -143,6 +143,7 @@ describe("connect gesture", () => {
       sourceId: "cmp_orch",
       targetId: "cmp_crm",
       anchor: { x: 300, y: 200 },
+      pins: { source: "right", target: "left" },
     });
     expect(hook.result.current.connecting).toBeNull();
   });
@@ -154,6 +155,22 @@ describe("connect gesture", () => {
     act(() => hook.result.current.onConnectEnd(end(10, 10), finalState));
     restore();
     expect(hook.result.current.pendingConnection).toMatchObject({ sourceId: "cmp_orch", targetId: "cmp_search" });
+    // Body drop: only the pressed port is pinned; the target stays automatic.
+    expect(hook.result.current.pendingConnection?.pins).toEqual({ source: "right" });
+  });
+
+  it("exposes the component under the pointer while dragging and clears it on release", () => {
+    const { hook } = setup();
+    const restore = withElementAt(componentElement("cmp_search"));
+    act(() => hook.result.current.onConnectStart(end(0, 0), { nodeId: "cmp_orch", handleId: "bottom", handleType: "source" }));
+    expect(hook.result.current.connectTargetId).toBeNull();
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
+    });
+    expect(hook.result.current.connectTargetId).toBe("cmp_search");
+    act(() => hook.result.current.onConnectEnd(end(10, 10), finalState));
+    restore();
+    expect(hook.result.current.connectTargetId).toBeNull();
   });
 
   it("opens no picker over the pane, a group or the source node", () => {

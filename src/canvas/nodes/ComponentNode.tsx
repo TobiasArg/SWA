@@ -5,7 +5,7 @@ import type { Component } from "../../domain/types";
 import { Icon, type IconName } from "../../ui/icons";
 import type { ComponentFlowNode } from "../flowTypes";
 import { componentTypeTag } from "../labels";
-import { useCanvasNodeCallbacks } from "../nodeContext";
+import { useCanvasNodeCallbacks, useConnectHint } from "../nodeContext";
 import {
   PORT_SIDES,
   SELECTION_INFLATE,
@@ -57,6 +57,8 @@ const HANDLE_POSITION: Record<PortSide, Position> = {
 function ComponentNodeView({ id, data, selected, isConnectable, width, height }: NodeProps<ComponentFlowNode>) {
   const { component } = data;
   const { onResizeEnd } = useCanvasNodeCallbacks();
+  const hint = useConnectHint();
+  const connectTarget = hint.targetId === id;
   const handleResizeEnd = useCallback<OnResizeEnd>(
     (_event, params) => onResizeEnd(id, params),
     [id, onResizeEnd],
@@ -85,6 +87,7 @@ function ComponentNodeView({ id, data, selected, isConnectable, width, height }:
       data-accent={accent}
       data-shape={kind}
       data-selected={selected ? "true" : undefined}
+      data-connect-target={connectTarget ? "true" : undefined}
       style={padding}
     >
       <NodeResizer
@@ -140,7 +143,7 @@ function ComponentNodeView({ id, data, selected, isConnectable, width, height }:
             type="source"
             position={HANDLE_POSITION[side]}
             isConnectable={isConnectable}
-            className="sa-port"
+            className={connectTarget && hint.activeSide === side ? "sa-port sa-port--active" : "sa-port"}
             data-port={side}
             style={{ left: anchor.x, top: anchor.y }}
           />

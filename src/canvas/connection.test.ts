@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   RELATIONSHIP_TYPE_ORDER,
+  activeTargetPort,
+  capturePins,
   addRelationshipAndSelect,
   directionNote,
   eventClientPoint,
   readsAsHint,
   resolveConnectionTarget,
 } from "./connection";
+import { absolutePortAnchor, autoPortFor } from "./shapes";
 import { createFakeStore } from "./testing/fakeStore";
 import { buildFixtureArchitecture } from "./testing/fixtures";
 
@@ -93,5 +96,64 @@ describe("resolveConnectionTarget", () => {
 describe("eventClientPoint", () => {
   it("reads mouse events", () => {
     expect(eventClientPoint(new MouseEvent("mouseup", { clientX: 5, clientY: 7 }))).toEqual({ x: 5, y: 7 });
+  });
+});
+
+describe("pin capture (UI v2 8.1)", () => {
+  it("pins the pressed port, and the target only when released on a port", () => {
+    expect(capturePins("right", "left")).toEqual({ source: "right", target: "left" });
+    expect(capturePins("bottom", null)).toEqual({ source: "bottom" });
+    expect(capturePins("bottom", undefined)).toEqual({ source: "bottom" });
+  });
+
+  it("ignores handle ids that are not port sides", () => {
+    expect(capturePins("nonsense", "middle")).toEqual({});
+    expect(capturePins(null, "top")).toEqual({ target: "top" });
+  });
+});
+
+describe("addRelationshipAndSelect pins", () => {
+  const ids = () => {
+    const architecture = buildFixtureArchitecture();
+    return { architecture, a: architecture.components[0]!.id, b: architecture.components[1]!.id };
+  };
+
+  it("stores visual.ports with both pins from a port-to-port drag", () => {
+    const { architecture, a, b } = ids();
+    const store = createFakeStore(architecture);
+    const id = addRelationshipAndSelect(store, "uses", a, b, { source: "right", target: "left" })!;
+    const rel = store.getState().architecture.relationships.find((r) => r.id === id)!;
+    expect(rel.visual).toEqual({ ports: { source: "right", target: "left" } });
+  });
+
+  it("stores only the source pin for a body drop", () => {
+    const { architecture, a, b } = ids();
+    const store = createFakeStore(architecture);
+    const id = addRelationshipAndSelect(store, "uses", a, b, { source: "bottom" })!;
+    const rel = store.getState().architecture.relationships.find((r) => r.id === id)!;
+    expect(rel.visual).toEqual({ ports: { source: "bottom" } });
+  });
+
+  it("stores no visual for the Connect dialog path (no pins)", () => {
+    const { architecture, a, b } = ids();
+    const store = createFakeStore(architecture);
+    const id = addRelationshipAndSelect(store, "uses", a, b)!;
+    const rel = store.getState().architecture.relationships.find((r) => r.id === id)!;
+    expect(rel).not.toHaveProperty("visual");
+  });
+});
+
+describe("activeTargetPort (UI v2 8.2)", () => {
+  const rect = { x: 400, y: 0, width: 160, height: 80 };
+  const sourceAnchor = absolutePortAnchor("rounded", { x: 0, y: 0, width: 160, height: 80 }, "right");
+
+  it("is the snapped port when the pointer snapped to one", () => {
+    expect(activeTargetPort({ snappedSide: "top", targetKind: "rounded", targetRect: rect, sourceAnchor })).toBe("top");
+  });
+
+  it("is autoPortFor(T, pinned source anchor) for a body hover, i.e. what the edge renders", () => {
+    const side = activeTargetPort({ snappedSide: null, targetKind: "rounded", targetRect: rect, sourceAnchor });
+    expect(side).toBe(autoPortFor("rounded", rect, sourceAnchor));
+    expect(side).toBe("left");
   });
 });

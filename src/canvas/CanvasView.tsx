@@ -41,6 +41,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
+  useConnection,
   useReactFlow,
   useStoreApi,
   type AriaLabelConfig,
@@ -57,24 +58,28 @@ import type { Architecture, RelationshipType, Selection } from "../domain/types"
 import { useEditorState, useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
 import { CanvasApiContext, type CanvasApi } from "./canvasApi";
-import { addRelationshipAndSelect } from "./connection";
+import { activeTargetPort, addRelationshipAndSelect } from "./connection";
+import { isPortSide } from "../domain/ports";
 import { ConnectionLine } from "./ConnectionLine";
 import { RelationshipEdge } from "./edges/RelationshipEdge";
+import { internalNodeRect } from "./floating";
 import {
   COMPONENT_NODE_TYPE,
   GROUP_NODE_TYPE,
   RELATIONSHIP_EDGE_TYPE,
+  nodeComponent,
   type CanvasNode,
   type RelationshipFlowEdge,
 } from "./flowTypes";
 import { useCanvasInteractions } from "./interactions";
-import { CanvasNodeCallbacksContext } from "./nodeContext";
+import { CanvasNodeCallbacksContext, ConnectHintContext, NO_CONNECT_HINT, type ConnectHint } from "./nodeContext";
 import { isAppliedNodeChange, mergeProjectedNodes } from "./nodeState";
 import { ComponentNode } from "./nodes/ComponentNode";
 import { GroupNode } from "./nodes/GroupNode";
 import { toFlowEdges, toFlowNodes } from "./projection";
 import { handlePaletteDragOver, handlePaletteDrop } from "./paletteDrop";
 import { RelationshipTypePicker } from "./RelationshipTypePicker";
+import { CONNECTION_RADIUS, absolutePortAnchor, shapeKindFor } from "./shapes";
 import { applySelectionChanges, selectionFromFocusedElement } from "./selection";
 
 const nodeTypes: NodeTypes = {
@@ -302,6 +307,45 @@ function CanvasSurface() {
 
   const nodeCallbacks = useMemo(() => ({ onResizeEnd: interactions.onResizeEnd }), [interactions.onResizeEnd]);
 
+  // ---- Connection hover hint (UI v2 7.1, 8.2) -------------------------------
+  // The candidate target and the port that would be used: the snapped port
+  // (React Flow `toHandle`) or, for a body hover, autoPortFor(T, source anchor).
+  const fromHandle = useConnection((connection) => connection.fromHandle);
+  const toHandle = useConnection((connection) => connection.toHandle);
+  const connectHint = ((): ConnectHint => {
+    if (interactions.connecting === null || interactions.connecting === "cancelled" || !fromHandle) {
+      return NO_CONNECT_HINT;
+    }
+    const { nodeLookup } = flowStore.getState();
+    const fromNode = nodeLookup.get(fromHandle.nodeId);
+    const fromComponent = nodeComponent(fromNode);
+    if (!fromNode || !fromComponent || !isPortSide(fromHandle.id)) return NO_CONNECT_HINT;
+    const snappedNode =
+      toHandle && toHandle.nodeId !== fromHandle.nodeId ? nodeLookup.get(toHandle.nodeId) : undefined;
+    const snapped = nodeComponent(snappedNode) && isPortSide(toHandle?.id) ? { node: snappedNode, side: toHandle.id } : null;
+    const targetNode = snapped
+      ? snapped.node
+      : interactions.connectTargetId
+        ? nodeLookup.get(interactions.connectTargetId)
+        : undefined;
+    const targetComponent = nodeComponent(targetNode);
+    if (!targetNode || !targetComponent) return NO_CONNECT_HINT;
+    const sourceAnchor = absolutePortAnchor(
+      shapeKindFor(fromComponent),
+      internalNodeRect(fromNode),
+      fromHandle.id,
+    );
+    return {
+      targetId: targetNode.id,
+      activeSide: activeTargetPort({
+        snappedSide: snapped ? snapped.side : null,
+        targetKind: shapeKindFor(targetComponent),
+        targetRect: internalNodeRect(targetNode),
+        sourceAnchor,
+      }),
+    };
+  })();
+
   // ---- Relationship type picker (TD 6.3) ----------------------------------
   const { pendingConnection, clearPendingConnection } = interactions;
   const focusNode = useCallback(
@@ -320,7 +364,7 @@ function CanvasSurface() {
   const choosePickerType = useCallback(
     (type: RelationshipType) => {
       if (!pendingConnection) return;
-      addRelationshipAndSelect(store, type, pendingConnection.sourceId, pendingConnection.targetId);
+      addRelationshipAndSelect(store, type, pendingConnection.sourceId, pendingConnection.targetId, pendingConnection.pins);
       clearPendingConnection();
       focusNode(pendingConnection.sourceId);
     },
@@ -351,6 +395,7 @@ function CanvasSurface() {
       data-connecting={interactions.connecting ?? undefined}
     >
       <CanvasNodeCallbacksContext.Provider value={nodeCallbacks}>
+        <ConnectHintContext.Provider value={connectHint}>
         <ReactFlow<CanvasNode, RelationshipFlowEdge>
           className="sa-flow"
           nodes={nodes}
@@ -373,7 +418,8 @@ function CanvasSurface() {
           onMoveEnd={onMoveEnd}
           isValidConnection={isValidConnection}
           connectionMode={ConnectionMode.Loose}
-          connectionLineType={ConnectionLineType.Straight}
+          connectionRadius={CONNECTION_RADIUS}
+          connectionLineType={ConnectionLineType.Bezier}
           connectionLineComponent={connectionLine}
           deleteKeyCode={null}
           edgesReconnectable={false}
@@ -392,6 +438,7 @@ function CanvasSurface() {
           <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--sa-color-canvas-grid)" />
           <MiniMap className="sa-minimap" pannable={false} zoomable={false} />
         </ReactFlow>
+        </ConnectHintContext.Provider>
       </CanvasNodeCallbacksContext.Provider>
       {components.length === 0 ? <p className="sa-canvas__empty">{EMPTY_CANVAS_HINT}</p> : null}
       {pendingConnection ? (

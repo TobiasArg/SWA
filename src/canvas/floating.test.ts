@@ -6,54 +6,12 @@ import {
   computeParallelInfo,
   cubicEdgeGeometry,
   cubicPoint,
-  getFloatingEdgeGeometry,
   internalNodeRect,
-  rayExit,
+  layoutRelationship,
+  connectionPreviewGeometry,
 } from "./floating";
 import { TERMINAL_RADIUS } from "./shapes";
 import { makeRelationship } from "./testing/fixtures";
-
-const a = { x: 0, y: 0, width: 100, height: 50 };
-const b = { x: 300, y: 0, width: 100, height: 50 };
-
-describe("rayExit", () => {
-  it("returns the border point in the direction of travel", () => {
-    expect(rayExit(a, { x: 50, y: 25 }, { x: 350, y: 25 })).toEqual({ x: 100, y: 25 });
-    expect(rayExit(a, { x: 50, y: 25 }, { x: 50, y: -100 })).toEqual({ x: 50, y: 0 });
-  });
-
-  it("hits corners on diagonals and handles a zero-length ray", () => {
-    const square = { x: 0, y: 0, width: 100, height: 100 };
-    expect(rayExit(square, { x: 50, y: 50 }, { x: 150, y: 150 })).toEqual({ x: 100, y: 100 });
-    expect(rayExit(square, { x: 50, y: 50 }, { x: 50, y: 50 })).toEqual({ x: 50, y: 50 });
-  });
-});
-
-describe("getFloatingEdgeGeometry", () => {
-  it("puts endpoints on the facing borders and the label at the midpoint", () => {
-    expect(getFloatingEdgeGeometry(a, b)).toEqual({
-      sourceX: 100,
-      sourceY: 25,
-      targetX: 300,
-      targetY: 25,
-      labelX: 200,
-      labelY: 25,
-    });
-  });
-
-  it("shifts perpendicular to the line for parallel edges, keeping endpoints on borders", () => {
-    const geometry = getFloatingEdgeGeometry(a, b, 12);
-    // Left-hand normal of a rightward line in screen coordinates points up (-y).
-    expect(geometry.sourceY).toBeCloseTo(13);
-    expect(geometry.targetY).toBeCloseTo(13);
-    expect(geometry.sourceX).toBeCloseTo(100);
-    expect(geometry.targetX).toBeCloseTo(300);
-  });
-
-  it("places the label at the requested fraction", () => {
-    expect(getFloatingEdgeGeometry(a, b, 0, 0.25).labelX).toBeCloseTo(150);
-  });
-});
 
 describe("parallel edges", () => {
   it("steps offsets by PARALLEL_STEP (20 px) alternating sides", () => {
@@ -78,9 +36,19 @@ describe("parallel edges", () => {
     // Rendered in absolute terms, r2 and r3 are on opposite sides of the a→b line.
     const ga = { x: 0, y: 0, width: 100, height: 50 };
     const gb = { x: 300, y: 0, width: 100, height: 50 };
-    const r2 = getFloatingEdgeGeometry(gb, ga, info.get("r2")!.parallelOffset, info.get("r2")!.labelPosition);
-    const r3 = getFloatingEdgeGeometry(ga, gb, info.get("r3")!.parallelOffset, info.get("r3")!.labelPosition);
-    expect(Math.sign(r2.sourceY - 25)).toBe(-Math.sign(r3.sourceY - 25));
+    const layout = (source: typeof ga, target: typeof ga, id: string) =>
+      layoutRelationship({
+        relationship: { sourceId: id === "r2" ? "b" : "a", targetId: id === "r2" ? "a" : "b", direction: "undirected" },
+        sourceRect: source,
+        targetRect: target,
+        sourceKind: "rounded",
+        targetKind: "rounded",
+        parallelOffset: info.get(id)!.parallelOffset,
+        labelPosition: info.get(id)!.labelPosition,
+      });
+    const r2 = layout(gb, ga, "r2");
+    const r3 = layout(ga, gb, "r3");
+    expect(Math.sign(r2.p1.y - 25)).toBe(-Math.sign(r3.p1.y - 25));
     expect(r2.labelX).not.toBeCloseTo(r3.labelX);
   });
 });
@@ -96,18 +64,6 @@ describe("internalNodeRect", () => {
       width: 7,
       height: 8,
     });
-  });
-});
-
-describe("arrowheadGeometry", () => {
-  it("puts the tip at the target and shortens the line", () => {
-    const arrow = arrowheadGeometry(getFloatingEdgeGeometry(a, b))!;
-    expect(arrow.path.startsWith("M 300 25")).toBe(true);
-    expect(arrow.lineEndX).toBeCloseTo(292);
-  });
-
-  it("returns null for segments shorter than the arrowhead", () => {
-    expect(arrowheadGeometry({ sourceX: 0, sourceY: 0, targetX: 4, targetY: 0, labelX: 2, labelY: 0 })).toBeNull();
   });
 });
 
@@ -215,5 +171,100 @@ describe("cubicEdgeGeometry", () => {
     const u = cubicEdgeGeometry({ ...base, targetAnchor: { x: 101, y: 25 }, directed: false });
     expect(u.arrow).toBeNull();
     expect(u.path).not.toContain("NaN");
+  });
+});
+
+describe("layoutRelationship", () => {
+  const A = { x: 0, y: 0, width: 160, height: 80 };
+  const B = { x: 400, y: 0, width: 160, height: 80 };
+  const base = { sourceKind: "rounded", targetKind: "rounded" } as const;
+
+  it("uses automatic sides (Rule A) without pins and follows the node when it moves", () => {
+    const rel = { sourceId: "a", targetId: "b", direction: "directed" } as const;
+    const right = layoutRelationship({ relationship: rel, sourceRect: A, targetRect: B, ...base });
+    expect(right.sides).toEqual({ source: "right", target: "left" });
+    const below = layoutRelationship({ relationship: rel, sourceRect: A, targetRect: { x: 0, y: 300, width: 160, height: 80 }, ...base });
+    expect(below.sides).toEqual({ source: "bottom", target: "top" });
+    expect(below.path).not.toBe(right.path);
+  });
+
+  it("pins win over automatic sides; a single pin uses Rule B for the other end", () => {
+    const pinned = layoutRelationship({
+      relationship: { sourceId: "a", targetId: "b", direction: "directed", visual: { ports: { source: "top", target: "bottom" } } },
+      sourceRect: A,
+      targetRect: B,
+      ...base,
+    });
+    expect(pinned.sides).toEqual({ source: "top", target: "bottom" });
+    const half = layoutRelationship({
+      relationship: { sourceId: "a", targetId: "b", direction: "directed", visual: { ports: { source: "right" } } },
+      sourceRect: A,
+      targetRect: B,
+      ...base,
+    });
+    expect(half.sides).toEqual({ source: "right", target: "left" });
+    // Malformed pins are ignored (automatic).
+    const bad = layoutRelationship({
+      relationship: { sourceId: "a", targetId: "b", direction: "directed", visual: { ports: { source: "diagonal" } } },
+      sourceRect: A,
+      targetRect: B,
+      ...base,
+    });
+    expect(bad.sides).toEqual({ source: "right", target: "left" });
+  });
+
+  it("renders an undirected relationship identically when its stored order is swapped", () => {
+    const fwd = layoutRelationship({ relationship: { sourceId: "a", targetId: "b", direction: "undirected" }, sourceRect: A, targetRect: B, ...base, labelPosition: 0.5 });
+    const rev = layoutRelationship({ relationship: { sourceId: "b", targetId: "a", direction: "undirected" }, sourceRect: B, targetRect: A, ...base, labelPosition: 0.5 });
+    expect(rev.arrow).toBeNull();
+    expect(fwd.arrow).toBeNull();
+    expect(rev.p0).toEqual(fwd.p3);
+    expect(rev.p3).toEqual(fwd.p0);
+    expect(rev.p1).toEqual(fwd.p2);
+    expect(rev.p2).toEqual(fwd.p1);
+    expect(rev.labelX).toBeCloseTo(fwd.labelX);
+    expect(rev.labelY).toBeCloseTo(fwd.labelY);
+    expect(rev.sourceTerminal).toEqual(fwd.targetTerminal);
+  });
+
+  it("draws an arrowhead only for directed relationships and always two terminals", () => {
+    const directed = layoutRelationship({ relationship: { sourceId: "a", targetId: "b", direction: "directed" }, sourceRect: A, targetRect: B, ...base });
+    const undirected = layoutRelationship({ relationship: { sourceId: "a", targetId: "b", direction: "undirected" }, sourceRect: A, targetRect: B, ...base });
+    expect(directed.arrow).not.toBeNull();
+    expect(undirected.arrow).toBeNull();
+    for (const g of [directed, undirected]) {
+      expect(g.sourceTerminal).toEqual({ x: 160, y: 40 });
+      expect(g.targetTerminal).toEqual({ x: 400, y: 40 });
+    }
+  });
+});
+
+describe("connectionPreviewGeometry", () => {
+  const sourceAnchor = { x: 100, y: 50 };
+  it("starts at the source anchor along its normal and ends at the pointer", () => {
+    const g = connectionPreviewGeometry({ sourceAnchor, sourceSide: "right", pointer: { x: 300, y: 50 } });
+    expect(g.end).toEqual({ x: 300, y: 50 });
+    expect(g.path.startsWith("M 100 50 C 1")).toBe(true);
+    const m = g.path.match(/C ([\d.-]+) ([\d.-]+)/)!;
+    expect(Number(m[2])).toBe(50);
+    expect(Number(m[1])).toBeGreaterThan(100);
+  });
+
+  it("snapped: ends at the port anchor and arrives along its normal", () => {
+    const g = connectionPreviewGeometry({
+      sourceAnchor,
+      sourceSide: "right",
+      pointer: { x: 290, y: 60 },
+      snapped: { anchor: { x: 300, y: 50 }, side: "left" },
+    });
+    expect(g.end).toEqual({ x: 300, y: 50 });
+    const nums = g.path.match(/-?[\d.]+/g)!.map(Number);
+    // P2 sits to the left of P3 on the target normal.
+    expect(nums[4]).toBeLessThan(300);
+    expect(nums[5]).toBe(50);
+  });
+
+  it("never throws on a zero-length drag", () => {
+    expect(() => connectionPreviewGeometry({ sourceAnchor, sourceSide: "top", pointer: sourceAnchor })).not.toThrow();
   });
 });

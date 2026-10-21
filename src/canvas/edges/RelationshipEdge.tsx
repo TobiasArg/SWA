@@ -1,58 +1,77 @@
 import { memo } from "react";
-import { BaseEdge, getStraightPath, useInternalNode, type EdgeProps } from "@xyflow/react";
-import { arrowheadGeometry, getFloatingEdgeGeometry, internalNodeRect } from "../floating";
-import type { RelationshipFlowEdge } from "../flowTypes";
+import { BaseEdge, useInternalNode, type EdgeProps, type InternalNode } from "@xyflow/react";
+import { internalNodeRect, layoutRelationship } from "../floating";
+import { nodeComponent, type CanvasNode, type RelationshipFlowEdge } from "../flowTypes";
+import { shapeKindFor, type ShapeKind } from "../shapes";
 
 const LABEL_BG_PADDING: [number, number] = [6, 2];
 
+/** Shape of a component node (ports sit on its silhouette); rounded for anything else. */
+function nodeShapeKind(node: InternalNode<CanvasNode>): ShapeKind {
+  const component = nodeComponent(node);
+  return component ? shapeKindFor(component) : "rounded";
+}
+
 /**
- * Floating straight relationship edge (TD 6.4, UI handoff 6).
+ * Relationship edge (UI v2 7.3, 8.5).
  *
- * - Endpoints sit on the node borders (center-to-center line), offset
- *   perpendicular for parallel relationships, whose labels are also spread
- *   along the line.
- * - Directed edges get an arrowhead at the target only. The arrowhead is drawn
- *   inline as part of this edge (instead of React Flow's shared `<marker>` defs)
- *   so it follows the edge's hover/selected stroke colour through CSS and is
- *   always part of the exported SVG. Its presence is driven by the projection's
- *   `markerEnd` (set only for directed relationships).
- * - Undirected edges: dashed stroke, no markers at either end.
- * - The label is SVG text (BaseEdge `label`), so PNG export includes it.
+ * - Sides come from the stored pins (`visual.ports`), else the deterministic
+ *   automatic rule, evaluated against the live node rects, so automatic edges
+ *   re-route when a node moves.
+ * - The path is a cubic between the port anchors on the silhouettes. Both ends
+ *   carry identical terminal rings (no direction cue).
+ * - Directed edges get an inline arrowhead at the target only (no `<marker>`,
+ *   no url() references, so PNG export needs no ID resolution). Its presence is
+ *   driven by the projection's `markerEnd` (set only for directed relationships).
+ * - Undirected edges: dashed stroke, no arrowheads. Never animated.
+ * - The label is SVG text (BaseEdge `label`) at the cubic point B(labelPosition).
  */
 function RelationshipEdgeView({ source, target, data, label, markerEnd, interactionWidth }: EdgeProps<RelationshipFlowEdge>) {
-  const sourceNode = useInternalNode(source);
-  const targetNode = useInternalNode(target);
+  const sourceNode = useInternalNode<CanvasNode>(source);
+  const targetNode = useInternalNode<CanvasNode>(target);
   if (!sourceNode || !targetNode || !data) return null;
 
   const directed = data.relationship.direction === "directed" && Boolean(markerEnd);
-  const geometry = getFloatingEdgeGeometry(
-    internalNodeRect(sourceNode),
-    internalNodeRect(targetNode),
-    data.parallelOffset,
-    data.labelPosition,
-  );
-  const arrow = directed ? arrowheadGeometry(geometry) : null;
-  const [path] = getStraightPath({
-    sourceX: geometry.sourceX,
-    sourceY: geometry.sourceY,
-    targetX: arrow ? arrow.lineEndX : geometry.targetX,
-    targetY: arrow ? arrow.lineEndY : geometry.targetY,
+  const layout = layoutRelationship({
+    relationship: { ...data.relationship, direction: directed ? "directed" : "undirected" },
+    sourceRect: internalNodeRect(sourceNode),
+    targetRect: internalNodeRect(targetNode),
+    sourceKind: nodeShapeKind(sourceNode),
+    targetKind: nodeShapeKind(targetNode),
+    parallelOffset: data.parallelOffset,
+    labelPosition: data.labelPosition,
   });
 
   return (
     <>
       <BaseEdge
-        path={path}
+        path={layout.path}
         className={directed ? "sa-edge-path" : "sa-edge-path sa-edge-path--undirected"}
         interactionWidth={interactionWidth}
         label={label}
-        labelX={geometry.labelX}
-        labelY={geometry.labelY}
+        labelX={layout.labelX}
+        labelY={layout.labelY}
         labelShowBg
         labelBgPadding={LABEL_BG_PADDING}
         labelBgBorderRadius={3}
       />
-      {arrow ? <path className="sa-edge-arrow" d={arrow.path} /> : null}
+      <circle
+        className="sa-edge-terminal"
+        data-terminal="source"
+        data-side={layout.sides.source}
+        cx={layout.sourceTerminal.x}
+        cy={layout.sourceTerminal.y}
+        r={layout.terminalRadius}
+      />
+      <circle
+        className="sa-edge-terminal"
+        data-terminal="target"
+        data-side={layout.sides.target}
+        cx={layout.targetTerminal.x}
+        cy={layout.targetTerminal.y}
+        r={layout.terminalRadius}
+      />
+      {layout.arrow ? <path className="sa-edge-arrow" d={layout.arrow.path} /> : null}
     </>
   );
 }
