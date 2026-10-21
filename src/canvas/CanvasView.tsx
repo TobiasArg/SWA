@@ -43,6 +43,7 @@ import {
   applyNodeChanges,
   useConnection,
   useReactFlow,
+  useStore,
   useStoreApi,
   type AriaLabelConfig,
   type ConnectionLineComponent,
@@ -61,7 +62,8 @@ import { CanvasApiContext, computeDiagramBounds, type CanvasApi } from "./canvas
 import { activeTargetPort, addRelationshipAndSelect } from "./connection";
 import { isPortSide } from "../domain/ports";
 import { ConnectionLine } from "./ConnectionLine";
-import { RelationshipEdge } from "./edges/RelationshipEdge";
+import { diagramLabelInputFromFlow, layoutDiagramLabels } from "./edgeLabels";
+import { EdgeLabelLayoutContext, RelationshipEdge } from "./edges/RelationshipEdge";
 import { internalNodeRect, layoutRelationship, type CubicEdgeGeometry } from "./floating";
 import {
   COMPONENT_NODE_TYPE,
@@ -179,6 +181,32 @@ export function CanvasProvider({ children }: PropsWithChildren) {
       <CanvasApiBridge>{children}</CanvasApiBridge>
     </ReactFlowProvider>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Edge label layout (UI_V2_REFINEMENT.md 3.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lays out every relationship label once per render, from React Flow's live
+ * internal node rects (moves and resizes) and edges (added, removed, relabelled),
+ * and hands each edge its placement through EdgeLabelLayoutContext. It
+ * subscribes to the store on its own, so only it and the edges re-render; the
+ * canvas element passed as `children` is not re-created.
+ */
+function EdgeLabelLayoutProvider({ children }: PropsWithChildren) {
+  const flowStore = useStoreApi<CanvasNode, RelationshipFlowEdge>();
+  const nodes = useStore((state) => state.nodes);
+  const edges = useStore((state) => state.edges as RelationshipFlowEdge[]);
+  const placements = useMemo(() => {
+    const { nodeLookup } = flowStore.getState();
+    const internalNodes = nodes.flatMap((node) => {
+      const internal = nodeLookup.get(node.id);
+      return internal ? [internal] : [];
+    });
+    return layoutDiagramLabels(diagramLabelInputFromFlow(internalNodes, edges, (id) => nodeLookup.get(id)));
+  }, [flowStore, nodes, edges]);
+  return <EdgeLabelLayoutContext.Provider value={placements}>{children}</EdgeLabelLayoutContext.Provider>;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +451,7 @@ function CanvasSurface() {
     >
       <CanvasNodeCallbacksContext.Provider value={nodeCallbacks}>
         <ConnectHintContext.Provider value={connectHint}>
+        <EdgeLabelLayoutProvider>
         <ReactFlow<CanvasNode, RelationshipFlowEdge>
           className="sa-flow"
           nodes={nodes}
@@ -465,6 +494,7 @@ function CanvasSurface() {
           <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--sa-color-canvas-grid)" />
           <MiniMap className="sa-minimap" pannable={false} zoomable={false} />
         </ReactFlow>
+        </EdgeLabelLayoutProvider>
         </ConnectHintContext.Provider>
       </CanvasNodeCallbacksContext.Provider>
       {components.length === 0 ? <p className="sa-canvas__empty">{EMPTY_CANVAS_HINT}</p> : null}

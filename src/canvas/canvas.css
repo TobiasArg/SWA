@@ -523,6 +523,26 @@
   fill: var(--sa-edge-label-bg);
 }
 
+/*
+ * Callout labels (UI_V2_REFINEMENT 3.3): a 1 px plate border and a dashed
+ * leader to the curve tell a callout apart from a node and from an undirected
+ * (6 4) edge. The leader follows the edge's hover and selected stroke, like
+ * the terminal rings; it is never animated and never takes the pointer.
+ */
+.sa-flow .react-flow__edge-textbg.sa-edge-label__plate--callout {
+  stroke: var(--sa-edge-stroke);
+  stroke-width: 1px;
+}
+
+.sa-edge-leader {
+  fill: none;
+  stroke: var(--sa-edge-stroke);
+  stroke-width: 1px;
+  stroke-dasharray: 2 2;
+  pointer-events: none;
+  transition: stroke var(--sa-duration-fast) var(--sa-ease);
+}
+
 /* Hover */
 .sa-flow .react-flow__edge:hover .sa-edge-path {
   stroke: var(--sa-edge-stroke-hover);
@@ -532,7 +552,8 @@
   fill: var(--sa-edge-stroke-hover);
 }
 
-.sa-flow .react-flow__edge:hover .sa-edge-terminal {
+.sa-flow .react-flow__edge:hover .sa-edge-terminal,
+.sa-flow .react-flow__edge:hover .sa-edge-leader {
   stroke: var(--sa-edge-stroke-hover);
 }
 
@@ -552,7 +573,8 @@
   fill: var(--sa-edge-stroke-selected);
 }
 
-.sa-flow .react-flow__edge.selected .sa-edge-terminal {
+.sa-flow .react-flow__edge.selected .sa-edge-terminal,
+.sa-flow .react-flow__edge.selected .sa-edge-leader {
   stroke: var(--sa-edge-stroke-selected);
 }
 
@@ -650,12 +672,19 @@
 }
 
 .sa-exporting .react-flow__edge .sa-edge-terminal,
-.sa-exporting .react-flow__edge:hover .sa-edge-terminal {
+.sa-exporting .react-flow__edge:hover .sa-edge-terminal,
+.sa-exporting .react-flow__edge .sa-edge-leader {
   stroke: var(--sa-edge-stroke) !important;
 }
 
 .sa-exporting .react-flow__edge .react-flow__edge-textbg {
   stroke: none !important;
+}
+
+/* The callout plate border is part of the label, not a selection state. */
+.sa-exporting .react-flow__edge .react-flow__edge-textbg.sa-edge-label__plate--callout {
+  stroke: var(--sa-edge-stroke) !important;
+  stroke-width: 1px !important;
 }
 
 .sa-exporting .sa-group[data-selected="true"] .sa-group__outline-stroke {
@@ -673,6 +702,7 @@
 @media (prefers-reduced-motion: reduce) {
   .sa-edge-arrow,
   .sa-edge-terminal,
+  .sa-edge-leader,
   .sa-flow .react-flow__edge-path.sa-edge-path,
   .sa-flow .react-flow__handle.sa-port {
     transition: none;
@@ -721,6 +751,11 @@
     stroke: CanvasText;
   }
 
+  .sa-edge-leader,
+  .sa-flow .react-flow__edge-textbg.sa-edge-label__plate--callout {
+    stroke: CanvasText;
+  }
+
   .sa-flow .react-flow__connection-path {
     stroke: Highlight;
   }
@@ -738,7 +773,8 @@
     fill: Highlight;
   }
 
-  .sa-flow .react-flow__edge.selected .sa-edge-terminal {
+  .sa-flow .react-flow__edge.selected .sa-edge-terminal,
+  .sa-flow .react-flow__edge.selected .sa-edge-leader {
     stroke: Highlight;
   }
 }

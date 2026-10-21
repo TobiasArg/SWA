@@ -129,8 +129,8 @@ test.describe("UI v2 — ports and curved edges", () => {
     await expect(page.locator(".react-flow__edge marker, .react-flow__edge [marker-end]")).toHaveCount(0);
 
     // Same relationship stored in the opposite order: geometry is compared (path and terminal
-    // coordinates) instead of pixels; the path is the same curve traversed backwards, so we
-    // compare the terminal set and the reversed control polygon.
+    // coordinates) instead of pixels. Undirected geometry is built in canonical order
+    // (UI_V2_REFINEMENT 2.2 step 0), so the path string is byte-identical.
     const reversed = buildV2File("UI v2 18 rev", [A, B], [
       { id: "rel_u", type: "shares_context_with", sourceId: B.id, targetId: A.id, direction: "undirected" },
     ]);
@@ -140,11 +140,7 @@ test.describe("UI v2 — ports and curved edges", () => {
     const key = (t: { side: string; cx: number; cy: number; r: number }) =>
       `${t.side}:${t.cx.toFixed(2)}:${t.cy.toFixed(2)}:${t.r}`;
     expect(rev.terminals.map(key).sort()).toEqual(fwd.terminals.map(key).sort());
-    const nums = (d: string) => (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
-    const pairs = (n: number[]) => Array.from({ length: n.length / 2 }, (_, i) => [n[2 * i]!, n[2 * i + 1]!]);
-    const forwardPoints = pairs(nums(fwd.d));
-    const reversedPoints = pairs(nums(rev.d)).reverse();
-    expect(reversedPoints).toEqual(forwardPoints);
+    expect(rev.d).toBe(fwd.d);
   });
 
   test("19: Reset ports to automatic removes the pins in one undo step", async ({ page }) => {
@@ -305,5 +301,81 @@ test.describe("UI v2 — PNG export bounds", () => {
     expect(c.left).toBeGreaterThan(4);
     // The selected node's outline is not exported.
     expect(analysis.selectionPixels).toBe(0);
+  });
+});
+
+test.describe("UI v2 refinement — curves and labels (UI_V2_REFINEMENT 3.5)", () => {
+  // Agents A, B, C (220 × 88) at x = 100, 400, 700 (y = 100): 80 px gaps.
+  const reviewFixture = () =>
+    buildV2File(
+      "UI v2 review layout",
+      [
+        { id: "cmp_ra", type: "agent", name: "Agent A", x: 100, y: 100 },
+        { id: "cmp_rb", type: "agent", name: "Agent B", x: 400, y: 100 },
+        { id: "cmp_rc", type: "agent", name: "Agent C", x: 700, y: 100 },
+      ],
+      [
+        { id: "rel_ab", type: "delegates_to", sourceId: "cmp_ra", targetId: "cmp_rb", direction: "directed", label: "coordinates" },
+        { id: "rel_bc", type: "uses", sourceId: "cmp_rb", targetId: "cmp_rc", direction: "directed" },
+        { id: "rel_share", type: "shares_context_with", sourceId: "cmp_rb", targetId: "cmp_rc", direction: "undirected" },
+      ] as Parameters<typeof buildV2File>[2],
+    );
+  const expectedLabels: Record<string, string> = {
+    rel_ab: "delegates to · coordinates",
+    rel_bc: "uses",
+    rel_share: "shares context with",
+  };
+
+  test("E1: every relationship path bows at least 5 px away from its endpoint chord", async ({ page }) => {
+    await openImported(page, "UI v2 review layout", reviewFixture());
+    await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+    const deviations = await page.locator(".sa-edge-path").evaluateAll((paths) =>
+      paths.map((element) => {
+        const path = element as SVGPathElement;
+        const length = path.getTotalLength();
+        const start = path.getPointAtLength(0);
+        const end = path.getPointAtLength(length);
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const chord = Math.hypot(dx, dy);
+        let max = 0;
+        for (let i = 0; i <= 100; i += 1) {
+          const p = path.getPointAtLength((length * i) / 100);
+          max = Math.max(max, Math.abs((p.x - start.x) * dy - (p.y - start.y) * dx) / chord);
+        }
+        return max;
+      }),
+    );
+    expect(deviations).toHaveLength(3);
+    for (const deviation of deviations) expect(deviation).toBeGreaterThanOrEqual(5);
+  });
+
+  test("E2: label plates never overlap nodes, keep the full text, and A→B gets a callout leader", async ({ page }) => {
+    await openImported(page, "UI v2 review layout", reviewFixture());
+    await expect(page.locator(".react-flow__edge")).toHaveCount(3);
+    const result = await page.evaluate(() => {
+      const box = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      };
+      return {
+        plates: [...document.querySelectorAll(".react-flow__edge-textbg")].map(box),
+        nodes: [...document.querySelectorAll(".react-flow__node-component")].map(box),
+        edges: [...document.querySelectorAll(".react-flow__edge")].map((edge) => ({
+          id: edge.getAttribute("data-id") ?? "",
+          text: [...edge.querySelectorAll(".react-flow__edge-text tspan")].map((t) => t.textContent).join(" "),
+          leader: edge.querySelectorAll(".sa-edge-leader").length,
+        })),
+      };
+    });
+    expect(result.nodes).toHaveLength(3);
+    expect(result.plates).toHaveLength(3);
+    const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+      a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    for (const plate of result.plates) {
+      for (const node of result.nodes) expect(overlap(plate, node), JSON.stringify({ plate, node })).toBe(false);
+    }
+    expect(Object.fromEntries(result.edges.map((edge) => [edge.id, edge.text]))).toEqual(expectedLabels);
+    expect(result.edges.find((edge) => edge.id === "rel_ab")!.leader).toBe(1);
   });
 });

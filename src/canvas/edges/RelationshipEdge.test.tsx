@@ -2,9 +2,10 @@ import { render } from "@testing-library/react";
 import type { EdgeProps } from "@xyflow/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Component, Relationship } from "../../domain/types";
+import type { LabelPlacement } from "../edgeLabels";
 import type { RelationshipFlowEdge } from "../flowTypes";
 import { makeComponent, makeRelationship } from "../testing/fixtures";
-import { RelationshipEdge } from "./RelationshipEdge";
+import { EdgeLabelLayoutContext, RelationshipEdge } from "./RelationshipEdge";
 
 type Rect = { x: number; y: number; width: number; height: number };
 const nodes = new Map<string, { type: string; data: { component: Component }; internals: { positionAbsolute: { x: number; y: number } }; measured: { width: number; height: number } }>();
@@ -26,12 +27,15 @@ function place(component: Component, rect: Rect) {
 const agentA = makeComponent({ id: "a", type: "agent" });
 const toolB = makeComponent({ id: "b", type: "tool" });
 
-function renderEdge(relationship: Relationship, info: { parallelOffset?: number; labelPosition?: number } = {}) {
+function renderEdge(
+  relationship: Relationship,
+  info: { parallelOffset?: number; labelPosition?: number; label?: string; placements?: Map<string, LabelPlacement> } = {},
+) {
   const props = {
     id: relationship.id,
     source: relationship.sourceId,
     target: relationship.targetId,
-    label: "Uses",
+    label: info.label ?? "Uses",
     interactionWidth: 16,
     markerEnd: relationship.direction === "directed" ? { type: "arrowclosed" } : undefined,
     data: {
@@ -42,9 +46,10 @@ function renderEdge(relationship: Relationship, info: { parallelOffset?: number;
       labelPosition: info.labelPosition ?? 0.5,
     },
   } as unknown as EdgeProps<RelationshipFlowEdge>;
+  const edge = <RelationshipEdge {...props} />;
   return render(
     <svg>
-      <RelationshipEdge {...props} />
+      {info.placements ? <EdgeLabelLayoutContext.Provider value={info.placements}>{edge}</EdgeLabelLayoutContext.Provider> : edge}
     </svg>,
   );
 }
@@ -54,8 +59,6 @@ const terminal = (c: HTMLElement, end: "source" | "target") =>
   c.querySelector<SVGCircleElement>(`.sa-edge-terminal[data-terminal="${end}"]`)!;
 
 beforeEach(() => {
-  // jsdom has no SVG text metrics (used by the label plate).
-  (SVGElement.prototype as unknown as { getBBox: () => Rect }).getBBox = () => ({ x: 0, y: 0, width: 40, height: 14 });
   nodes.clear();
   place(agentA, { x: 0, y: 0, width: 160, height: 80 });
   place(toolB, { x: 400, y: 0, width: 160, height: 80 });
@@ -134,6 +137,75 @@ describe("RelationshipEdge", () => {
   it("never animates", () => {
     const { container } = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b" }));
     expect(container.querySelector("animate, animateMotion, .animated")).toBeNull();
+  });
+
+  it("draws its own label on the path: plate, text with one tspan, no BaseEdge label wrapper", () => {
+    const { container } = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b" }), { label: "uses" });
+    const plate = container.querySelector<SVGRectElement>("rect.react-flow__edge-textbg")!;
+    const text = container.querySelector("text.react-flow__edge-text")!;
+    expect(container.querySelector(".react-flow__edge-textwrapper")).toBeNull();
+    expect(container.querySelector(".sa-edge-label")).toHaveAttribute("data-mode", "path");
+    expect(plate.getAttribute("rx")).toBe("3");
+    // jsdom fallback measure: 7 px per code point + 2 × 6 px padding; one line = 19 px.
+    expect(plate.getAttribute("width")).toBe(String(4 * 7 + 12));
+    expect(plate.getAttribute("height")).toBe("19");
+    expect(text.getAttribute("text-anchor")).toBe("middle");
+    expect([...text.querySelectorAll("tspan")].map((t) => t.textContent)).toEqual(["uses"]);
+    expect(container.querySelector(".sa-edge-leader")).toBeNull();
+    expect(plate.classList.contains("sa-edge-label__plate--callout")).toBe(false);
+    // The label is painted after the path, inside the edge's own fragment.
+    const order = [...container.querySelector("svg")!.children].map((el) => el.getAttribute("class"));
+    expect(order.at(-1)).toBe("sa-edge-label");
+  });
+
+  it("moves a label that does not fit between close nodes into a callout with a dashed leader", () => {
+    place(toolB, { x: 240, y: 0, width: 160, height: 80 }); // 80 px gap
+    const { container } = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b" }), {
+      label: "delegates to · coordinates",
+    });
+    expect(container.querySelector(".sa-edge-label")).toHaveAttribute("data-mode", "callout");
+    const plate = container.querySelector("rect.react-flow__edge-textbg")!;
+    expect(plate.classList.contains("sa-edge-label__plate--callout")).toBe(true);
+    const leader = container.querySelector("line.sa-edge-leader")!;
+    expect(leader).not.toBeNull();
+    // The leader ends on the plate (bottom edge, plate above the pair).
+    expect(Number(leader.getAttribute("y2"))).toBeCloseTo(Number(plate.getAttribute("y")) + Number(plate.getAttribute("height")), 6);
+    expect(Number(plate.getAttribute("y")) + Number(plate.getAttribute("height"))).toBeLessThanOrEqual(-4);
+    expect(container.querySelector("text.react-flow__edge-text")!.textContent).toBe("delegates to · coordinates");
+  });
+
+  it("renders the placement the canvas computed, with two tspans 15 px apart when wrapped", () => {
+    const placements = new Map<string, LabelPlacement>([
+      [
+        "r",
+        {
+          mode: "path-wrapped",
+          lines: ["delegates to ·", "coordinates"],
+          plate: { x: 100, y: 50, width: 110, height: 34 },
+          leader: null,
+        },
+      ],
+    ]);
+    const { container } = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b" }), {
+      label: "delegates to · coordinates",
+      placements,
+    });
+    const plate = container.querySelector("rect.react-flow__edge-textbg")!;
+    expect([plate.getAttribute("x"), plate.getAttribute("y"), plate.getAttribute("width"), plate.getAttribute("height")]).toEqual([
+      "100",
+      "50",
+      "110",
+      "34",
+    ]);
+    const tspans = [...container.querySelectorAll("text.react-flow__edge-text tspan")];
+    expect(tspans.map((t) => t.textContent)).toEqual(["delegates to ·", "coordinates"]);
+    expect(tspans.map((t) => t.getAttribute("x"))).toEqual(["155", "155"]);
+    expect(Number(tspans[1]!.getAttribute("y")) - Number(tspans[0]!.getAttribute("y"))).toBe(15);
+  });
+
+  it("draws no label for an empty label", () => {
+    const { container } = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b" }), { label: "" });
+    expect(container.querySelector(".react-flow__edge-textbg, .react-flow__edge-text")).toBeNull();
   });
 
   it("renders nothing until both nodes exist", () => {
