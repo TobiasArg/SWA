@@ -24,7 +24,8 @@ function api(viewport: HTMLElement | null, bounds = { x: 10, y: 20, width: 400, 
     fitView: vi.fn(),
     screenToFlowPosition: (p) => p,
     getViewportElement: () => viewport,
-    getNodesBounds: () => bounds,
+    getNodesBounds: () => ({ x: 0, y: 0, width: 1, height: 1 }),
+    getDiagramBounds: () => bounds,
   };
 }
 
@@ -94,6 +95,13 @@ describe("exportPng", () => {
     expect(root.classList.contains("sa-exporting")).toBe(false);
     expect(downloaded).toEqual({ href: "data:image/png;base64,AAAA", download: "my-swarm.png" });
     expect(document.querySelector("a")).toBeNull();
+  });
+
+  it("sizes the image from getDiagramBounds, not getNodesBounds", async () => {
+    const { viewport } = setupDom();
+    toPng.mockResolvedValue("data:image/png;base64,AAAA");
+    await exportPng(api(viewport, { x: 0, y: 0, width: 1000, height: 500 }), "x");
+    expect(toPng.mock.calls.at(-1)![1]).toMatchObject({ width: 1096, height: 596 });
   });
 
   it("removes the exporting class and rethrows when rendering fails", async () => {

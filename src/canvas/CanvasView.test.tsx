@@ -96,6 +96,11 @@ describe("CanvasView", () => {
     const bounds = api!.getNodesBounds();
     expect(bounds.x).toBe(80);
     expect(bounds.y).toBe(80);
+    const diagram = api!.getDiagramBounds();
+    expect(diagram.x).toBeLessThanOrEqual(bounds.x);
+    expect(diagram.y).toBeLessThanOrEqual(bounds.y);
+    expect(diagram.x + diagram.width).toBeGreaterThanOrEqual(bounds.x + bounds.width);
+    expect(diagram.y + diagram.height).toBeGreaterThanOrEqual(bounds.y + bounds.height);
   });
 
   it("adds a dropped palette item at the drop point and accepts the drag as a copy", () => {

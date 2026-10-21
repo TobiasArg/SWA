@@ -1,5 +1,5 @@
 import { ACCENT_IDS, COMPONENT_TYPE_LABELS, RELATIONSHIP_TYPES } from "../constants";
-import type { ComponentType, RelationshipType } from "../types";
+import { SCHEMA_VERSION, type ComponentType, type RelationshipType } from "../types";
 
 export const VALIDATION_CODES = [
   "E_FILE_TOO_LARGE",
@@ -74,7 +74,7 @@ export function schemaVersionUnsupportedIssue(version: unknown): ValidationIssue
   return makeIssue(
     "E_SCHEMA_VERSION_UNSUPPORTED",
     "schemaVersion",
-    `The file uses format version ${String(version)}. This version of Swarm Architecturer supports format version 1 only.`,
+    `The file uses format version ${String(version)}. This version of Swarm Architecturer supports format versions 1 to ${SCHEMA_VERSION}.`,
   );
 }
 

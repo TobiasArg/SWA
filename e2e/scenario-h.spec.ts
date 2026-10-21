@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import {
   addComponent,
+  analyzePng,
   connectViaDialog,
   createArchitecture,
   downloadBuffer,
+  maybeSavePng,
   moveComponentBy,
   selectTwoComponents,
 } from "./helpers";
@@ -13,10 +15,14 @@ test("Scenario H — PNG export includes a grouped diagram and its SVG relations
   await createArchitecture(page, "Scenario H — PNG export");
   await addComponent(page, "Orchestrator", "Coordinator");
   await addComponent(page, "Agent", "Worker Agent");
-  await moveComponentBy(page, "Worker Agent", 0, 200);
+  await moveComponentBy(page, "Worker Agent", 0, 320);
   await connectViaDialog(page, "Coordinator", "Worker Agent", "Delegates To");
   await page.getByLabel("Label", { exact: true }).fill("delegates research tasks");
   await expect(page.locator(".react-flow__edge-text")).toContainText("delegates research tasks");
+
+  // v2 edges: both terminal rings and the target arrowhead are rendered before export.
+  await expect(page.locator(".react-flow__edge .sa-edge-terminal")).toHaveCount(2);
+  await expect(page.locator(".react-flow__edge .sa-edge-arrow")).toHaveCount(1);
 
   await selectTwoComponents(page, "Coordinator", "Worker Agent");
   await page.getByRole("button", { name: "Group", exact: true }).click();
@@ -35,21 +41,12 @@ test("Scenario H — PNG export includes a grouped diagram and its SVG relations
   expect(width).toBeLessThanOrEqual(8192);
   expect(height).toBeLessThanOrEqual(8192);
 
-  const rasterHasDiagramPixels = await page.evaluate(async (bytes) => {
-    const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
-    const bitmap = await createImageBitmap(blob);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const context = canvas.getContext("2d");
-    if (!context) return false;
-    context.drawImage(bitmap, 0, 0);
-    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
-    let nonBackgroundPixels = 0;
-    for (let index = 0; index < data.length; index += 4) {
-      if (data[index] !== 245 || data[index + 1] !== 243 || data[index + 2] !== 238) nonBackgroundPixels += 1;
-    }
-    return nonBackgroundPixels > 500;
-  }, [...png]);
-  expect(rasterHasDiagramPixels).toBe(true);
+  // UI v2: the canvas background is #F7F6F3 (the earlier v1 value #F5F3EE would make this check vacuous).
+  // There is no stored image baseline for this scenario; the check is pixel-statistical.
+  await maybeSavePng(png, "scenario-h.png");
+  const analysis = await analyzePng(page, png);
+  expect(analysis.nonBackground).toBeGreaterThan(500);
+  // Nothing is cropped at the image edge, and no selection outline (#2650C8) was rendered.
+  expect(analysis.touchesEdge).toBe(false);
+  expect(analysis.selectionPixels).toBe(0);
 });

@@ -57,12 +57,12 @@ import {
 import type { Architecture, RelationshipType, Selection } from "../domain/types";
 import { useEditorState, useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
-import { CanvasApiContext, type CanvasApi } from "./canvasApi";
+import { CanvasApiContext, computeDiagramBounds, type CanvasApi } from "./canvasApi";
 import { activeTargetPort, addRelationshipAndSelect } from "./connection";
 import { isPortSide } from "../domain/ports";
 import { ConnectionLine } from "./ConnectionLine";
 import { RelationshipEdge } from "./edges/RelationshipEdge";
-import { internalNodeRect } from "./floating";
+import { internalNodeRect, layoutRelationship, type CubicEdgeGeometry } from "./floating";
 import {
   COMPONENT_NODE_TYPE,
   GROUP_NODE_TYPE,
@@ -133,6 +133,33 @@ function CanvasApiBridge({ children }: PropsWithChildren) {
       getNodesBounds: () => {
         const bounds = flow.getNodesBounds(flow.getNodes());
         return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+      },
+      getDiagramBounds: () => {
+        const nodes = flow.getNodes();
+        const nodesBounds = nodes.length ? flow.getNodesBounds(nodes) : null;
+        const edges: { geometry: CubicEdgeGeometry; label?: string }[] = [];
+        for (const edge of flow.getEdges()) {
+          const data = edge.data;
+          const source = flow.getInternalNode(edge.source);
+          const target = flow.getInternalNode(edge.target);
+          if (!data || !source || !target) continue;
+          const kindOf = (node: typeof source) => {
+            const component = nodeComponent(node);
+            return component ? shapeKindFor(component) : "rounded";
+          };
+          const geometry = layoutRelationship({
+            relationship: data.relationship,
+            sourceRect: internalNodeRect(source),
+            targetRect: internalNodeRect(target),
+            sourceKind: kindOf(source),
+            targetKind: kindOf(target),
+            parallelOffset: data.parallelOffset,
+            labelPosition: data.labelPosition,
+          });
+          edges.push({ geometry, label: typeof edge.label === "string" ? edge.label : undefined });
+        }
+        const bounds = computeDiagramBounds(nodesBounds && { x: nodesBounds.x, y: nodesBounds.y, width: nodesBounds.width, height: nodesBounds.height }, edges);
+        return bounds;
       },
     }),
     [flow],

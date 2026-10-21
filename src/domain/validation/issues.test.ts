@@ -62,7 +62,7 @@ describe("validation issue contracts", () => {
       "The file has no schemaVersion, so its format cannot be determined.",
     );
     expect(schemaVersionUnsupportedIssue(3).message).toBe(
-      "The file uses format version 3. This version of Swarm Architecturer supports format version 1 only.",
+      "The file uses format version 3. This version of Swarm Architecturer supports format versions 1 to 2.",
     );
     expect(shapeIssue("architecture.name", "expected a non-empty text value.").message).toBe(
       "architecture.name: expected a non-empty text value.",

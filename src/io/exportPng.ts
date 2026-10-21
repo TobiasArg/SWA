@@ -76,7 +76,7 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void> {
   const viewport = api.getViewportElement();
   if (!viewport) throw new Error("The canvas is not available for export.");
 
-  const bounds = api.getNodesBounds();
+  const bounds = api.getDiagramBounds();
   if (!(bounds.width > 0 && bounds.height > 0)) throw new Error("There is nothing to export.");
 
   const frame = computeExportFrame(bounds);
