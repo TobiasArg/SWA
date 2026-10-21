@@ -1,12 +1,13 @@
 /**
  * PNG export of the whole diagram (TD 10), following React Flow's "Download
  * Image" technique: render `.react-flow__viewport` with html-to-image while
- * overriding its transform so the full diagram fits the image.
+ * overriding its transform so the full diagram fits the image. The transform is
+ * computed explicitly from the frame (UI_V2_REFINEMENT §4.2), not from React
+ * Flow's viewport helper.
  *
  * html-to-image is pinned to exactly 1.11.11 (later releases did not export
  * correctly per React Flow's example). Errors are thrown; callers show the toast.
  */
-import { getViewportForBounds } from "@xyflow/react";
 import { toPng } from "html-to-image";
 import type { CanvasApi } from "../canvas/canvasApi";
 import type { Rect } from "../domain/types";
@@ -20,18 +21,29 @@ export interface ExportFrame {
   /** Image size in CSS px (before pixelRatio). */
   width: number;
   height: number;
-  /** Viewport transform that fits `bounds` into the image. */
+  /** Viewport transform that places `bounds` inside the image with the margin. */
   transform: { x: number; y: number; zoom: number };
 }
 
-/** Image size = bounds + 48 px padding per side, scaled so no side exceeds 4096 CSS px. */
+/**
+ * Frame for `bounds` (CSS px). The 48 px margin is defined before the max-side
+ * scaling: `s` shrinks the padded box, and the margin shrinks with it, so the
+ * image is `48·s` px of margin on the left and top. Only the image sides are
+ * clamped to 4096 px; there is no minimum zoom, so very large diagrams stay
+ * complete even when they become hard to read.
+ */
 export function computeExportFrame(bounds: Rect): ExportFrame {
   const paddedWidth = bounds.width + EXPORT_PADDING * 2;
   const paddedHeight = bounds.height + EXPORT_PADDING * 2;
   const scale = Math.min(1, EXPORT_MAX_SIDE / paddedWidth, EXPORT_MAX_SIDE / paddedHeight);
-  const width = Math.max(1, Math.min(EXPORT_MAX_SIDE, Math.round(paddedWidth * scale)));
-  const height = Math.max(1, Math.min(EXPORT_MAX_SIDE, Math.round(paddedHeight * scale)));
-  const transform = getViewportForBounds(bounds, width, height, 0.1, 2, 0.05);
+  // The small epsilon keeps floating-point noise from adding a whole pixel.
+  const width = Math.max(1, Math.min(EXPORT_MAX_SIDE, Math.ceil(paddedWidth * scale - 1e-6)));
+  const height = Math.max(1, Math.min(EXPORT_MAX_SIDE, Math.ceil(paddedHeight * scale - 1e-6)));
+  const transform = {
+    x: (EXPORT_PADDING - bounds.x) * scale,
+    y: (EXPORT_PADDING - bounds.y) * scale,
+    zoom: scale,
+  };
   return { width, height, transform };
 }
 
