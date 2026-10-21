@@ -50,7 +50,7 @@
 
   /* Component accents (UI v2 §2.3): ink = stroke and glyph, tint = icon chip. Never text. */
   --sa-accent-tomato-ink: #B23A2B;
-  --sa-accent-tomato-tint: #F9D9D3;
+  --sa-accent-tomato-tint: #FADCD6;
   --sa-accent-coral-ink: #A8452F;
   --sa-accent-coral-tint: #FADFD2;
   --sa-accent-tangerine-ink: #9A4D10;
@@ -147,3 +147,28 @@
   --sa-palette-w-collapsed: 48px;
   --sa-inspector-w: 340px;
 }
+
+/* Component palette (UI_COLOR_CONFIRMATION_DESIGN §1.3): the only place a
+   component color is chosen. Fill and ink always travel together. */
+[data-palette="type-agent"] { --sa-palette-ink: var(--sa-type-agent-ink); --sa-palette-fill: var(--sa-type-agent-fill); }
+[data-palette="type-orchestrator"] { --sa-palette-ink: var(--sa-type-orchestrator-ink); --sa-palette-fill: var(--sa-type-orchestrator-fill); }
+[data-palette="type-tool"] { --sa-palette-ink: var(--sa-type-tool-ink); --sa-palette-fill: var(--sa-type-tool-fill); }
+[data-palette="type-memory"] { --sa-palette-ink: var(--sa-type-memory-ink); --sa-palette-fill: var(--sa-type-memory-fill); }
+[data-palette="type-external"] { --sa-palette-ink: var(--sa-type-external-ink); --sa-palette-fill: var(--sa-type-external-fill); }
+[data-palette="type-decision"] { --sa-palette-ink: var(--sa-type-decision-ink); --sa-palette-fill: var(--sa-type-decision-fill); }
+[data-palette="tomato"] { --sa-palette-ink: var(--sa-accent-tomato-ink); --sa-palette-fill: var(--sa-accent-tomato-tint); }
+[data-palette="coral"] { --sa-palette-ink: var(--sa-accent-coral-ink); --sa-palette-fill: var(--sa-accent-coral-tint); }
+[data-palette="tangerine"] { --sa-palette-ink: var(--sa-accent-tangerine-ink); --sa-palette-fill: var(--sa-accent-tangerine-tint); }
+[data-palette="mustard"] { --sa-palette-ink: var(--sa-accent-mustard-ink); --sa-palette-fill: var(--sa-accent-mustard-tint); }
+[data-palette="olive"] { --sa-palette-ink: var(--sa-accent-olive-ink); --sa-palette-fill: var(--sa-accent-olive-tint); }
+[data-palette="fern"] { --sa-palette-ink: var(--sa-accent-fern-ink); --sa-palette-fill: var(--sa-accent-fern-tint); }
+[data-palette="mint"] { --sa-palette-ink: var(--sa-accent-mint-ink); --sa-palette-fill: var(--sa-accent-mint-tint); }
+[data-palette="teal"] { --sa-palette-ink: var(--sa-accent-teal-ink); --sa-palette-fill: var(--sa-accent-teal-tint); }
+[data-palette="lagoon"] { --sa-palette-ink: var(--sa-accent-lagoon-ink); --sa-palette-fill: var(--sa-accent-lagoon-tint); }
+[data-palette="sky"] { --sa-palette-ink: var(--sa-accent-sky-ink); --sa-palette-fill: var(--sa-accent-sky-tint); }
+[data-palette="denim"] { --sa-palette-ink: var(--sa-accent-denim-ink); --sa-palette-fill: var(--sa-accent-denim-tint); }
+[data-palette="indigo"] { --sa-palette-ink: var(--sa-accent-indigo-ink); --sa-palette-fill: var(--sa-accent-indigo-tint); }
+[data-palette="lavender"] { --sa-palette-ink: var(--sa-accent-lavender-ink); --sa-palette-fill: var(--sa-accent-lavender-tint); }
+[data-palette="plum"] { --sa-palette-ink: var(--sa-accent-plum-ink); --sa-palette-fill: var(--sa-accent-plum-tint); }
+[data-palette="rose"] { --sa-palette-ink: var(--sa-accent-rose-ink); --sa-palette-fill: var(--sa-accent-rose-tint); }
+[data-palette="cocoa"] { --sa-palette-ink: var(--sa-accent-cocoa-ink); --sa-palette-fill: var(--sa-accent-cocoa-tint); }

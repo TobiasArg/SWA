@@ -92,7 +92,7 @@ export type AccentId = (typeof ACCENT_IDS)[number];
 
 /** Persisted IDs are stable; never rename or recolor an ID's hue family (UI v2 §5.4). */
 export const ACCENTS: Record<AccentId, { label: string; ink: string; tint: string }> = {
-  tomato: { label: "Tomato", ink: "#B23A2B", tint: "#F9D9D3" },
+  tomato: { label: "Tomato", ink: "#B23A2B", tint: "#FADCD6" },
   coral: { label: "Coral", ink: "#A8452F", tint: "#FADFD2" },
   tangerine: { label: "Tangerine", ink: "#9A4D10", tint: "#FBE2C8" },
   mustard: { label: "Mustard", ink: "#7D5F00", tint: "#F6E7B0" },
