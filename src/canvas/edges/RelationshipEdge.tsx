@@ -42,6 +42,11 @@ function RelationshipEdgeView({ source, target, data, label, markerEnd, interact
     labelPosition: data.labelPosition,
   });
 
+  // Geometry emits undirected terminals in canonical order; the DOM keeps the stored roles.
+  const [sourceTerminal, targetTerminal] = layout.canonicalSwap
+    ? [layout.targetTerminal, layout.sourceTerminal]
+    : [layout.sourceTerminal, layout.targetTerminal];
+
   return (
     <>
       <BaseEdge
@@ -59,16 +64,16 @@ function RelationshipEdgeView({ source, target, data, label, markerEnd, interact
         className="sa-edge-terminal"
         data-terminal="source"
         data-side={layout.sides.source}
-        cx={layout.sourceTerminal.x}
-        cy={layout.sourceTerminal.y}
+        cx={sourceTerminal.x}
+        cy={sourceTerminal.y}
         r={layout.terminalRadius}
       />
       <circle
         className="sa-edge-terminal"
         data-terminal="target"
         data-side={layout.sides.target}
-        cx={layout.targetTerminal.x}
-        cy={layout.targetTerminal.y}
+        cx={targetTerminal.x}
+        cy={targetTerminal.y}
         r={layout.terminalRadius}
       />
       {layout.arrow ? <path className="sa-edge-arrow" d={layout.arrow.path} /> : null}

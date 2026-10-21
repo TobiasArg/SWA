@@ -121,15 +121,14 @@ describe("RelationshipEdge", () => {
   it("renders an undirected relationship identically when its stored order is swapped", () => {
     const fwd = renderEdge(makeRelationship({ id: "r", sourceId: "a", targetId: "b", direction: "undirected" }));
     const fwdTerminals = [terminal(fwd.container, "source").outerHTML, terminal(fwd.container, "target").outerHTML];
-    const fwdNums = pathD(fwd.container).match(/-?[\d.]+/g)!.map(Number);
+    const fwdD = pathD(fwd.container);
     fwd.unmount();
     const rev = renderEdge(makeRelationship({ id: "r", sourceId: "b", targetId: "a", direction: "undirected" }));
-    const revNums = pathD(rev.container).match(/-?[\d.]+/g)!.map(Number);
-    // The reversed cubic is the same curve walked backwards.
-    const pts = (n: number[]) => [[n[0], n[1]], [n[2], n[3]], [n[4], n[5]], [n[6], n[7]]];
-    expect(pts(revNums)).toEqual(pts(fwdNums).reverse());
-    // Terminals swap roles but occupy the same positions.
+    // Canonical order (UI_V2_REFINEMENT 2.2 step 0): the identical physical curve.
+    expect(pathD(rev.container)).toBe(fwdD);
+    // Terminals keep their stored roles but occupy the same positions.
     expect(terminal(rev.container, "target").outerHTML).toBe(fwdTerminals[0]!.replace('data-terminal="source"', 'data-terminal="target"'));
+    expect(terminal(rev.container, "source").outerHTML).toBe(fwdTerminals[1]!.replace('data-terminal="target"', 'data-terminal="source"'));
   });
 
   it("never animates", () => {

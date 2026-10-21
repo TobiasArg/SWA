@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SIZE, MAX_SIZE, MIN_SIZE } from "../domain/constants";
 import type { ComponentType, Position, Rect } from "../domain/types";
 import {
+  CURVE_BOW_FACTOR,
+  CURVE_BOW_MAX,
+  CURVE_BOW_MIN_CHORD,
   CURVE_FACTOR,
   OCTAGON_CHAMFER,
   PARALLELOGRAM_SKEW,
@@ -26,6 +29,9 @@ describe("constants", () => {
   it("match section 2.2", () => {
     expect(PARALLEL_STEP).toBe(20);
     expect(CURVE_FACTOR).toBe(0.4);
+    expect(CURVE_BOW_MAX).toBe(24);
+    expect(CURVE_BOW_FACTOR).toBe(0.15);
+    expect(CURVE_BOW_MIN_CHORD).toBe(24);
     expect(cylinderCapRy(56)).toBe(8);
     expect(cylinderCapRy(35)).toBe(5);
     expect(PORT_SIDES).toEqual(["top", "right", "bottom", "left"]);

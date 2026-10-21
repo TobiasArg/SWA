@@ -8,6 +8,9 @@ import type { Position, Rect, Relationship } from "../domain/types";
 import {
   ARROW_HALF_WIDTH,
   ARROW_LENGTH,
+  CURVE_BOW_FACTOR,
+  CURVE_BOW_MAX,
+  CURVE_BOW_MIN_CHORD,
   CURVE_FACTOR,
   CURVE_MAX,
   CURVE_MIN,
@@ -151,28 +154,46 @@ export interface CubicEdgeInput {
   sourceSide: PortSide;
   targetSide: PortSide;
   directed: boolean;
-  /** Signed px along the left-hand normal of the chord P0 -> P3 (computeParallelInfo). */
+  /** Signed px along the left-hand normal of the chord (computeParallelInfo), relative to the stored direction. */
   parallelOffset?: number;
-  /** t in 0..1 for the label point (computeParallelInfo.labelPosition). */
+  /** t in 0..1 for the label point (computeParallelInfo.labelPosition), relative to the stored direction. */
   labelPosition?: number;
+  /**
+   * Stored relationship ids. Only used for undirected edges: when both are given and
+   * sourceId > targetId (code-point order) the geometry is built in canonical order
+   * (UI_V2_REFINEMENT.md 2.2 step 0) so swapping the stored ends changes nothing.
+   */
+  sourceId?: string;
+  targetId?: string;
 }
 
 export interface CubicEdgeGeometry {
+  /** Canonical-order geometry for undirected edges (identical whatever the stored order). */
   p0: Position;
   p1: Position;
   p2: Position;
   p3: Position;
   /** `M P0 C P1 P2 P3` */
   path: string;
-  /** Terminal ring centers (the anchors) and radius; drawn on both ends of every edge. */
+  /**
+   * Terminal ring centers (the anchors) and radius; drawn on both ends of every edge.
+   * For an undirected edge that was canonically swapped these are emitted in canonical
+   * order (sourceTerminal = anchor at p0), so the pair is order-independent in output.
+   */
   sourceTerminal: Position;
   targetTerminal: Position;
   terminalRadius: number;
-  /** Directed only: arrow tip, unit direction (-n_t) and triangle path. Null when undirected. */
+  /** Directed only: arrow tip, unit direction of the curve end tangent and triangle path. Null when undirected. */
   arrow: { tip: Position; direction: Position; path: string } | null;
-  /** Cubic point B(labelPosition). */
+  /** Cubic point B(labelT). */
   labelX: number;
   labelY: number;
+  /** Canonical label parameter actually used (1 - labelPosition after a swap). */
+  labelT: number;
+  /** Geometric bow normal b-hat (bows up for horizontal-dominant chords, else right); (0, -1) when the chord is shorter than CURVE_BOW_MIN_CHORD. */
+  bowNormal: Position;
+  /** True when step 0 swapped source and target (undirected, sourceId > targetId). */
+  canonicalSwap: boolean;
 }
 
 export function cubicPoint(p0: Position, p1: Position, p2: Position, p3: Position, t: number): Position {
@@ -187,45 +208,86 @@ export function cubicPoint(p0: Position, p1: Position, p2: Position, p3: Positio
   };
 }
 
-/** Pure; never throws, including for coincident anchors. */
+/** Pure; never throws, including for coincident anchors. UI_V2_REFINEMENT.md 2.2 steps 0-9. */
 export function cubicEdgeGeometry(input: CubicEdgeInput): CubicEdgeGeometry {
-  const { sourceAnchor: As, targetAnchor: At, directed } = input;
-  const ns = portNormal(input.sourceSide);
-  const nt = portNormal(input.targetSide);
-  const t = Math.min(1, Math.max(0, input.labelPosition ?? 0.5));
+  const R = TERMINAL_RADIUS;
+  // Step 0: canonical order for undirected edges, before any arithmetic.
+  const canonicalSwap =
+    !input.directed && input.sourceId !== undefined && input.targetId !== undefined && input.sourceId > input.targetId;
+  const As = canonicalSwap ? input.targetAnchor : input.sourceAnchor;
+  const At = canonicalSwap ? input.sourceAnchor : input.targetAnchor;
+  const ns = portNormal(canonicalSwap ? input.targetSide : input.sourceSide);
+  const nt = portNormal(canonicalSwap ? input.sourceSide : input.targetSide);
+  const directed = input.directed;
+  const rawOffset = input.parallelOffset ?? 0;
+  const offset = canonicalSwap ? -rawOffset : rawOffset;
+  const rawT = Math.min(1, Math.max(0, input.labelPosition ?? 0.5));
+  // Rounded after a swap so 1 - (1 - t) reproduces t exactly (label placement is identical).
+  const labelT = canonicalSwap ? Math.round((1 - rawT) * 1e6) / 1e6 : rawT;
 
-  const p0 = { x: As.x + ns.x * TERMINAL_RADIUS, y: As.y + ns.y * TERMINAL_RADIUS };
-  let p3: Position;
+  // Steps 1-3.
+  const p0 = { x: As.x + ns.x * R, y: As.y + ns.y * R };
+  const endDist = directed ? R + 0.75 + ARROW_LENGTH - 2 : R;
+  const E = { x: At.x + nt.x * endDist, y: At.y + nt.y * endDist };
+  const cx = E.x - p0.x;
+  const cy = E.y - p0.y;
+  const chord = Math.hypot(cx, cy);
+  const d = Math.min(CURVE_MAX, Math.max(CURVE_MIN, CURVE_FACTOR * chord));
+  const c1 = { x: p0.x + ns.x * d, y: p0.y + ns.y * d };
+  const c2 = { x: E.x + nt.x * d, y: E.y + nt.y * d };
+
+  // Steps 4-7.
+  let bow: Position = { x: 0, y: -1 };
+  let shiftX = 0;
+  let shiftY = 0;
+  if (chord >= CURVE_BOW_MIN_CHORD) {
+    const ux = cx / chord;
+    const uy = cy / chord;
+    const px = -uy;
+    const py = ux;
+    if (Math.abs(ux) >= Math.abs(uy)) bow = py < 0 ? { x: px, y: py } : { x: -px, y: -py };
+    else bow = px > 0 ? { x: px, y: py } : { x: -px, y: -py };
+    const h = Math.max(
+      Math.abs((c1.x - p0.x) * bow.x + (c1.y - p0.y) * bow.y),
+      Math.abs((c2.x - p0.x) * bow.x + (c2.y - p0.y) * bow.y),
+    );
+    const B = Math.min(CURVE_BOW_MAX, CURVE_BOW_FACTOR * chord);
+    const beta = Math.max(0, B - h);
+    const pi = offset * ((cy / chord) * bow.x + (-cx / chord) * bow.y);
+    const sigma = pi + (pi < 0 ? -1 : 1) * beta;
+    shiftX = bow.x * sigma;
+    shiftY = bow.y * sigma;
+  } else if (offset !== 0 && chord > 0) {
+    // V2 behavior: parallel shift only, along the left-hand normal of the chord.
+    shiftX = (cy / chord) * offset;
+    shiftY = (-cx / chord) * offset;
+  }
+  const p1 = { x: c1.x + shiftX, y: c1.y + shiftY };
+  const p2 = { x: c2.x + shiftX, y: c2.y + shiftY };
+
+  // Step 8.
+  let p3: Position = E;
   let arrow: CubicEdgeGeometry["arrow"] = null;
   if (directed) {
-    const tipDist = TERMINAL_RADIUS + 0.75;
+    const tipDist = R + 0.75;
     const tip = { x: At.x + nt.x * tipDist, y: At.y + nt.y * tipDist };
-    const direction = { x: -nt.x, y: -nt.y };
+    let ux = tip.x - p2.x;
+    let uy = tip.y - p2.y;
+    const m = Math.hypot(ux, uy);
+    if (m > 0) {
+      ux /= m;
+      uy /= m;
+    } else {
+      ux = -nt.x;
+      uy = -nt.y;
+    }
+    const direction = { x: ux, y: uy };
     const head = arrowheadGeometry(tip, direction);
     arrow = { tip, direction, path: head.path };
-    // 2 px inside the arrowhead base.
     p3 = { x: head.lineEndX, y: head.lineEndY };
-  } else {
-    p3 = { x: At.x + nt.x * TERMINAL_RADIUS, y: At.y + nt.y * TERMINAL_RADIUS };
   }
 
-  const chordX = p3.x - p0.x;
-  const chordY = p3.y - p0.y;
-  const chord = Math.hypot(chordX, chordY);
-  const d = Math.min(CURVE_MAX, Math.max(CURVE_MIN, CURVE_FACTOR * chord));
-  let p1 = { x: p0.x + ns.x * d, y: p0.y + ns.y * d };
-  let p2 = { x: p3.x + nt.x * d, y: p3.y + nt.y * d };
-
-  const offset = input.parallelOffset ?? 0;
-  if (offset !== 0 && chord > 0) {
-    // Left-hand normal of travel in screen coordinates (y down).
-    const sx = (chordY / chord) * offset;
-    const sy = (-chordX / chord) * offset;
-    p1 = { x: p1.x + sx, y: p1.y + sy };
-    p2 = { x: p2.x + sx, y: p2.y + sy };
-  }
-
-  const label = cubicPoint(p0, p1, p2, p3, t);
+  const label = cubicPoint(p0, p1, p2, p3, labelT);
   const f = round2;
   return {
     p0,
@@ -235,10 +297,13 @@ export function cubicEdgeGeometry(input: CubicEdgeInput): CubicEdgeGeometry {
     path: `M ${f(p0.x)} ${f(p0.y)} C ${f(p1.x)} ${f(p1.y)} ${f(p2.x)} ${f(p2.y)} ${f(p3.x)} ${f(p3.y)}`,
     sourceTerminal: { x: As.x, y: As.y },
     targetTerminal: { x: At.x, y: At.y },
-    terminalRadius: TERMINAL_RADIUS,
+    terminalRadius: R,
     arrow,
     labelX: label.x,
     labelY: label.y,
+    labelT,
+    bowNormal: bow,
+    canonicalSwap,
   };
 }
 
@@ -268,19 +333,27 @@ export interface ConnectionPreviewGeometry {
  * straight at the pointer (the direction of the chord). Pure, never throws.
  */
 export function connectionPreviewGeometry(input: ConnectionPreviewInput): ConnectionPreviewGeometry {
+  if (input.snapped) {
+    // UI_V2_REFINEMENT.md 2.4: the same curve (bow included) the final edge will have, minus the arrowhead.
+    const geometry = cubicEdgeGeometry({
+      sourceAnchor: input.sourceAnchor,
+      targetAnchor: input.snapped.anchor,
+      sourceSide: input.sourceSide,
+      targetSide: input.snapped.side,
+      directed: false,
+    });
+    return { path: geometry.path, end: { x: input.snapped.anchor.x, y: input.snapped.anchor.y } };
+  }
   const p0 = input.sourceAnchor;
   const ns = portNormal(input.sourceSide);
-  const p3 = input.snapped ? input.snapped.anchor : input.pointer;
+  const p3 = input.pointer;
   const chordX = p3.x - p0.x;
   const chordY = p3.y - p0.y;
   const chord = Math.hypot(chordX, chordY);
   const d = Math.min(CURVE_MAX, Math.max(CURVE_MIN, CURVE_FACTOR * chord));
   const p1 = { x: p0.x + ns.x * d, y: p0.y + ns.y * d };
   let p2: Position;
-  if (input.snapped) {
-    const nt = portNormal(input.snapped.side);
-    p2 = { x: p3.x + nt.x * d, y: p3.y + nt.y * d };
-  } else if (chord > 0) {
+  if (chord > 0) {
     p2 = { x: p3.x - (chordX / chord) * d, y: p3.y - (chordY / chord) * d };
   } else {
     p2 = { x: p3.x, y: p3.y };
@@ -331,6 +404,8 @@ export function layoutRelationship(input: RelationshipLayoutInput): Relationship
     sourceSide: sides.source,
     targetSide: sides.target,
     directed: relationship.direction === "directed",
+    sourceId: relationship.sourceId,
+    targetId: relationship.targetId,
     ...(input.parallelOffset === undefined ? {} : { parallelOffset: input.parallelOffset }),
     ...(input.labelPosition === undefined ? {} : { labelPosition: input.labelPosition }),
   });

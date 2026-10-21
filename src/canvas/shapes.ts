@@ -32,6 +32,12 @@ export const CURVE_MIN = 32;
 export const CURVE_MAX = 120;
 export const CURVE_FACTOR = 0.4;
 export const PARALLEL_STEP = 20;
+/** UI v2 refinement 2.1: largest minimum bow (px), perpendicular to the chord. */
+export const CURVE_BOW_MAX = 24;
+/** Bow target as a fraction of the chord length. */
+export const CURVE_BOW_FACTOR = 0.15;
+/** Below this chord length no bow is added (overlapping or touching nodes). */
+export const CURVE_BOW_MIN_CHORD = 24;
 export const CONNECTION_RADIUS = 20;
 export const HATCH_STEP = 8;
 
