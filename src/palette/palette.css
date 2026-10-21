@@ -1,0 +1,121 @@
+/* Component library (handoff 9.2, 10.1). Focus ring comes from base.css :focus-visible. */
+
+.sa-palette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sa-space-2);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sa-space-4) var(--sa-space-3);
+  background: var(--sa-color-surface);
+  color: var(--sa-color-text);
+}
+
+.sa-palette__heading {
+  margin: 0;
+  padding: 0 var(--sa-space-3) var(--sa-space-2);
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-xs);
+  font-weight: var(--sa-weight-semibold);
+}
+
+.sa-palette__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sa-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sa-palette__item {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: var(--sa-space-3);
+  padding: 0 var(--sa-space-3);
+  border: var(--sa-stroke-thin) solid transparent;
+  border-radius: var(--sa-radius-sm);
+  background: transparent;
+  color: var(--sa-color-text);
+  font: var(--sa-text-sm);
+  text-align: left;
+  cursor: grab;
+  transition:
+    background-color var(--sa-duration-fast) var(--sa-ease),
+    border-color var(--sa-duration-fast) var(--sa-ease);
+}
+
+.sa-palette__item:hover {
+  border-color: var(--sa-color-border);
+  background: var(--sa-color-surface-hover);
+}
+
+.sa-palette__item:active {
+  cursor: grabbing;
+  background: var(--sa-color-surface-sunken);
+}
+
+.sa-palette__icon {
+  flex: none;
+  width: var(--sa-icon-md);
+  height: var(--sa-icon-md);
+}
+
+.sa-palette__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-palette__item--orchestrator .sa-palette__icon { color: var(--sa-type-orchestrator-ink); }
+.sa-palette__item--agent .sa-palette__icon { color: var(--sa-type-agent-ink); }
+.sa-palette__item--tool .sa-palette__icon { color: var(--sa-type-tool-ink); }
+.sa-palette__item--memory .sa-palette__icon { color: var(--sa-type-memory-ink); }
+.sa-palette__item--external .sa-palette__icon { color: var(--sa-type-external-ink); }
+.sa-palette__item--decision .sa-palette__icon { color: var(--sa-type-decision-ink); }
+
+/* Collapsed icon rail (48px wide container). */
+.sa-palette--collapsed {
+  align-items: center;
+  padding: var(--sa-space-3) var(--sa-space-2);
+}
+
+.sa-palette--collapsed .sa-palette__list {
+  align-items: center;
+}
+
+.sa-palette--collapsed .sa-palette__item {
+  width: 40px;
+  justify-content: center;
+  padding: 0;
+}
+
+.sa-palette__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-palette__item {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .sa-palette__item:hover {
+    border-color: CanvasText;
+  }
+}

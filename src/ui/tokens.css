@@ -1,0 +1,109 @@
+:root {
+  color-scheme: light;
+
+  /* Neutrals and surfaces */
+  --sa-color-canvas: #F5F3EE;
+  --sa-color-canvas-grid: #DDD8CD;
+  --sa-color-surface: #FFFFFF;
+  --sa-color-surface-sunken: #EFECE6;
+  --sa-color-surface-hover: #F5F3EE;
+  --sa-color-border: #D8D3C8;
+  --sa-color-border-strong: #8C8679;
+  --sa-color-text: #1F1D1A;
+  --sa-color-text-muted: #5C574F;
+  --sa-color-text-disabled: #8F897D;
+  --sa-color-backdrop: rgba(31, 29, 26, 0.40);
+
+  /* Interaction and status */
+  --sa-color-accent: #2650C8;
+  --sa-color-accent-hover: #1E41A6;
+  --sa-color-accent-soft: rgba(38, 80, 200, 0.16);
+  --sa-color-on-accent: #FFFFFF;
+  --sa-color-focus: #1F1D1A;
+  --sa-color-focus-gap: #FFFFFF;
+  --sa-color-danger: #B42318;
+  --sa-color-danger-hover: #931D13;
+  --sa-color-danger-soft: #FBEAE8;
+  --sa-color-on-danger: #FFFFFF;
+  --sa-color-success: #2E6A4C;
+  --sa-color-warning-text: #7A4A06;
+  --sa-color-warning-soft: #FBF1DC;
+  --sa-color-info-soft: #EFECE6;
+  --sa-color-toast-bg: #2A2723;
+  --sa-color-toast-text: #F5F3EE;
+  --sa-color-toast-action: #9DB4F5;
+
+  /* Component type inks and fills */
+  --sa-type-agent-ink: #36597D;
+  --sa-type-agent-fill: #EDF2F7;
+  --sa-type-orchestrator-ink: #1D3557;
+  --sa-type-orchestrator-fill: #E6ECF4;
+  --sa-type-tool-ink: #875611;
+  --sa-type-tool-fill: #FBF3E3;
+  --sa-type-memory-ink: #2E6A4C;
+  --sa-type-memory-fill: #EBF4EE;
+  --sa-type-external-ink: #57534C;
+  --sa-type-external-fill: #F1EFEA;
+  --sa-type-external-hatch: #E4E0D7;
+  --sa-type-decision-ink: #6C3D74;
+  --sa-type-decision-fill: #F5EEF6;
+
+  /* Canvas structure */
+  --sa-edge-stroke: #6B655B;
+  --sa-edge-stroke-hover: #1F1D1A;
+  --sa-edge-stroke-selected: var(--sa-color-accent);
+  --sa-edge-label-text: #3A3631;
+  --sa-edge-label-bg: #F5F3EE;
+  --sa-group-border: #857F72;
+  --sa-group-fill: rgba(87, 83, 76, 0.05);
+  --sa-group-header-fill: rgba(87, 83, 76, 0.10);
+  --sa-handle-fill: #FFFFFF;
+  --sa-handle-border: var(--sa-color-accent);
+
+  /* Typography */
+  --sa-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sa-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sa-text-2xs: 600 11px/14px var(--sa-font-mono);
+  --sa-text-xs: 400 12px/16px var(--sa-font-sans);
+  --sa-text-sm: 400 13px/18px var(--sa-font-sans);
+  --sa-text-md: 600 14px/20px var(--sa-font-sans);
+  --sa-text-lg: 600 16px/22px var(--sa-font-sans);
+  --sa-text-xl: 600 20px/28px var(--sa-font-sans);
+  --sa-weight-regular: 400;
+  --sa-weight-semibold: 600;
+
+  /* Spacing, sizing and shape */
+  --sa-space-1: 2px;
+  --sa-space-2: 4px;
+  --sa-space-3: 8px;
+  --sa-space-4: 12px;
+  --sa-space-5: 16px;
+  --sa-space-6: 24px;
+  --sa-space-7: 32px;
+  --sa-space-8: 48px;
+  --sa-control-h: 32px;
+  --sa-control-h-sm: 28px;
+  --sa-icon-sm: 16px;
+  --sa-icon-md: 20px;
+  --sa-radius-sm: 4px;
+  --sa-radius-md: 6px;
+  --sa-radius-lg: 8px;
+  --sa-stroke-thin: 1px;
+  --sa-stroke: 1.5px;
+  --sa-stroke-strong: 2px;
+  --sa-stroke-selected: 2.5px;
+
+  /* Floating layer elevations */
+  --sa-shadow-popover: 0 4px 12px rgba(31, 29, 26, 0.12), 0 1px 3px rgba(31, 29, 26, 0.08);
+  --sa-shadow-dialog: 0 16px 40px rgba(31, 29, 26, 0.20);
+
+  /* Motion */
+  --sa-duration-fast: 120ms;
+  --sa-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Editor layout */
+  --sa-toolbar-h: 48px;
+  --sa-palette-w: 216px;
+  --sa-palette-w-collapsed: 48px;
+  --sa-inspector-w: 340px;
+}

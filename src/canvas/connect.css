@@ -1,0 +1,142 @@
+/*
+ * Relationship type picker (UI handoff 8.4, 9.2) and Connect dialog (8.4).
+ * Tokens only; no raw colours.
+ */
+
+/* ---- Type picker popover ---------------------------------------------------- */
+
+.sa-type-picker {
+  position: absolute;
+  z-index: 20;
+  width: min(280px, calc(100% - 16px));
+  overflow: hidden;
+  border: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-color-surface);
+  box-shadow: var(--sa-shadow-popover);
+  color: var(--sa-color-text);
+  font-family: var(--sa-font-sans);
+}
+
+.sa-type-picker__title {
+  margin: 0;
+  padding: var(--sa-space-3) var(--sa-space-4) var(--sa-space-2);
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sa-type-picker__list {
+  max-height: min(448px, 60vh);
+  margin: 0;
+  padding: 0 0 var(--sa-space-1);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sa-type-picker__list:focus {
+  outline: none;
+}
+
+.sa-type-picker__list:focus-visible {
+  outline: var(--sa-stroke-strong) solid var(--sa-color-focus);
+  outline-offset: -2px;
+}
+
+.sa-type-picker__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sa-space-2) var(--sa-space-4);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.sa-type-picker__option[data-active="true"] {
+  border-left-color: var(--sa-color-accent);
+  background: var(--sa-color-accent-soft);
+}
+
+.sa-type-picker__name {
+  display: flex;
+  align-items: center;
+  gap: var(--sa-space-2);
+  font: var(--sa-text-sm);
+  font-weight: var(--sa-weight-semibold);
+}
+
+.sa-type-picker__tag {
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-2xs);
+  font-family: var(--sa-font-mono);
+  font-weight: var(--sa-weight-regular);
+}
+
+.sa-type-picker__hint {
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-xs);
+}
+
+.sa-type-picker__footer {
+  margin: 0;
+  padding: var(--sa-space-2) var(--sa-space-4);
+  border-top: var(--sa-stroke-thin) solid var(--sa-color-border);
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-2xs);
+  font-family: var(--sa-font-mono);
+}
+
+/* ---- Connect dialog --------------------------------------------------------- */
+
+.sa-dialog.sa-connect-dialog {
+  width: min(400px, calc(100vw - 32px));
+}
+
+.sa-connect-dialog__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sa-space-4);
+}
+
+.sa-connect-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sa-space-1);
+}
+
+.sa-connect-dialog__label {
+  font: var(--sa-text-sm);
+  font-weight: var(--sa-weight-semibold);
+}
+
+.sa-connect-dialog__field select {
+  width: 100%;
+  min-height: var(--sa-control-h);
+  padding: 0 var(--sa-space-3);
+  border: var(--sa-stroke-thin) solid var(--sa-color-border-strong);
+  border-radius: var(--sa-radius-sm);
+  background: var(--sa-color-surface);
+  font: var(--sa-text-sm);
+}
+
+.sa-connect-dialog__field select:hover {
+  border-color: var(--sa-color-text-muted);
+}
+
+.sa-connect-dialog__hint,
+.sa-connect-dialog__note {
+  margin: 0;
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-xs);
+}
+
+.sa-connect-dialog__hint {
+  color: var(--sa-color-text);
+}
+
+@media (forced-colors: active) {
+  .sa-type-picker__option[data-active="true"] {
+    border-left-color: Highlight;
+  }
+}

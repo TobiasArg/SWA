@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "architecture": {
+    "id": "arch_lhe",
+    "name": "Lead Hunting Engine",
+    "description": "Multi-agent system for discovering, validating and scoring sales leads.",
+    "createdAt": "2026-10-20T09:00:00Z",
+    "updatedAt": "2026-10-20T09:30:00Z",
+    "components": [
+      {
+        "id": "cmp_orchestrator",
+        "type": "agent",
+        "subtype": "orchestrator",
+        "name": "LHE Orchestrator",
+        "description": "Coordinates the lead pipeline.",
+        "position": { "x": 400, "y": 80 },
+        "behavior": {
+          "purpose": "Ensures every lead search ends in a complete, scored batch without manual coordination.",
+          "role": "Coordinator: delegates discovery, validation and scoring, and decides when a lead batch is complete.",
+          "responsibilities": ["Assign discovery tasks", "Route leads to validation", "Escalate stalled batches"],
+          "activation": "Starts when a new lead-search request is received.",
+          "delegation": "Delegates discovery first; delegates validation once candidates exist.",
+          "outputs": "A completed, scored lead batch.",
+          "failureHandling": "If an agent fails twice, escalate the batch to a human operator."
+        }
+      },
+      {
+        "id": "cmp_discovery",
+        "type": "agent",
+        "name": "Discovery Agent",
+        "description": "Finds candidate leads.",
+        "position": { "x": 200, "y": 280 },
+        "behavior": {
+          "purpose": "Supplies the pipeline with candidate companies that match the target profile.",
+          "role": "Searcher: runs searches and records raw candidates.",
+          "responsibilities": ["Run searches", "Record raw candidates"],
+          "boundaries": ["Does not judge lead quality"],
+          "activation": "When delegated a search task by the orchestrator.",
+          "outputs": "Raw candidate records in the lead store.",
+          "failureHandling": "Report empty or failed searches to the orchestrator."
+        }
+      },
+      {
+        "id": "cmp_validation",
+        "type": "agent",
+        "name": "Validation Agent",
+        "description": "Checks candidate fit.",
+        "position": { "x": 440, "y": 280 }
+      },
+      {
+        "id": "cmp_lead_store",
+        "type": "memory",
+        "name": "Shared Lead Store",
+        "description": "Lead records shared across agents.",
+        "position": { "x": 320, "y": 480 },
+        "properties": { "storeKind": "relational", "accessScope": "shared" }
+      }
+    ],
+    "relationships": [
+      {
+        "id": "rel_1",
+        "type": "delegates_to",
+        "sourceId": "cmp_orchestrator",
+        "targetId": "cmp_discovery",
+        "direction": "directed",
+        "label": "search tasks"
+      },
+      {
+        "id": "rel_2",
+        "type": "writes_to",
+        "sourceId": "cmp_discovery",
+        "targetId": "cmp_lead_store",
+        "direction": "directed"
+      },
+      {
+        "id": "rel_3",
+        "type": "reads_from",
+        "sourceId": "cmp_validation",
+        "targetId": "cmp_lead_store",
+        "direction": "directed"
+      },
+      {
+        "id": "rel_4",
+        "type": "shares_context_with",
+        "sourceId": "cmp_discovery",
+        "targetId": "cmp_validation",
+        "direction": "undirected",
+        "description": "Share the current target profile."
+      }
+    ],
+    "groups": [
+      {
+        "id": "grp_pipeline",
+        "name": "Lead Processing Swarm",
+        "memberComponentIds": ["cmp_discovery", "cmp_validation"],
+        "bounds": { "x": 160, "y": 240, "width": 480, "height": 140 }
+      }
+    ],
+    "canvas": { "viewport": { "x": 0, "y": 0, "zoom": 1 } }
+  }
+}

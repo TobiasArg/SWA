@@ -1,0 +1,635 @@
+/*
+ * Canvas styles (UI handoff 2.4, 5, 6, 7, 9.1). Tokens only; no raw colours.
+ * React Flow's --xy-* variables are mapped to --sa-* tokens on the flow root.
+ */
+
+.sa-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--sa-color-canvas);
+}
+
+/* ---- React Flow variable mapping ------------------------------------------ */
+
+.sa-flow {
+  --xy-background-color: var(--sa-color-canvas);
+  --xy-background-pattern-color: var(--sa-color-canvas-grid);
+
+  --xy-edge-stroke: var(--sa-edge-stroke);
+  --xy-edge-stroke-width: var(--sa-stroke);
+  --xy-edge-stroke-selected: var(--sa-edge-stroke-selected);
+  --xy-edge-label-background-color: var(--sa-edge-label-bg);
+  --xy-edge-label-color: var(--sa-edge-label-text);
+
+  --xy-connectionline-stroke: var(--sa-color-accent);
+  --xy-connectionline-stroke-width: var(--sa-stroke);
+
+  --xy-handle-background-color: var(--sa-handle-fill);
+  --xy-handle-border-color: var(--sa-handle-border);
+
+  --xy-selection-background-color: color-mix(in srgb, var(--sa-color-accent) 8%, transparent);
+  --xy-selection-border: var(--sa-stroke-thin) solid var(--sa-color-accent);
+
+  --xy-resize-background-color: var(--sa-color-accent);
+
+  --xy-minimap-background-color: var(--sa-color-surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--sa-color-surface-sunken) 70%, transparent);
+  --xy-minimap-mask-stroke-color: var(--sa-color-border-strong);
+  --xy-minimap-mask-stroke-width: 1;
+  --xy-minimap-node-background-color: var(--sa-color-border);
+  --xy-minimap-node-stroke-color: transparent;
+
+  --xy-attribution-background-color: color-mix(in srgb, var(--sa-color-surface) 70%, transparent);
+
+  color: var(--sa-color-text);
+  font-family: var(--sa-font-sans);
+}
+
+.sa-flow .react-flow__attribution a {
+  color: var(--sa-color-text-muted);
+}
+
+.sa-minimap {
+  border: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-radius: var(--sa-radius-sm);
+}
+
+@media (max-width: 899px) {
+  .sa-minimap {
+    display: none;
+  }
+}
+
+/* ---- Empty canvas hint (handoff 7.3) -------------------------------------- */
+
+.sa-canvas__empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  width: min(360px, calc(100% - 32px));
+  margin: 0;
+  transform: translate(-50%, -50%);
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-sm);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ---- Component nodes (handoff 5.1, 5.2) ------------------------------------ */
+
+.sa-flow .react-flow__node-component {
+  cursor: grab;
+}
+
+.sa-node {
+  --sa-node-ink: var(--sa-type-agent-ink);
+  --sa-node-fill: var(--sa-type-agent-fill);
+  --sa-node-inset: 0 0 0 0 transparent;
+  --sa-node-halo: 0 0 0 0 transparent;
+
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 10px 12px 4px;
+  border: var(--sa-stroke) solid var(--sa-node-ink);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-node-fill);
+  box-shadow: var(--sa-node-inset), var(--sa-node-halo);
+  color: var(--sa-color-text);
+  transition: border-color var(--sa-duration-fast) var(--sa-ease);
+}
+
+.sa-node__frame {
+  display: none;
+}
+
+.sa-node__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--sa-space-1);
+  overflow: hidden;
+}
+
+.sa-node__type {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--sa-space-2);
+  color: var(--sa-node-ink);
+}
+
+.sa-node__icon {
+  flex: none;
+}
+
+.sa-node__type-label {
+  overflow: hidden;
+  font: var(--sa-text-2xs);
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sa-node__name {
+  overflow: hidden;
+  font: var(--sa-text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-node__description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Agent: the plain baseline. */
+
+/* Orchestrator: 2 px border plus a solid ink header band behind the type row. */
+.sa-node[data-subtype="orchestrator"] {
+  --sa-node-ink: var(--sa-type-orchestrator-ink);
+  --sa-node-fill: var(--sa-type-orchestrator-fill);
+  padding: 0 0 2px;
+  border-width: var(--sa-stroke-strong);
+}
+
+/* The band bleeds into the content padding, which overflow: hidden does not clip. */
+.sa-node[data-subtype="orchestrator"] .sa-node__content {
+  padding: 0 12px;
+}
+
+.sa-node[data-subtype="orchestrator"] .sa-node__type {
+  height: 24px;
+  flex: none;
+  margin: 0 -12px var(--sa-space-1);
+  padding: 0 12px;
+  border-radius: var(--sa-radius-sm) var(--sa-radius-sm) 0 0;
+  background: var(--sa-node-ink);
+  color: var(--sa-color-on-accent);
+}
+
+/* Tool: tighter radius plus a 4 px ink bar along the left edge. */
+.sa-node[data-type="tool"] {
+  --sa-node-ink: var(--sa-type-tool-ink);
+  --sa-node-fill: var(--sa-type-tool-fill);
+  --sa-node-inset: inset 4px 0 0 0 var(--sa-type-tool-ink);
+  padding-left: 16px;
+  border-radius: var(--sa-radius-sm);
+}
+
+/* Memory / Data Store: elliptical "disk lid" top plus a second rule below it. */
+.sa-node[data-type="memory"] {
+  --sa-node-ink: var(--sa-type-memory-ink);
+  --sa-node-fill: var(--sa-type-memory-fill);
+  padding-top: 16px;
+  border-radius: 50% 50% var(--sa-radius-md) var(--sa-radius-md) / 10px 10px var(--sa-radius-md) var(--sa-radius-md);
+}
+
+.sa-node[data-type="memory"]::before {
+  position: absolute;
+  top: 6px;
+  right: -1px;
+  left: -1px;
+  height: 10px;
+  border-top: var(--sa-stroke-thin) solid var(--sa-node-ink);
+  border-radius: 50% / 10px;
+  content: "";
+  pointer-events: none;
+}
+
+/* External System: dashed border and a 45° hatch over the fill. */
+.sa-node[data-type="external_system"] {
+  --sa-node-ink: var(--sa-type-external-ink);
+  --sa-node-fill: var(--sa-type-external-fill);
+  border-style: dashed;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--sa-type-external-hatch) 0 1px,
+      transparent 1px 8px
+    ),
+    var(--sa-node-fill);
+}
+
+/* Decision / Routing Rule: chamfered corners, stroked through an inner frame. */
+.sa-node[data-type="decision"] {
+  --sa-node-ink: var(--sa-type-decision-ink);
+  --sa-node-fill: var(--sa-type-decision-fill);
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sa-node[data-type="decision"] .sa-node__frame {
+  position: absolute;
+  inset: calc(-1 * var(--sa-stroke));
+  display: block;
+  background: var(--sa-node-ink);
+  clip-path: polygon(
+    10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px),
+    calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px
+  );
+  pointer-events: none;
+}
+
+.sa-node[data-type="decision"] .sa-node__frame::after {
+  position: absolute;
+  inset: var(--sa-stroke);
+  background: var(--sa-node-fill);
+  clip-path: polygon(
+    9.4px 0, calc(100% - 9.4px) 0, 100% 9.4px, 100% calc(100% - 9.4px),
+    calc(100% - 9.4px) 100%, 9.4px 100%, 0 calc(100% - 9.4px), 0 9.4px
+  );
+  content: "";
+}
+
+/* Hover: border darkens to text colour. */
+.sa-flow .react-flow__node-component:hover .sa-node:not([data-type="decision"]) {
+  border-color: var(--sa-color-text);
+}
+
+.sa-flow .react-flow__node-component:hover .sa-node[data-type="decision"] .sa-node__frame {
+  background: var(--sa-color-text);
+}
+
+/* Selected: 2 px accent outline 2 px outside the border plus a soft halo. */
+.sa-node[data-selected="true"] {
+  --sa-node-halo: 0 0 0 8px var(--sa-color-accent-soft);
+  outline: var(--sa-stroke-strong) solid var(--sa-color-accent);
+  outline-offset: 2px;
+}
+
+/* ---- Handles (handoff 5.3) ------------------------------------------------- */
+
+.sa-flow .react-flow__handle.sa-handle {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  min-height: 8px;
+  border: var(--sa-stroke) solid var(--sa-handle-border);
+  background: var(--sa-handle-fill);
+  opacity: 0;
+  transition: opacity var(--sa-duration-fast) var(--sa-ease);
+  /* Above the node content layer (z-index 1), which spans the full width of orchestrators. */
+  z-index: 2;
+}
+
+/* 16 px invisible hit area. */
+.sa-flow .react-flow__handle.sa-handle::after {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  content: "";
+}
+
+.sa-flow .react-flow__node-component:hover .sa-handle,
+.sa-flow .react-flow__node-component:focus-visible .sa-handle,
+.sa-flow .react-flow__node-component:focus-within .sa-handle,
+.sa-flow .react-flow__node-component.selected .sa-handle,
+.sa-flow .react-flow__handle.sa-handle.connectingfrom {
+  opacity: 1;
+}
+
+/* ---- Resize controls (handoff 5.3) ----------------------------------------- */
+
+.sa-flow .react-flow__resize-control.handle.sa-resize-handle {
+  width: 8px;
+  height: 8px;
+  border: var(--sa-stroke) solid var(--sa-color-accent);
+  border-radius: 1px;
+  background: var(--sa-handle-fill);
+}
+
+.sa-flow .react-flow__resize-control.line.sa-resize-line {
+  border-color: var(--sa-color-accent);
+}
+
+/* ---- Focus ring (handoff 9.1) ---------------------------------------------- */
+
+/*
+ * The node wrapper carries keyboard focus. The ring sits outside the selection
+ * outline and halo, so a focused, selected node shows both; the canvas between
+ * them acts as the gap of the double ring.
+ */
+.sa-flow .react-flow__node.selectable:focus-visible {
+  outline: var(--sa-stroke-strong) solid var(--sa-color-focus);
+  outline-offset: 10px;
+}
+
+/* ---- Group container (handoff 5.4) ----------------------------------------- */
+
+.sa-flow .react-flow__node.react-flow__node-group-container {
+  cursor: default;
+  pointer-events: none;
+}
+
+.sa-group {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--sa-radius-lg);
+  background: var(--sa-group-fill);
+  pointer-events: none;
+}
+
+.sa-group__outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Invisible wide stroke: the outline is clickable, the body is not. */
+.sa-group__outline-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.sa-group__outline-stroke {
+  fill: none;
+  stroke: var(--sa-group-border);
+  stroke-dasharray: 8 4;
+  stroke-width: var(--sa-stroke);
+  pointer-events: none;
+}
+
+.sa-group__header {
+  position: relative;
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: var(--sa-space-3);
+  padding: 0 var(--sa-space-4);
+  border-bottom: var(--sa-stroke-thin) dashed var(--sa-group-border);
+  border-radius: var(--sa-radius-lg) var(--sa-radius-lg) 0 0;
+  background: var(--sa-group-header-fill);
+  color: var(--sa-color-text);
+  cursor: grab;
+  pointer-events: all;
+}
+
+.sa-flow .react-flow__node-group-container.dragging .sa-group__header {
+  cursor: grabbing;
+}
+
+.sa-group__grip {
+  flex: none;
+  color: var(--sa-color-text-muted);
+}
+
+.sa-group__name {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--sa-text-sm);
+  font-weight: var(--sa-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-group__count {
+  flex: none;
+  margin-left: auto;
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.sa-group[data-selected="true"] .sa-group__outline-stroke {
+  stroke: var(--sa-color-accent);
+  stroke-dasharray: none;
+  stroke-width: var(--sa-stroke-strong);
+}
+
+.sa-group[data-selected="true"] .sa-group__header {
+  background: var(--sa-color-accent-soft);
+}
+
+/* ---- Relationship edges (handoff 6) ---------------------------------------- */
+
+.sa-flow .react-flow__edge-path.sa-edge-path {
+  stroke: var(--sa-edge-stroke);
+  stroke-width: var(--sa-stroke);
+  transition: stroke var(--sa-duration-fast) var(--sa-ease);
+}
+
+.sa-flow .react-flow__edge-path.sa-edge-path--undirected {
+  stroke-dasharray: 6 4;
+}
+
+.sa-edge-arrow {
+  fill: var(--sa-edge-stroke);
+  stroke: none;
+  transition: fill var(--sa-duration-fast) var(--sa-ease);
+}
+
+.sa-flow .react-flow__edge-text {
+  font-family: var(--sa-font-sans);
+  font-size: 12px;
+  font-weight: var(--sa-weight-regular);
+}
+
+.sa-flow .react-flow__edge-textbg {
+  fill: var(--sa-edge-label-bg);
+}
+
+/* Hover */
+.sa-flow .react-flow__edge:hover .sa-edge-path {
+  stroke: var(--sa-edge-stroke-hover);
+}
+
+.sa-flow .react-flow__edge:hover .sa-edge-arrow {
+  fill: var(--sa-edge-stroke-hover);
+}
+
+/* React Flow paints focused edges as selected; we use a focus ring instead. */
+.sa-flow .react-flow__edge.selectable:focus:not(.selected) .sa-edge-path,
+.sa-flow .react-flow__edge.selectable:focus-visible:not(.selected) .sa-edge-path {
+  stroke: var(--sa-edge-stroke);
+}
+
+/* Selected */
+.sa-flow .react-flow__edge.selected .sa-edge-path {
+  stroke: var(--sa-edge-stroke-selected);
+  stroke-width: var(--sa-stroke-selected);
+}
+
+.sa-flow .react-flow__edge.selected .sa-edge-arrow {
+  fill: var(--sa-edge-stroke-selected);
+}
+
+.sa-flow .react-flow__edge.selected .react-flow__edge-textbg {
+  stroke: var(--sa-color-accent);
+  stroke-width: 1px;
+}
+
+/* Keyboard focus: ring around the label rectangle (9.1). */
+.sa-flow .react-flow__edge:focus-visible .react-flow__edge-textbg {
+  stroke: var(--sa-color-focus);
+  stroke-width: 2px;
+}
+
+/*
+ * Connection line while dragging from a handle (handoff 6): accent dashed line
+ * ending in an accent dot. Over an invalid target (pane, group, the source
+ * itself) it turns danger and the cursor becomes not-allowed.
+ */
+.sa-flow .react-flow__connection-path {
+  stroke: var(--sa-color-accent);
+  stroke-dasharray: 6 4;
+  stroke-width: var(--sa-stroke);
+}
+
+.sa-connection-line__dot {
+  fill: var(--sa-color-accent);
+}
+
+.sa-canvas[data-connecting="invalid"] .react-flow__connection-path,
+.sa-flow .react-flow__connection.invalid .react-flow__connection-path {
+  stroke: var(--sa-color-danger);
+}
+
+.sa-canvas[data-connecting="invalid"] .sa-connection-line__dot,
+.sa-flow .react-flow__connection.invalid .sa-connection-line__dot {
+  fill: var(--sa-color-danger);
+}
+
+.sa-canvas[data-connecting="invalid"],
+.sa-canvas[data-connecting="invalid"] * {
+  cursor: not-allowed !important;
+}
+
+.sa-canvas[data-connecting="valid"],
+.sa-canvas[data-connecting="valid"] * {
+  cursor: crosshair !important;
+}
+
+/* Escape cancelled the drag: hide the line until the pointer is released. */
+.sa-canvas[data-connecting="cancelled"] .react-flow__connectionline {
+  display: none;
+}
+
+/* ---- PNG export (TD 10): rest styles only ---------------------------------- */
+
+/* No transitions, so the rest styles apply in the same frame the image is captured. */
+.sa-exporting,
+.sa-exporting * {
+  transition: none !important;
+}
+
+.sa-exporting .react-flow__handle,
+.sa-exporting .react-flow__resize-control,
+.sa-exporting .react-flow__nodesselection,
+.sa-exporting .react-flow__selection {
+  display: none !important;
+}
+
+.sa-exporting .react-flow__node,
+.sa-exporting .react-flow__edge,
+.sa-exporting .sa-node {
+  outline: none !important;
+}
+
+.sa-exporting .sa-node[data-selected="true"] {
+  --sa-node-halo: 0 0 0 0 transparent;
+}
+
+.sa-exporting .react-flow__edge .sa-edge-path,
+.sa-exporting .react-flow__edge:hover .sa-edge-path {
+  stroke: var(--sa-edge-stroke) !important;
+  stroke-width: var(--sa-stroke) !important;
+}
+
+.sa-exporting .react-flow__edge .sa-edge-arrow {
+  fill: var(--sa-edge-stroke) !important;
+}
+
+.sa-exporting .react-flow__edge .react-flow__edge-textbg {
+  stroke: none !important;
+}
+
+.sa-exporting .sa-group[data-selected="true"] .sa-group__outline-stroke {
+  stroke: var(--sa-group-border);
+  stroke-dasharray: 8 4;
+  stroke-width: var(--sa-stroke);
+}
+
+.sa-exporting .sa-group[data-selected="true"] .sa-group__header {
+  background: var(--sa-group-header-fill);
+}
+
+.sa-exporting .react-flow__node-component:hover .sa-node:not([data-type="decision"]) {
+  border-color: var(--sa-node-ink);
+}
+
+/* ---- Reduced motion and forced colours (handoff 4, 9.3) -------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-node,
+  .sa-edge-arrow,
+  .sa-flow .react-flow__edge-path.sa-edge-path,
+  .sa-flow .react-flow__handle.sa-handle {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .sa-node {
+    border-color: CanvasText;
+  }
+
+  .sa-node[data-type="decision"] .sa-node__frame {
+    background: CanvasText;
+  }
+
+  .sa-node[data-selected="true"] {
+    outline-color: Highlight;
+  }
+
+  .sa-flow .react-flow__edge-path.sa-edge-path,
+  .sa-group__outline-stroke {
+    stroke: CanvasText;
+  }
+
+  .sa-edge-arrow {
+    fill: CanvasText;
+  }
+
+  .sa-flow .react-flow__connection-path {
+    stroke: Highlight;
+  }
+
+  .sa-connection-line__dot {
+    fill: Highlight;
+  }
+
+  .sa-flow .react-flow__edge.selected .sa-edge-path,
+  .sa-group[data-selected="true"] .sa-group__outline-stroke {
+    stroke: Highlight;
+  }
+
+  .sa-flow .react-flow__edge.selected .sa-edge-arrow {
+    fill: Highlight;
+  }
+}

@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+node_modules/.tmp/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
