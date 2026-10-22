@@ -191,6 +191,19 @@ button:disabled {
   margin-top: var(--sa-space-6);
 }
 
+/* Inline failure inside a dialog: a full-width line above the buttons (CD7). */
+.sa-dialog__error {
+  display: flex;
+  flex-basis: 100%;
+  align-items: flex-start;
+  gap: var(--sa-space-2);
+  margin: 0;
+  padding: var(--sa-space-3);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-color-danger-soft);
+  color: var(--sa-color-danger);
+}
+
 .sa-toast-region {
   position: fixed;
   z-index: 1000;

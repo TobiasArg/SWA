@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { DialogHTMLAttributes } from "react";
 
 export interface DialogProps
@@ -7,6 +7,8 @@ export interface DialogProps
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  /** When false, Escape cannot close the dialog (busy confirmations, UI_COLOR_CONFIRMATION_DESIGN CD6). */
+  dismissible?: boolean;
   onClose: () => void;
 }
 
@@ -15,7 +17,9 @@ export function Dialog({
   title,
   description,
   actions,
+  dismissible = true,
   onClose,
+  onCancel,
   children,
   className,
   ...dialogProps
@@ -24,7 +28,8 @@ export function Dialog({
   const titleId = useId();
   const descriptionId = useId();
 
-  useEffect(() => {
+  // A layout effect, so a `flushSync` close takes the dialog out of the top layer immediately.
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
 
@@ -42,7 +47,21 @@ export function Dialog({
       className={className ? `sa-dialog ${className}` : "sa-dialog"}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      onClose={onClose}
+      onCancel={(event) => {
+        onCancel?.(event);
+        if (!dismissible) event.preventDefault();
+      }}
+      onClose={() => {
+        const dialog = dialogRef.current;
+        // `close` is dispatched as a task; if the dialog was reopened meanwhile, the event is stale.
+        if (dialog?.open) return;
+        // Browsers may skip a prevented `cancel` on repeated Escape; reopen instead of dismissing.
+        if (!dismissible && open && dialog) {
+          dialog.showModal();
+          return;
+        }
+        onClose();
+      }}
     >
       <header>
         <h2 className="sa-dialog__title" id={titleId}>

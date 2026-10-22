@@ -41,6 +41,15 @@ function sortRecords(records: StoredRecord[]): StoredRecord[] {
   return [...records].sort((a, b) => time(b) - time(a) || recordName(a).localeCompare(recordName(b)));
 }
 
+function recordKey(record: StoredRecord): string {
+  return record.status === "ok" ? record.file.architecture.id : record.id;
+}
+
+/** Where focus goes once the delete dialog has closed (UI_COLOR_CONFIRMATION_DESIGN CD8). */
+type DeleteFocus =
+  | { kind: "cancelled"; key: string }
+  | { kind: "deleted"; key: string; candidates: string[] };
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -72,9 +81,13 @@ export function LibraryScreen({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
   const [busy, setBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [importIssues, setImportIssues] = useState<ValidationIssue[] | null>(null);
   const [noticeDismissed, setNoticeDismissed] = useState(readDismissed);
   const fileInput = useRef<HTMLInputElement>(null);
+  const newArchitectureButton = useRef<HTMLButtonElement>(null);
+  const deleteFocus = useRef<DeleteFocus | null>(null);
+  const removing = useRef(false);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
@@ -146,13 +159,71 @@ export function LibraryScreen({
       await load();
     });
 
-  const remove = (record: StoredRecord) =>
-    run(async () => {
-      await repository.remove(record.status === "ok" ? record.file.architecture.id : record.id);
-      closeDialog();
-      announce(`Deleted ${recordName(record)}.`);
+  const openDelete = (record: StoredRecord) => {
+    setDeleteError(null);
+    setDialog({ kind: "delete", record });
+  };
+
+  const cancelDelete = (record: StoredRecord) => {
+    deleteFocus.current = { kind: "cancelled", key: recordKey(record) };
+    setDeleteError(null);
+    closeDialog();
+  };
+
+  // Not undoable, so failures stay in the dialog instead of a toast behind the backdrop (CD7).
+  const remove = async (record: StoredRecord) => {
+    if (removing.current) return;
+    removing.current = true;
+    const key = recordKey(record);
+    const keys = (records ?? []).map(recordKey);
+    const index = keys.indexOf(key);
+    const candidates = index < 0 ? [] : [keys[index + 1], keys[index - 1]].filter((k): k is string => k !== undefined);
+    setDeleteError(null);
+    setBusy(true);
+    try {
+      await repository.remove(key);
+    } catch (error) {
+      removing.current = false;
+      if (mounted.current) {
+        setDeleteError(`The architecture could not be deleted (${errorMessage(error)}).`);
+        setBusy(false);
+      }
+      return;
+    }
+    removing.current = false;
+    if (!mounted.current) return;
+    deleteFocus.current = { kind: "deleted", key, candidates };
+    closeDialog();
+    announce(`Deleted ${recordName(record)}.`);
+    try {
       await load();
-    });
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  };
+
+  // Focus never falls to <body> after the delete dialog closes (CD8). Runs once the dialog is
+  // closed, the controls are enabled again and, after a delete, the row is gone from the list.
+  useEffect(() => {
+    const request = deleteFocus.current;
+    if (!request || dialog.kind !== "none" || busy) return;
+    const rowFor = (key: string) => document.querySelector<HTMLElement>(`tr[data-record-id="${CSS.escape(key)}"]`);
+    if (request.kind === "cancelled") {
+      deleteFocus.current = null;
+      rowFor(request.key)?.querySelector<HTMLElement>(".sa-button--destructive-outline")?.focus();
+      return;
+    }
+    if (records?.some((record) => recordKey(record) === request.key)) return;
+    deleteFocus.current = null;
+    for (const key of request.candidates) {
+      const target = rowFor(key)?.querySelector<HTMLElement>("a[href], button");
+      if (target) {
+        target.focus();
+        return;
+      }
+    }
+    newArchitectureButton.current?.focus();
+  }, [busy, dialog, records]);
 
   const exportRecord = (record: StoredRecord) => {
     if (record.status === "ok") services.exportArchitectureJson(record.file.architecture);
@@ -192,7 +263,12 @@ export function LibraryScreen({
               <Button onClick={startImport} disabled={busy}>
                 Import JSON
               </Button>
-              <Button variant="primary" onClick={() => setDialog({ kind: "create" })} disabled={busy}>
+              <Button
+                ref={newArchitectureButton}
+                variant="primary"
+                onClick={() => setDialog({ kind: "create" })}
+                disabled={busy}
+              >
                 New architecture
               </Button>
             </div>
@@ -242,7 +318,12 @@ export function LibraryScreen({
               Create an architecture to start mapping agents, tools and data stores, or import a JSON file.
             </p>
             <div className="sa-library__empty-actions">
-              <Button variant="primary" onClick={() => setDialog({ kind: "create" })} disabled={busy}>
+              <Button
+                ref={newArchitectureButton}
+                variant="primary"
+                onClick={() => setDialog({ kind: "create" })}
+                disabled={busy}
+              >
                 New architecture
               </Button>
               <Button onClick={startImport} disabled={busy}>
@@ -284,7 +365,7 @@ export function LibraryScreen({
                         onDuplicate={(file) => void duplicate(file)}
                         onExport={exportRecord}
                         onExportMarkdown={(file) => services.exportArchitectureMarkdown(file.architecture)}
-                        onDelete={(target) => setDialog({ kind: "delete", record: target })}
+                        onDelete={openDelete}
                       />
                     ))}
               </tbody>
@@ -333,16 +414,16 @@ export function LibraryScreen({
       <ConfirmDialog
         open={dialog.kind === "delete"}
         title={dialog.kind === "delete" ? `Delete '${recordName(dialog.record)}'?` : "Delete architecture?"}
+        description="This cannot be undone. Export it to JSON first if you want a backup."
         busy={busy}
-        onCancel={closeDialog}
+        error={deleteError}
+        onCancel={() => {
+          if (dialog.kind === "delete") cancelDelete(dialog.record);
+        }}
         onConfirm={() => {
           if (dialog.kind === "delete") void remove(dialog.record);
         }}
-      >
-        <p className="sa-library__confirm-text">
-          This cannot be undone. Export it to JSON first if you want a backup.
-        </p>
-      </ConfirmDialog>
+      />
       <ImportErrorDialog issues={importIssues} onClose={() => setImportIssues(null)} />
     </div>
   );
