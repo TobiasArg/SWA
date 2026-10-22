@@ -28,7 +28,10 @@ describe("GroupInspector", () => {
     const { store, actions } = renderInspector(fixture(), { groupIds: ["grp_a"] });
 
     expect(screen.getByText("Members (2)")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Remove Web Search from group" }));
+    const remove = screen.getByRole("button", { name: "Remove from group: Web Search" });
+    expect(remove).toHaveTextContent("Remove from group");
+    expect(remove.getAttribute("aria-label")).toContain(remove.textContent);
+    await user.click(remove);
     expect(store.dispatched.at(-1)?.command).toEqual({
       kind: "assignToGroup",
       componentIds: ["cmp_tool"],
