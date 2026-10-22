@@ -90,13 +90,15 @@
 }
 
 /*
- * Per-node variables (UI v2 §4.1). Type rules set only --sa-node-ink and
- * --sa-node-fill; accent rules set only the border and chip variables, so the
- * two never compete on specificity. Text never takes an accent.
+ * Per-node variables (UI_COLOR_CONFIRMATION_DESIGN §1.3, §1.4). The node's one
+ * effective palette entry (`data-palette`, see tokens.css) supplies fill and ink
+ * together; this is the only rule that maps it. Type rules set geometry only,
+ * never color, so a type can never override a selected color. Text never takes
+ * the fill. The fallback is the neutral External pair.
  */
 .sa-node {
-  --sa-node-ink: var(--sa-type-agent-ink);
-  --sa-node-fill: var(--sa-type-agent-fill);
+  --sa-node-ink: var(--sa-palette-ink, var(--sa-type-external-ink));
+  --sa-node-fill: var(--sa-palette-fill, var(--sa-type-external-fill));
   --sa-node-border: var(--sa-node-ink);
   --sa-node-chip-fill: var(--sa-node-surface);
   --sa-node-chip-ink: var(--sa-node-ink);
@@ -113,48 +115,8 @@
 }
 
 .sa-node[data-subtype="orchestrator"] {
-  --sa-node-ink: var(--sa-type-orchestrator-ink);
-  --sa-node-fill: var(--sa-type-orchestrator-fill);
   --sa-node-stroke-rest: 2px; /* ORCHESTRATOR_STROKE */
 }
-
-.sa-node[data-type="tool"] {
-  --sa-node-ink: var(--sa-type-tool-ink);
-  --sa-node-fill: var(--sa-type-tool-fill);
-}
-
-.sa-node[data-type="memory"] {
-  --sa-node-ink: var(--sa-type-memory-ink);
-  --sa-node-fill: var(--sa-type-memory-fill);
-}
-
-.sa-node[data-type="external_system"] {
-  --sa-node-ink: var(--sa-type-external-ink);
-  --sa-node-fill: var(--sa-type-external-fill);
-}
-
-.sa-node[data-type="decision"] {
-  --sa-node-ink: var(--sa-type-decision-ink);
-  --sa-node-fill: var(--sa-type-decision-fill);
-}
-
-/* Accent (UI v2 §2.3, §4.1): silhouette stroke, chip ring and glyph, chip tint, Memory rim. */
-.sa-node[data-accent="tomato"] { --sa-node-border: var(--sa-accent-tomato-ink); --sa-node-chip-ink: var(--sa-accent-tomato-ink); --sa-node-chip-fill: var(--sa-accent-tomato-tint); }
-.sa-node[data-accent="coral"] { --sa-node-border: var(--sa-accent-coral-ink); --sa-node-chip-ink: var(--sa-accent-coral-ink); --sa-node-chip-fill: var(--sa-accent-coral-tint); }
-.sa-node[data-accent="tangerine"] { --sa-node-border: var(--sa-accent-tangerine-ink); --sa-node-chip-ink: var(--sa-accent-tangerine-ink); --sa-node-chip-fill: var(--sa-accent-tangerine-tint); }
-.sa-node[data-accent="mustard"] { --sa-node-border: var(--sa-accent-mustard-ink); --sa-node-chip-ink: var(--sa-accent-mustard-ink); --sa-node-chip-fill: var(--sa-accent-mustard-tint); }
-.sa-node[data-accent="olive"] { --sa-node-border: var(--sa-accent-olive-ink); --sa-node-chip-ink: var(--sa-accent-olive-ink); --sa-node-chip-fill: var(--sa-accent-olive-tint); }
-.sa-node[data-accent="fern"] { --sa-node-border: var(--sa-accent-fern-ink); --sa-node-chip-ink: var(--sa-accent-fern-ink); --sa-node-chip-fill: var(--sa-accent-fern-tint); }
-.sa-node[data-accent="mint"] { --sa-node-border: var(--sa-accent-mint-ink); --sa-node-chip-ink: var(--sa-accent-mint-ink); --sa-node-chip-fill: var(--sa-accent-mint-tint); }
-.sa-node[data-accent="teal"] { --sa-node-border: var(--sa-accent-teal-ink); --sa-node-chip-ink: var(--sa-accent-teal-ink); --sa-node-chip-fill: var(--sa-accent-teal-tint); }
-.sa-node[data-accent="lagoon"] { --sa-node-border: var(--sa-accent-lagoon-ink); --sa-node-chip-ink: var(--sa-accent-lagoon-ink); --sa-node-chip-fill: var(--sa-accent-lagoon-tint); }
-.sa-node[data-accent="sky"] { --sa-node-border: var(--sa-accent-sky-ink); --sa-node-chip-ink: var(--sa-accent-sky-ink); --sa-node-chip-fill: var(--sa-accent-sky-tint); }
-.sa-node[data-accent="denim"] { --sa-node-border: var(--sa-accent-denim-ink); --sa-node-chip-ink: var(--sa-accent-denim-ink); --sa-node-chip-fill: var(--sa-accent-denim-tint); }
-.sa-node[data-accent="indigo"] { --sa-node-border: var(--sa-accent-indigo-ink); --sa-node-chip-ink: var(--sa-accent-indigo-ink); --sa-node-chip-fill: var(--sa-accent-indigo-tint); }
-.sa-node[data-accent="lavender"] { --sa-node-border: var(--sa-accent-lavender-ink); --sa-node-chip-ink: var(--sa-accent-lavender-ink); --sa-node-chip-fill: var(--sa-accent-lavender-tint); }
-.sa-node[data-accent="plum"] { --sa-node-border: var(--sa-accent-plum-ink); --sa-node-chip-ink: var(--sa-accent-plum-ink); --sa-node-chip-fill: var(--sa-accent-plum-tint); }
-.sa-node[data-accent="rose"] { --sa-node-border: var(--sa-accent-rose-ink); --sa-node-chip-ink: var(--sa-accent-rose-ink); --sa-node-chip-fill: var(--sa-accent-rose-tint); }
-.sa-node[data-accent="cocoa"] { --sa-node-border: var(--sa-accent-cocoa-ink); --sa-node-chip-ink: var(--sa-accent-cocoa-ink); --sa-node-chip-fill: var(--sa-accent-cocoa-tint); }
 
 /* ---- Silhouette SVG (UI v2 §3.1) ------------------------------------------- */
 
@@ -182,9 +144,9 @@
   stroke-linecap: butt;
 }
 
-/* Orchestrator header band: always the orchestrator ink, never the accent. */
+/* Orchestrator header band: the effective ink (white on every ink is >= 4.5:1). */
 .sa-node__detail--band {
-  fill: var(--sa-type-orchestrator-ink);
+  fill: var(--sa-node-ink);
   stroke: none;
 }
 
@@ -194,9 +156,10 @@
   stroke-width: 1px;
 }
 
-/* External hatch: texture, not border; never accented. */
+/* External hatch: a faint ink texture, not border; the dashed stroke is the cue. */
 .sa-node__detail--hatch {
-  stroke: var(--sa-type-external-hatch);
+  stroke: var(--sa-node-ink);
+  stroke-opacity: 0.16;
   stroke-width: 1px;
 }
 
@@ -222,7 +185,7 @@
   display: inline;
 }
 
-/* Hover: thicker stroke in the same colour, so the accent stays visible. */
+/* Hover: thicker stroke in the same colour, so the palette ink stays visible. */
 .sa-flow .react-flow__node-component:hover .sa-node__body {
   stroke-width: 2.25px; /* NODE_STROKE_HOVER */
 }

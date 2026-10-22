@@ -44,11 +44,10 @@
   --sa-type-memory-fill: #EBF4EE;
   --sa-type-external-ink: #57534C;
   --sa-type-external-fill: #F1EFEA;
-  --sa-type-external-hatch: #E4E0D7;
   --sa-type-decision-ink: #6C3D74;
   --sa-type-decision-fill: #F5EEF6;
 
-  /* Component accents (UI v2 §2.3): ink = stroke and glyph, tint = icon chip. Never text. */
+  /* Component accents (UI v2 §2.3, UI_COLOR_CONFIRMATION_DESIGN §1.4): tint = node fill, ink = stroke, logo and type label. */
   --sa-accent-tomato-ink: #B23A2B;
   --sa-accent-tomato-tint: #FADCD6;
   --sa-accent-coral-ink: #A8452F;

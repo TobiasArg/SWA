@@ -1,6 +1,7 @@
 import { memo, useCallback, type CSSProperties } from "react";
 import { Handle, NodeResizer, Position, type NodeProps, type OnResizeEnd } from "@xyflow/react";
 import { DEFAULT_SIZE, MAX_SIZE, MIN_SIZE, isAccentId } from "../../domain/constants";
+import { effectivePaletteId } from "../../domain/palette";
 import type { Component } from "../../domain/types";
 import { Icon, type IconName } from "../../ui/icons";
 import type { ComponentFlowNode } from "../flowTypes";
@@ -44,9 +45,10 @@ const HANDLE_POSITION: Record<PortSide, Position> = {
  * A component node (UI v2 §3, §4, §7). The silhouette is one inline SVG (halo,
  * selection outline, body, type details) built from the pure geometry in
  * shapes.ts, with no url(#...) references so PNG export needs no ID resolution.
- * Per-type and accent styling is selected in canvas.css through `data-type`,
- * `data-subtype` and `data-accent`; `data-accent` is only ever a validated
- * accent ID, never user text (TD 3.4).
+ * Color comes only from `data-palette`, the one effective palette entry
+ * (UI_COLOR_CONFIRMATION_DESIGN §1.3); `data-type` and `data-subtype` select
+ * geometry only. `data-accent` mirrors the stored choice for tests and is read
+ * by no CSS rule. Both are only ever validated IDs, never user text (TD 3.4).
  *
  * Four `source` ports (connection mode is Loose) are always rendered so React
  * Flow can measure them. Each sits exactly on the outline at `portAnchor(...)`;
@@ -85,6 +87,7 @@ function ComponentNodeView({ id, data, selected, isConnectable, width, height }:
       data-type={component.type}
       data-subtype={component.subtype}
       data-accent={accent}
+      data-palette={effectivePaletteId(component)}
       data-shape={kind}
       data-selected={selected ? "true" : undefined}
       data-connect-target={connectTarget ? "true" : undefined}

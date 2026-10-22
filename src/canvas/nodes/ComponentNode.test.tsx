@@ -15,7 +15,7 @@ import { buildFixtureArchitecture } from "../testing/fixtures";
 
 // Vitest replaces CSS imports (including ?raw) with empty strings, so the
 // stylesheets are read from disk. jsdom cannot compute custom properties from
-// stylesheets either, so the accent tests resolve var() chains from the rule text.
+// stylesheets either, so the palette tests resolve var() chains from the rule text.
 let tokensCss = "";
 let canvasCss = "";
 let rootTokens: Record<string, string> = {};
@@ -94,12 +94,15 @@ function declarations(body: string): Record<string, string> {
 }
 
 
-/** Resolves a var() chain against :root tokens (jsdom does not compute custom properties). */
+/**
+ * Resolves a var() chain (with an optional fallback) against `scope`, then :root
+ * tokens (jsdom does not compute custom properties).
+ */
 function resolveToken(value: string, scope: Record<string, string> = {}): string {
-  const match = /^var\((--[\w-]+)\)$/.exec(value.trim());
+  const match = /^var\((--[\w-]+)(?:,\s*(.+))?\)$/.exec(value.trim());
   if (!match) return value.trim();
   const name = match[1]!;
-  const next = scope[name] ?? rootTokens[name];
+  const next = scope[name] ?? rootTokens[name] ?? match[2];
   expect(next, `token ${name}`).toBeDefined();
   return resolveToken(next!, scope);
 }
@@ -153,7 +156,24 @@ describe("ComponentNode silhouettes", () => {
   });
 });
 
-describe("ComponentNode accent", () => {
+describe("ComponentNode palette (UI_COLOR_CONFIRMATION_DESIGN §1)", () => {
+  const TYPE_NODES: Record<string, string> = {
+    cmp_discovery: "type-agent",
+    cmp_orch: "type-orchestrator",
+    cmp_search: "type-tool",
+    cmp_store: "type-memory",
+    cmp_crm: "type-external",
+    cmp_router: "type-decision",
+  };
+
+  /** Per-node custom properties for one palette entry: `.sa-node` plus its `[data-palette]` rule. */
+  function nodeScope(palette: string): Record<string, string> {
+    return {
+      ...declarations(ruleBody(tokensCss, `[data-palette="${palette}"]`)),
+      ...declarations(ruleBody(canvasCss, ".sa-node")),
+    };
+  }
+
   it("sets data-accent only for valid accent IDs and keeps aria-labels free of colour words", () => {
     const { node, container } = renderNodes();
     expect(node("cmp_discovery")).toHaveAttribute("data-accent", "teal");
@@ -167,12 +187,25 @@ describe("ComponentNode accent", () => {
     }
   });
 
-  it("never renders data-accent on groups", () => {
+  it("sets data-palette to the effective entry: the accent, else the type default", () => {
+    const { node } = renderNodes();
+    expect(node("cmp_discovery")).toHaveAttribute("data-palette", "teal");
+    expect(node("cmp_orch")).toHaveAttribute("data-palette", "tomato");
+    expect(node("cmp_crm")).toHaveAttribute("data-palette", "indigo");
+    expect(node("cmp_store")).toHaveAttribute("data-palette", "fern");
+    // Invalid accent falls back to the type default.
+    expect(node("cmp_search")).toHaveAttribute("data-palette", "type-tool");
+    expect(node("cmp_router")).toHaveAttribute("data-palette", "type-decision");
+  });
+
+  it("AC-C8: never renders data-palette or data-accent on groups", () => {
     const { container } = renderNodes();
     const groups = container.querySelectorAll(".react-flow__node-group-container");
     expect(groups.length).toBeGreaterThan(0);
     for (const group of Array.from(groups)) {
       expect(group.querySelector("[data-accent]")).toBeNull();
+      expect(group.querySelector("[data-palette]")).toBeNull();
+      expect(group.closest("[data-palette]")).toBeNull();
     }
   });
 
@@ -183,39 +216,100 @@ describe("ComponentNode accent", () => {
     }
   });
 
-  it("teal: the body stroke resolves to #106A6E while fill, label and text keep the type style", () => {
-    const { node } = renderNodes();
-    const accented = node("cmp_discovery");
-    expect(accented.querySelector(".sa-node__body")).not.toBeNull();
-
-    const base = declarations(ruleBody(canvasCss, ".sa-node"));
-    const teal = { ...base, ...declarations(ruleBody(canvasCss, '.sa-node[data-accent="teal"]')) };
-    const body = declarations(ruleBody(canvasCss, ".sa-node__body"));
-
-    expect(body.fill).toBe("var(--sa-node-fill)");
-    expect(body.stroke).toBe("var(--sa-node-border)");
-    expect(resolveToken(teal["--sa-node-border"]!, teal)).toBe("#106A6E");
-    expect(resolveToken(teal["--sa-node-fill"]!, teal)).toBe(rootTokens["--sa-type-agent-fill"]);
-    expect(resolveToken(teal["--sa-node-label-ink"]!, teal)).toBe(rootTokens["--sa-type-agent-ink"]);
-    expect(resolveToken(teal["--sa-node-chip-fill"]!, teal)).toBe("#C9EAEA");
-    // Accent rules touch only border and chip variables, never fill or text.
-    for (const id of ACCENT_IDS) {
-      const keys = Object.keys(declarations(ruleBody(canvasCss, `.sa-node[data-accent="${id}"]`))).sort();
-      expect(keys).toEqual(["--sa-node-border", "--sa-node-chip-fill", "--sa-node-chip-ink"]);
+  it("AC-C4: only .sa-node maps the palette, and no rule selects on data-accent", () => {
+    expect(canvasCss).not.toContain("[data-accent");
+    const nodeVars = /(--sa-node-(?:ink|fill|border|chip-[\w-]+|label-ink))\s*:/g;
+    const rules = canvasCss.replace(/\/\*[\s\S]*?\*\//g, "").split("}");
+    for (const rule of rules) {
+      const [selector = "", body = ""] = rule.split("{");
+      if (!nodeVars.test(body)) continue;
+      nodeVars.lastIndex = 0;
+      expect(selector.trim(), `rule declaring ${body.match(nodeVars)}`).toBe(".sa-node");
     }
-    const name = declarations(ruleBody(canvasCss, ".sa-node__name"));
-    expect(name.color).toBeUndefined();
+    // Neither ports, edges nor groups read a palette variable: only .sa-node does.
+    const paletteReaders = rules
+      .filter((rule) => rule.includes("--sa-palette-"))
+      .map((rule) => rule.split("{")[0]!.trim());
+    expect(paletteReaders).toEqual([".sa-node"]);
   });
 
-  it("orchestrator band stays the orchestrator ink with an accent", () => {
+  it("AC-C5: teal drives fill, border, chip, label, rim and band on every type; the chip plate stays white", () => {
     const { node } = renderNodes();
-    expect(node("cmp_orch")).toHaveAttribute("data-accent", "tomato");
-    const band = node("cmp_orch").querySelector('[data-detail="band"]')!;
-    expect(band).toHaveClass("sa-node__detail--band");
-    const bandRule = declarations(ruleBody(canvasCss, ".sa-node__detail--band"));
-    expect(resolveToken(bandRule.fill!)).toBe("#1D3557");
-    const hatchRule = declarations(ruleBody(canvasCss, ".sa-node__detail--hatch"));
-    expect(hatchRule.stroke).toBe("var(--sa-type-external-hatch)");
+    expect(node("cmp_discovery")).toHaveAttribute("data-palette", "teal");
+    const scope = nodeScope("teal");
+    const resolve = (property: string) => resolveToken(scope[property]!, scope);
+    expect(resolve("--sa-node-fill")).toBe("#C9EAEA");
+    for (const property of ["--sa-node-ink", "--sa-node-border", "--sa-node-chip-ink", "--sa-node-label-ink"]) {
+      expect(resolve(property), property).toBe("#106A6E");
+    }
+    expect(resolve("--sa-node-chip-fill")).toBe("#FFFFFF");
+
+    const body = declarations(ruleBody(canvasCss, ".sa-node__body"));
+    expect(body.fill).toBe("var(--sa-node-fill)");
+    expect(body.stroke).toBe("var(--sa-node-border)");
+    const band = declarations(ruleBody(canvasCss, ".sa-node__detail--band"));
+    expect(resolveToken(band.fill!, scope)).toBe("#106A6E");
+    const rim = declarations(ruleBody(canvasCss, ".sa-node__detail--rim"));
+    expect(resolveToken(rim.stroke!, scope)).toBe("#106A6E");
+    const hatch = declarations(ruleBody(canvasCss, ".sa-node__detail--hatch"));
+    expect(resolveToken(hatch.stroke!, scope)).toBe("#106A6E");
+    expect(hatch["stroke-opacity"]).toBe("0.16");
+    // Text never takes the fill; the name keeps the inherited text color.
+    expect(declarations(ruleBody(canvasCss, ".sa-node__name")).color).toBeUndefined();
+    // The Orchestrator type row stays white on the band.
+    const orchRow = declarations(ruleBody(canvasCss, '.sa-node[data-subtype="orchestrator"] .sa-node__type'));
+    expect(resolveToken(orchRow.color!)).toBe("#FFFFFF");
+  });
+
+  it("AC-C6: without an accent each type resolves to its existing type ink and fill", () => {
+    const { node } = renderNodes();
+    expect(node("cmp_router")).toHaveAttribute("data-palette", "type-decision");
+    for (const palette of Object.values(TYPE_NODES)) {
+      const type = palette.slice("type-".length);
+      const scope = nodeScope(palette);
+      expect(resolveToken(scope["--sa-node-ink"]!, scope), palette).toBe(rootTokens[`--sa-type-${type}-ink`]);
+      expect(resolveToken(scope["--sa-node-fill"]!, scope), palette).toBe(rootTokens[`--sa-type-${type}-fill`]);
+    }
+  });
+
+  it("AC-C7: shape, details, dash source, icon and type label do not change with any accent", () => {
+    const signature = (accent?: string) => {
+      const architecture = buildFixtureArchitecture();
+      architecture.components = architecture.components.map((component) => {
+        const { accent: _drop, ...rest } = component;
+        return (accent ? { ...rest, accent } : rest) as Component;
+      });
+      const { container, unmount } = render(
+        <EditorProvider store={createFakeStore(architecture)}>
+          <div style={{ width: 800, height: 600 }}>
+            <CanvasView />
+          </div>
+        </EditorProvider>,
+      );
+      const result = Object.keys(TYPE_NODES).map((id) => {
+        const el = container.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"] .sa-node`)!;
+        expect(el).toHaveAttribute("data-palette", accent ?? TYPE_NODES[id]);
+        return {
+          id,
+          shape: el.dataset.shape,
+          type: el.dataset.type,
+          subtype: el.dataset.subtype,
+          details: Array.from(el.querySelectorAll("[data-detail]")).map((d) => d.getAttribute("data-detail")),
+          icon: el.querySelector(".sa-node__icon")!.outerHTML,
+          label: el.querySelector(".sa-node__type-label")!.textContent,
+        };
+      });
+      unmount();
+      return result;
+    };
+    const baseline = signature();
+    for (const accent of ACCENT_IDS) {
+      expect(signature(accent), accent).toEqual(baseline);
+    }
+    // The dash pattern is keyed on data-type only.
+    expect(declarations(ruleBody(canvasCss, '.sa-node[data-type="external_system"] .sa-node__body'))).toEqual({
+      "stroke-dasharray": "6 4",
+    });
   });
 });
 
