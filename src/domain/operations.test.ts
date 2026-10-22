@@ -3,6 +3,8 @@ import { DomainError, type Command } from "./commands";
 import { computeGroupBounds } from "./geometry";
 import { applyCommand } from "./operations";
 import type { Architecture, Component, Group, Relationship } from "./types";
+import { createEditorStore } from "../editor/store";
+import { DEFAULT_COMMAND_LABELS } from "../editor/commandLabels";
 
 function component(
   id: string,
@@ -564,5 +566,130 @@ describe("applyCommand: group commands and deletion", () => {
     expect(result.architecture.components).toBe(input.components);
     expect(result.architecture.relationships).toBe(input.relationships);
     expect(result.architecture.groups).toEqual([]);
+  });
+});
+
+describe("applyCommand: diagram restore", () => {
+  it("replaces only the diagram arrays, preserves library metadata, and isolates snapshot data", () => {
+    const input = architecture({
+      description: "Library description",
+      canvas: { viewport: { x: 120, y: -40, zoom: 1.25 } },
+    });
+    const before = structuredClone(input);
+    const components = [
+      component("cmp_version_a", "agent", { x: 40, y: 60 }, { behavior: { responsibilities: ["coordinate"] } }),
+      component("cmp_version_b", "tool", { x: 280, y: 80 }),
+    ];
+    const relationships = [
+      relationship("rel_version", "cmp_version_a", "cmp_version_b", {
+        visual: { ports: { source: "top" }, custom: { enabled: true } },
+      }),
+    ];
+    const groups = [group("grp_version", ["cmp_version_a"], components.slice(0, 1))];
+    const result = applyCommand(input, {
+      kind: "restoreDiagram",
+      components,
+      relationships,
+      groups,
+    }).architecture;
+
+    expect(result).toMatchObject({
+      id: input.id,
+      name: input.name,
+      description: input.description,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+      canvas: input.canvas,
+    });
+    expect(result.components).toEqual(components);
+    expect(result.relationships).toEqual(relationships);
+    expect(result.groups).toEqual(groups);
+    expect(input).toEqual(before);
+
+    components[0]!.position.x = 999;
+    components[0]!.behavior!.responsibilities![0] = "changed";
+    (relationships[0]!.visual!.ports as { source: string }).source = "bottom";
+    groups[0]!.memberComponentIds[0] = "cmp_version_b";
+    groups[0]!.bounds.x = 999;
+    expect(result.components[0]?.position.x).toBe(40);
+    expect(result.components[0]?.behavior?.responsibilities).toEqual(["coordinate"]);
+    expect((result.relationships[0]?.visual?.ports as { source: string }).source).toBe("top");
+    expect(result.groups[0]?.memberComponentIds).toEqual(["cmp_version_a"]);
+    expect(result.groups[0]?.bounds.x).not.toBe(999);
+  });
+
+  it("rejects an invalid candidate with E_INVALID_RESTORE without changing the architecture", () => {
+    const input = architecture();
+    const before = structuredClone(input);
+    const command: Command = {
+      kind: "restoreDiagram",
+      components: [component("cmp_version")],
+      relationships: [relationship("rel_dangling", "cmp_version", "missing")],
+      groups: [],
+    };
+
+    expectDomainError(input, command, "E_INVALID_RESTORE");
+    expect(input).toEqual(before);
+  });
+
+  it("restores in one store undo step and can redo the restored diagram", () => {
+    const original = architecture({
+      description: "Keep this description",
+      canvas: { viewport: { x: 15, y: 25, zoom: 1.5 } },
+    });
+    const restoredComponents = [component("cmp_version", "memory", { x: 90, y: 120 })];
+    const restoredRelationships: Relationship[] = [];
+    const restoredGroups = [group("grp_version", ["cmp_version"], restoredComponents)];
+    const timestamps = ["restored-at", "undone-at", "redone-at"];
+    const store = createEditorStore(original, () => timestamps.shift() ?? "unexpected");
+
+    expect(DEFAULT_COMMAND_LABELS.restoreDiagram).toBe("Restore version");
+    const dispatched = store.dispatch({
+      kind: "restoreDiagram",
+      components: restoredComponents,
+      relationships: restoredRelationships,
+      groups: restoredGroups,
+    });
+    expect(dispatched.ok).toBe(true);
+    expect(store.getState().architecture).toMatchObject({
+      id: original.id,
+      name: original.name,
+      description: original.description,
+      createdAt: original.createdAt,
+      updatedAt: "restored-at",
+      canvas: original.canvas,
+      components: restoredComponents,
+      relationships: restoredRelationships,
+      groups: restoredGroups,
+    });
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false });
+
+    store.undo();
+    expect(store.getState().architecture).toMatchObject({
+      id: original.id,
+      name: original.name,
+      description: original.description,
+      createdAt: original.createdAt,
+      updatedAt: "undone-at",
+      canvas: original.canvas,
+      components: original.components,
+      relationships: original.relationships,
+      groups: original.groups,
+    });
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true });
+
+    store.redo();
+    expect(store.getState().architecture).toMatchObject({
+      id: original.id,
+      name: original.name,
+      description: original.description,
+      createdAt: original.createdAt,
+      updatedAt: "redone-at",
+      canvas: original.canvas,
+      components: restoredComponents,
+      relationships: restoredRelationships,
+      groups: restoredGroups,
+    });
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false });
   });
 });

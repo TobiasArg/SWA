@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ArchitectureFile } from "../domain/types";
 import { validArchitectureFixture } from "../domain/validation/__fixtures__/fixtureFactory";
-import { openDatabase } from "./db";
+import { DATABASE_VERSION, openDatabase } from "./db";
 import {
   DamagedRecordError,
   RecordNotFoundError,
   StorageUnavailableError,
   openRepository,
 } from "./repository";
+import { openSnapshotStore, type SnapshotStore } from "./snapshots";
 
 type TestRepository = Awaited<ReturnType<typeof openRepository>>;
 const openedRepositories: TestRepository[] = [];
+const openedSnapshotStores: SnapshotStore[] = [];
 
 async function createRepository(): Promise<TestRepository> {
   const repository = await openRepository(`repository-test-${globalThis.crypto.randomUUID()}`);
@@ -20,7 +22,9 @@ async function createRepository(): Promise<TestRepository> {
 
 afterEach(() => {
   openedRepositories.splice(0).forEach((repository) => repository.close());
+  openedSnapshotStores.splice(0).forEach((snapshots) => snapshots.close());
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("IndexedDB architecture repository", () => {
@@ -105,6 +109,86 @@ describe("IndexedDB architecture repository", () => {
     const stored = await repository.get(first.architecture.id);
 
     expect(stored?.status === "ok" && stored.file.architecture.name).toBe("Fixture Architecture");
+  });
+
+  it("removes an architecture and its snapshots atomically without touching other architectures", async () => {
+    const databaseName = `remove-cascade-${globalThis.crypto.randomUUID()}`;
+    const repository = await openRepository(databaseName);
+    openedRepositories.push(repository);
+    const snapshots = await openSnapshotStore(databaseName);
+    openedSnapshotStores.push(snapshots);
+    const first = validArchitectureFixture();
+    const other = structuredClone(first);
+    other.architecture.id = "arch_other_cascade";
+    other.architecture.name = "Another architecture";
+    await repository.put(first);
+    await repository.put(other);
+    await snapshots.capture(first, "manual");
+    await snapshots.capture(other, "manual");
+
+    await repository.remove(first.architecture.id);
+
+    expect(await repository.exists(first.architecture.id)).toBe(false);
+    expect(await repository.exists(other.architecture.id)).toBe(true);
+    expect(await snapshots.list(first.architecture.id)).toHaveLength(0);
+    expect(await snapshots.list(other.architecture.id)).toHaveLength(1);
+  });
+
+  it("rolls back the architecture deletion if the two-store cascade transaction aborts", async () => {
+    const databaseName = `remove-cascade-abort-${globalThis.crypto.randomUUID()}`;
+    const repository = await openRepository(databaseName);
+    openedRepositories.push(repository);
+    const snapshots = await openSnapshotStore(databaseName);
+    openedSnapshotStores.push(snapshots);
+    const file = validArchitectureFixture();
+    await repository.put(file);
+    const captured = await snapshots.capture(file, "manual");
+    expect(captured.status).toBe("created");
+
+    const originalDelete = IDBObjectStore.prototype.delete;
+    const deleteSpy = vi.spyOn(IDBObjectStore.prototype, "delete").mockImplementation(function (
+      this: IDBObjectStore,
+      key: IDBValidKey | IDBKeyRange,
+    ) {
+      const request = originalDelete.call(this, key);
+      if (this.name === "architectures") {
+        request.addEventListener(
+          "success",
+          () => {
+            try {
+              this.transaction.abort();
+            } catch {
+              // IndexedDB can already have aborted the transaction for this request.
+            }
+          },
+          { once: true },
+        );
+      }
+      return request;
+    });
+
+    await expect(repository.remove(file.architecture.id)).rejects.toBeDefined();
+    deleteSpy.mockRestore();
+
+    expect(await repository.exists(file.architecture.id)).toBe(true);
+    expect(await snapshots.list(file.architecture.id)).toHaveLength(1);
+  });
+
+  it("closes on a newer schema and rejects subsequent repository writes", async () => {
+    const databaseName = `repository-blocking-${globalThis.crypto.randomUUID()}`;
+    const statuses: string[] = [];
+    const repository = await openRepository(databaseName, { onStatus: (status) => statuses.push(status) });
+    openedRepositories.push(repository);
+    const request = indexedDB.open(databaseName, DATABASE_VERSION + 1);
+    const newerConnection = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onupgradeneeded = () => undefined;
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    expect(statuses).toContain("blocking");
+    await expect(repository.put(validArchitectureFixture())).rejects.toMatchObject({ name: "SaveError" });
+    newerConnection.close();
   });
 
   it("opens a stored v1 record unchanged and rewrites it as v2", async () => {

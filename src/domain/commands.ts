@@ -5,6 +5,7 @@ import type {
   Architecture,
   Component,
   Direction,
+  Group,
   Position,
   Relationship,
   RelationshipType,
@@ -13,6 +14,12 @@ import type {
 
 export type Command =
   | { kind: "addComponent"; component: Component }
+  | {
+      kind: "restoreDiagram";
+      components: Component[];
+      relationships: Relationship[];
+      groups: Group[];
+    }
   | { kind: "duplicateComponents"; items: { sourceId: string; newId: string }[] }
   | {
       kind: "deleteElements";

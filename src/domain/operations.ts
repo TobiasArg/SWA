@@ -14,6 +14,7 @@ import {
 import { isPortSide, type PortSide } from "./ports";
 import { DomainError, type Command, type CommandResult } from "./commands";
 import { computeGroupBounds, recomputeGroupBounds } from "./geometry";
+import { validateArchitecture } from "./validation/validate";
 import type {
   AgentBehavior,
   Architecture,
@@ -159,6 +160,76 @@ function copyRelationship(relationship: Relationship): Relationship {
   if (copy.label === undefined || copy.label === "") delete copy.label;
   if (copy.description === undefined || copy.description === "") delete copy.description;
   return copy;
+}
+
+function copyUnknownValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(copyUnknownValue);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [key, copyUnknownValue(nested)]),
+    );
+  }
+  return value;
+}
+
+function copyRestoredComponent(component: Component): Component {
+  return {
+    ...component,
+    position: { ...component.position },
+    ...(component.size === undefined ? {} : { size: { ...component.size } }),
+    ...(component.links === undefined ? {} : { links: component.links.map((link) => ({ ...link })) }),
+    ...(component.properties === undefined ? {} : { properties: { ...component.properties } }),
+    ...(component.behavior === undefined
+      ? {}
+      : {
+          behavior: Object.fromEntries(
+            Object.entries(component.behavior).map(([key, value]) => [
+              key,
+              Array.isArray(value) ? [...value] : value,
+            ]),
+          ) as AgentBehavior,
+        }),
+  };
+}
+
+function copyRestoredRelationship(relationship: Relationship): Relationship {
+  return {
+    ...relationship,
+    ...(relationship.visual === undefined
+      ? {}
+      : { visual: copyUnknownValue(relationship.visual) as Record<string, unknown> }),
+  };
+}
+
+function restoreDiagram(
+  architecture: Architecture,
+  components: Component[],
+  relationships: Relationship[],
+  groups: Group[],
+): Architecture {
+  const candidate: Architecture = {
+    ...architecture,
+    components: components.map(copyRestoredComponent),
+    relationships: relationships.map(copyRestoredRelationship),
+    groups: groups.map((group) => ({
+      ...group,
+      memberComponentIds: [...group.memberComponentIds],
+      bounds: { ...group.bounds },
+    })),
+  };
+  const issues = validateArchitecture(candidate);
+  if (issues.length > 0) {
+    fail("E_INVALID_RESTORE", `The version cannot be restored: ${issues.map((issue) => issue.message).join(" ")}`);
+  }
+
+  if (
+    JSON.stringify(architecture.components) === JSON.stringify(candidate.components) &&
+    JSON.stringify(architecture.relationships) === JSON.stringify(candidate.relationships) &&
+    JSON.stringify(architecture.groups) === JSON.stringify(candidate.groups)
+  ) {
+    return architecture;
+  }
+  return candidate;
 }
 
 function updateComponent(
@@ -745,6 +816,16 @@ export function applyCommand(architecture: Architecture, command: Command): Comm
         },
       };
     }
+
+    case "restoreDiagram":
+      return {
+        architecture: restoreDiagram(
+          architecture,
+          command.components,
+          command.relationships,
+          command.groups,
+        ),
+      };
 
     case "duplicateComponents": {
       const newIds = new Set<string>();
