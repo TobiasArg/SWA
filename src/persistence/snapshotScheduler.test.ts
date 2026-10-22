@@ -41,6 +41,7 @@ function createStoreHarness(architecture: Architecture, contentRevision = 0) {
     canRedo: false,
     revision: 0,
     contentRevision,
+    historyHeadId: null,
   };
   const listeners = new Set<() => void>();
   const store = {
