@@ -453,6 +453,7 @@ textarea.sa-input {
 }
 
 .sa-accent-picker__swatch {
+  position: relative;
   display: inline-flex;
   width: var(--sa-swatch-size);
   height: var(--sa-swatch-size);
@@ -470,6 +471,26 @@ textarea.sa-input {
 
 .sa-accent-picker__check {
   display: none;
+}
+
+/* Multi-selection, mixed types (Roadmap v2 §4.1): neutral Type default swatch, no data-palette. */
+.sa-accent-picker__swatch--neutral {
+  --sa-swatch-ink: var(--sa-color-border);
+  --sa-swatch-tint: var(--sa-color-canvas);
+
+  color: var(--sa-color-text);
+}
+
+/* Usage mark: decorative corner dot on every value a selected component uses. */
+.sa-accent-picker__usage {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sa-color-text);
+  box-shadow: 0 0 0 2px var(--sa-color-surface);
 }
 
 /* Hover: 1 px outer ring with a 2 px gap. */
@@ -549,6 +570,10 @@ textarea.sa-input {
 
   .sa-accent-picker__input:checked + .sa-accent-picker__swatch {
     border-color: Highlight;
+  }
+
+  .sa-accent-picker__usage {
+    background: CanvasText;
   }
 
   .sa-segmented__option[data-checked="true"],

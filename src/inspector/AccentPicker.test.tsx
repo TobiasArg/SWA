@@ -178,12 +178,13 @@ describe("AccentPicker", () => {
     expect(within(picker()).getByRole("radio", { name: "Tomato" })).toHaveFocus();
   });
 
-  it("is not shown in the group, relationship, architecture or multi-selection inspectors", () => {
+  it("is not shown in the group, relationship, architecture or component-free multi-selection inspectors", () => {
     for (const selection of [
       { groupIds: ["grp_a"] },
       { relationshipIds: ["rel_reads"] },
       {},
-      { componentIds: ["cmp_tool", "cmp_val"] },
+      // Multi-selections with components get the mixed-state Color section (Roadmap v2 §4).
+      { relationshipIds: ["rel_reads"], groupIds: ["grp_b"] },
     ]) {
       const view = renderInspector(fixture(), selection);
       expect(screen.queryByRole("group", { name: "Color" })).not.toBeInTheDocument();

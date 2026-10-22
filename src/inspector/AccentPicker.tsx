@@ -1,5 +1,6 @@
+import { useId } from "react";
 import { ACCENT_IDS, ACCENTS, type AccentId } from "../domain/constants";
-import { typePaletteId } from "../domain/palette";
+import { typePaletteId, type PaletteId } from "../domain/palette";
 import type { Component } from "../domain/types";
 import { useInspectorCommands } from "./inspectorContext";
 
@@ -9,6 +10,10 @@ export const TYPE_DEFAULT_LABEL = "Type default";
 export function accentCaption(accent: AccentId | undefined): string {
   return `Color: ${accent ? ACCENTS[accent].label : TYPE_DEFAULT_LABEL}`;
 }
+
+/** Usage key for components without an `accent` (the type default). */
+export const DEFAULT_USAGE_KEY = "default";
+export type AccentUsageKey = AccentId | typeof DEFAULT_USAGE_KEY;
 
 /** Decorative 16 px check glyph shown on the checked swatch (UI v2 §6). */
 function CheckGlyph() {
@@ -33,28 +38,48 @@ function CheckGlyph() {
   );
 }
 
-export interface AccentPickerProps {
-  component: Component;
+export interface AccentRadioGroupProps {
+  name: string;
+  /** The shared accent, `undefined` for the type default, or "mixed" when values differ (none checked). */
+  value: AccentId | undefined | "mixed";
+  /** Palette entry for the Type default swatch; `null` renders the neutral swatch (mixed types). */
+  defaultPaletteId: PaletteId | null;
+  /** How many of `total` components use each value; only rendered when given. */
+  usage?: ReadonlyMap<AccentUsageKey, number>;
+  total?: number;
+  /** Overrides the caption (the mixed state). */
+  caption?: string;
+  onChoose(accent: AccentId | undefined): void;
 }
 
 /**
- * Color picker (UI v2 §6, §11.5; UI_COLOR_CONFIRMATION_DESIGN §1.8): a fieldset
- * of 17 native radios. Each swatch sets `data-palette` to the entry the node
- * would use, so swatch and node share one CSS source. The persisted field stays
- * `accent`. Color is decoration only (C8), so nothing is announced beyond the radio.
+ * Presentational color radios (UI v2 §6, §11.5; UI_COLOR_CONFIRMATION_DESIGN §1.8;
+ * Roadmap v2 §4.3): a fieldset of 17 native radios. Each swatch sets `data-palette`
+ * to the entry the node would use, so swatch and node share one CSS source.
  */
-export function AccentPicker({ component }: AccentPickerProps) {
-  const commands = useInspectorCommands();
-  const { id } = component;
-  const current = component.accent;
-  const name = `accent-${id}`;
-
-  function choose(accent: AccentId | undefined) {
-    commands.dispatch({ kind: "setComponentAccent", ids: [id], accent });
-  }
+export function AccentRadioGroup({
+  name,
+  value,
+  defaultPaletteId,
+  usage,
+  total = 0,
+  caption,
+  onChoose,
+}: AccentRadioGroupProps) {
+  const captionId = useId();
+  // Usage marks (Roadmap v2 §4.1): a decorative corner dot in the swatch plus hidden
+  // text. The text joins the label in one node so every engine computes the same name.
+  const usageDot = (key: AccentUsageKey) =>
+    usage?.get(key) ? <span className="sa-accent-picker__usage" /> : null;
+  const usageText = (key: AccentUsageKey) => {
+    const used = usage?.get(key);
+    return used ? `, used by ${used} of ${total}` : "";
+  };
+  const defaultUsage = usageText(DEFAULT_USAGE_KEY);
+  const defaultSwatchClass = `sa-accent-picker__swatch${defaultPaletteId ? "" : " sa-accent-picker__swatch--neutral"}`;
 
   return (
-    <fieldset className="sa-field sa-accent-picker">
+    <fieldset className="sa-field sa-accent-picker" aria-describedby={captionId}>
       <legend className="sa-field__label">{ACCENT_LEGEND}</legend>
       <label className="sa-accent-picker__option sa-accent-picker__option--default" title={TYPE_DEFAULT_LABEL}>
         <input
@@ -62,17 +87,23 @@ export function AccentPicker({ component }: AccentPickerProps) {
           className="sa-accent-picker__input"
           name={name}
           value=""
-          checked={current === undefined}
-          onChange={() => choose(undefined)}
+          checked={value === undefined}
+          onChange={() => onChoose(undefined)}
         />
-        <span
-          className="sa-accent-picker__swatch"
-          data-palette={typePaletteId(component)}
-          aria-hidden="true"
-        >
+        <span className={defaultSwatchClass} data-palette={defaultPaletteId ?? undefined} aria-hidden="true">
           <CheckGlyph />
+          {usageDot(DEFAULT_USAGE_KEY)}
         </span>
-        <span className="sa-accent-picker__default-text">{TYPE_DEFAULT_LABEL}</span>
+        {defaultUsage ? (
+          <>
+            <span className="sa-accent-picker__default-text" aria-hidden="true">
+              {TYPE_DEFAULT_LABEL}
+            </span>
+            <span className="sa-visually-hidden">{`${TYPE_DEFAULT_LABEL}${defaultUsage}`}</span>
+          </>
+        ) : (
+          <span className="sa-accent-picker__default-text">{TYPE_DEFAULT_LABEL}</span>
+        )}
       </label>
       <div className="sa-accent-picker__grid">
         {ACCENT_IDS.map((accent) => {
@@ -84,18 +115,43 @@ export function AccentPicker({ component }: AccentPickerProps) {
                 className="sa-accent-picker__input"
                 name={name}
                 value={accent}
-                checked={current === accent}
-                onChange={() => choose(accent)}
+                checked={value === accent}
+                onChange={() => onChoose(accent)}
               />
               <span className="sa-accent-picker__swatch" data-palette={accent} aria-hidden="true">
                 <CheckGlyph />
+                {usageDot(accent)}
               </span>
-              <span className="sa-visually-hidden">{label}</span>
+              <span className="sa-visually-hidden">{`${label}${usageText(accent)}`}</span>
             </label>
           );
         })}
       </div>
-      <p className="sa-accent-picker__caption">{accentCaption(current)}</p>
+      <p id={captionId} className="sa-accent-picker__caption">
+        {caption ?? accentCaption(value === "mixed" ? undefined : value)}
+      </p>
     </fieldset>
+  );
+}
+
+export interface AccentPickerProps {
+  component: Component;
+}
+
+/**
+ * Single-component color picker. The persisted field stays `accent`. Color is
+ * decoration only (C8), so nothing is announced beyond the radio.
+ */
+export function AccentPicker({ component }: AccentPickerProps) {
+  const commands = useInspectorCommands();
+  const { id } = component;
+
+  return (
+    <AccentRadioGroup
+      name={`accent-${id}`}
+      value={component.accent}
+      defaultPaletteId={typePaletteId(component)}
+      onChoose={(accent) => commands.dispatch({ kind: "setComponentAccent", ids: [id], accent })}
+    />
   );
 }
