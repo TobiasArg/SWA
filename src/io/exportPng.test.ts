@@ -23,7 +23,7 @@ function styleOf(options: Record<string, unknown> | undefined) {
 }
 
 function api(viewport: HTMLElement | null, bounds = { x: 10, y: 20, width: 400, height: 200 }): CanvasApi {
-  return {
+  const testApi = {
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     fitView: vi.fn(),
@@ -31,7 +31,9 @@ function api(viewport: HTMLElement | null, bounds = { x: 10, y: 20, width: 400, 
     getViewportElement: () => viewport,
     getNodesBounds: () => ({ x: 0, y: 0, width: 1, height: 1 }),
     getDiagramBounds: () => bounds,
-  };
+    revealComponent: vi.fn(async () => false),
+  } satisfies CanvasApi & { revealComponent(id: string): Promise<boolean> };
+  return testApi;
 }
 
 describe("computeExportFrame", () => {
