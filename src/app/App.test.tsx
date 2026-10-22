@@ -1,8 +1,16 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { config as zodConfig, z } from "zod";
+import { lazy, Suspense } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveController } from "../persistence/types";
-import App, { OPEN_FAILED_MESSAGE, STORAGE_UNAVAILABLE_MESSAGE } from "./App";
+import App, {
+  EDITOR_LOAD_FAILED_MESSAGE,
+  EDITOR_LOAD_FAILED_TITLE,
+  EditorLoadBoundary,
+  OPEN_FAILED_MESSAGE,
+  STORAGE_UNAVAILABLE_MESSAGE,
+} from "./App";
 import { placeholderModules, placeholderServices } from "./defaultServices";
 import { LEAVE_SAVE_FAILED_MESSAGE, TAB_CONFLICT_MESSAGE } from "./EditorScreen";
 import { createMemoryRepository, type MemoryRepository } from "./placeholders/persistence";
@@ -56,6 +64,42 @@ function key(init: KeyboardEventInit, target: Element = document.body) {
 }
 
 describe("App shell", () => {
+  it("keeps Zod validation on the CSP-safe interpreter without probing Function", () => {
+    expect(zodConfig().jitless).toBe(true);
+
+    const dynamicCode = vi.fn();
+    vi.stubGlobal("Function", dynamicCode);
+    try {
+      expect(z.object({ value: z.string() }).safeParse({ value: "ok" }).success).toBe(true);
+      expect(dynamicCode).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("shows the reload fallback when a lazy editor import rejects", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    const reload = vi.fn();
+    const FailedEditor = lazy(async () => {
+      await Promise.reject(new Error("chunk load failed"));
+      return { default: () => null };
+    });
+
+    render(
+      <EditorLoadBoundary reload={reload}>
+        <Suspense fallback={<p>Loading editor…</p>}>
+          <FailedEditor />
+        </Suspense>
+      </EditorLoadBoundary>,
+    );
+
+    expect(await screen.findByRole("heading", { name: EDITOR_LOAD_FAILED_TITLE })).toBeInTheDocument();
+    expect(screen.getByText(EDITOR_LOAD_FAILED_MESSAGE)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the full-page message when storage is unavailable", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     renderApp({ openRepository: () => Promise.reject(new Error("blocked")) });

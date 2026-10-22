@@ -8,7 +8,6 @@
  * html-to-image is pinned to exactly 1.11.11 (later releases did not export
  * correctly per React Flow's example). Errors are thrown; callers show the toast.
  */
-import { toPng } from "html-to-image";
 import type { CanvasApi } from "../canvas/canvasApi";
 import type { Rect } from "../domain/types";
 
@@ -98,6 +97,7 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void> {
   root.classList.add(EXPORTING_CLASS);
   let dataUrl: string;
   try {
+    const { toPng } = await import("html-to-image");
     dataUrl = await toPng(viewport, {
       backgroundColor,
       width: frame.width,
