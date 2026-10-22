@@ -59,7 +59,7 @@ export function GroupInspector({ architecture, group }: GroupInspectorProps) {
                   <Button
                     size="compact"
                     variant="ghost"
-                    aria-label={`Remove ${name} from group`}
+                    aria-label={`Remove from group: ${name}`}
                     onClick={() =>
                       commands.dispatch({ kind: "assignToGroup", componentIds: [memberId], groupId: null })
                     }
