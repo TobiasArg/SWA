@@ -1,8 +1,27 @@
 # Swarm Architecturer — Component Color and Delete Confirmation Design
 
-**Status:** Design report only. This change adds no application code, tests, dependencies or edits to other specs.
-**Authority:** `PRODUCT_CONCEPT_V1.1.md` (PC) and `TECHNICAL_DESIGN.md` (TD) remain authoritative for product meaning. This report **replaces** these visual rules: the accent rule in `UI_DESIGN_HANDOFF.md` (UH) §2.3, and `UI_V2_DESIGN.md` (V2) §2.3 (contrast columns), §4.1, §4.2 and §6 (swatch and caption copy). For delete interactions it **replaces** the "undoable editor deletions need no confirmation" rule (PC 8.3 / M2 wording, UH §8.1, TD 5.3, 11.2 and 12) at the user's explicit request: every editor delete now asks first in an app-styled modal (§2). It also tightens UH §8.4 (dialogs). The implementation worker updates those sections in the same change set that implements them. Anything not mentioned here keeps its current behavior.
+**Status:** Design record, **implemented** (merged in `a5375fe`: commits `d50d053`, `96ef20e`, `c438ff3`, `b59ef0c`, `fbbd14f`). The canonical description of shipped behavior is now in the specs (see "Implementation record" below). This report keeps the rationale, contrast tables and the original acceptance list, and is not a second implementation spec.
+**Authority (at design time):** `PRODUCT_CONCEPT_V1.1.md` (PC) and `TECHNICAL_DESIGN.md` (TD) remain authoritative for product meaning. This report **replaces** these visual rules: the accent rule in `UI_DESIGN_HANDOFF.md` (UH) §2.3, and `UI_V2_DESIGN.md` (V2) §2.3 (contrast columns), §4.1, §4.2 and §6 (swatch and caption copy). For delete interactions it **replaces** the "undoable editor deletions need no confirmation" rule (PC 8.3 / M2 wording, UH §8.1, TD 5.3, 11.2 and 12) at the user's explicit request: every editor delete now asks first in an app-styled modal (§2). It also tightens UH §8.4 (dialogs). The implementation worker updates those sections in the same change set that implements them. Anything not mentioned here keeps its current behavior.
 **Inputs inspected:** PC 6.2, 8.3, 9 (M2); TD 5.1–5.3, 6.7, 7.1, 8.5, 11.2, 12, 13; UH §1, §2, §5, §7.4, §8, §9; V2 §0, §2.3, §3, §4, §5, §6; `src/ui/{tokens.css,base.css,Dialog.tsx,ConfirmDialog.tsx,Toast.tsx}`, `src/canvas/{canvas.css,nodes/ComponentNode.tsx}`, `src/inspector/{AccentPicker.tsx,inspector.css}`, `src/palette/palette.css`, `src/editor/actions.ts`, `src/domain/operations.ts` (`deleteElements`, `applyCommand`), `src/app/{EditorScreen.tsx,shortcuts.ts}`, `src/toolbar/Toolbar.tsx`, `src/inspector/{Component,Relationship,Group,MultiSelection}Inspector.tsx`, `src/inspector/inspectorContext.tsx`, `src/library/LibraryScreen.tsx`, `src/persistence/unloadGuard.ts`, and the tests that cover them.
+
+---
+
+## Implementation record (as shipped)
+
+**Where the rules now live.** Color: UH §2.3, §5.1–5.2, §8.1, §9.3, §12; V2 §0 C7, §2.3, §3.2, §3.4, §4, §6, §11, §12; TD 3.1, 6.2, 7.1, 7.2, 12. Confirmation and notification: PC 8.3 and M2; TD 5.3, 6.1, 6.5, 6.7, 8.5, 11.2, 11.3, 12, 13, 15; UH §7.4, §8.4. Those sections describe the code; where this report and the code differ, the code and those sections win.
+
+**Implemented as designed, with tests:** D-C1–D-C6 (`src/domain/palette.ts`, 22 `[data-palette]` rules in `tokens.css`, color-free type rules, Tomato tint `#FADCD6`; AC-C1–C11 in `palette.test.ts`, `ComponentNode.test.tsx`, `AccentPicker.test.tsx`, `ComponentInspector.test.tsx`, `e2e/ui-v2.spec.ts`) and D-N1–D-N5 (one `requestDelete` in `EditorScreen.tsx` for all nine routes, hardened `ConfirmDialog`, library inline error and focus restore, ESLint rules, unchanged toast and `unloadGuard`; AC-N1–N14 in `App.integration.test.tsx`, `ConfirmDialog.test.tsx`, `actions.test.ts`, `LibraryScreen.test.tsx`, `e2e/a11y-keyboard.spec.ts`, `scenario-e.spec.ts`, `scenario-i.spec.ts`).
+
+**Differences from the text below:**
+
+- ED7 / AC-N7: the canvas focus target is the editor's `<main data-sa-canvas tabIndex={-1}>` region (with an inset focus ring in `base.css`), not the React Flow wrapper.
+- ED6: Confirm dispatches only if the current selection still equals the IDs the dialog described; otherwise it closes without deleting.
+- §2.3 copy: the ungroup and groups-only descriptions use plural forms for several groups ("The groups are removed. Their components stay on the canvas.").
+- §2.6: lint also restricts `globalThis.Notification`.
+- §1.8: the library empty-state icon row still uses its `--sa-type-*-ink` classes rather than `data-palette` (same colors, no visual change). The palette panel uses `data-palette="type-*"` as designed.
+- §4 `services.*`: `EditorScreen` imports the pure helpers from `editor/actions.ts` directly; `services.ts` and the placeholders are unchanged.
+
+**Left as design-only (not implemented, not specified elsewhere):** O1–O6 keep their defaults (no field rename, no threshold or "don't ask again", no Undo toast after Ungroup, no toast enhancements). No new grayscale screenshot with colored fills was recorded; V2 §11 item 1 notes this, and type-cue parity is covered by tests instead.
 
 ---
 

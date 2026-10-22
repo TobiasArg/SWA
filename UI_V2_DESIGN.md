@@ -2,6 +2,7 @@
 
 **Status:** Design report for the v2 visual update. No application code is part of this change.
 **Authority:** `PRODUCT_CONCEPT_V1.1.md` (PC) and `TECHNICAL_DESIGN.md` (TD) stay authoritative for product meaning and behavior. This report **replaces** the visual rules in `UI_DESIGN_HANDOFF.md` (UH) §2.1 (canvas tokens), §2.4 (canvas structure), §5.1–5.3 (node anatomy, per-type shapes, handles) and §6 (edge styling). It replaces the geometry rules in TD 6.4 (floating straight edges) and adds to TD 3.1/3.5/3.6/3.7 (persisted accent), TD 6.3 (pointer connect) and TD 10 (PNG bounds). The implementation worker updates those TD and UH sections in the same change set that implements them. Anything this report does not mention keeps its v1 behavior.
+**Superseded color rule (as built):** the accent-only rule in this report (C7, the §2.3 "ink/tint" roles, §3.2 band and hatch colors, §3.4 chip fill, §4.1–4.2, §6 copy, §11 items 1 and 3, §12 items 11–14) was replaced by `UI_COLOR_CONFIRMATION_DESIGN.md` §1 and is now implemented: a component's one effective palette entry (the selected color, else the type default) drives node fill **and** ink, including the logo, type label and Orchestrator band. The sections named above are updated to the shipped behavior; `UI_V2_REFINEMENT.md` §1's "accents only on the component border and details" describes the earlier v2 build. Persisted IDs, schema and migration (§5) are unchanged.
 **Visual reference:** n8n's editor, used only for its *look*: a light dotted canvas, cards with distinct silhouettes, concrete connection ports on the node outline, and curved connectors. No screenshot was present in this worktree; the decisions below rely only on the reference traits named in the brief. Nothing about n8n's *semantics* (inputs vs. outputs, execution, data items) is adopted.
 
 ---
@@ -18,8 +19,8 @@ The canvas documents an architecture. It is **not** an executable workflow. Ever
 | C4 | No path implies execution order or data flow. | Ports are not typed: there are no input or output ports, and no "left = in, right = out" convention. Every port can hold either end of any relationship. Edges never animate. There are no moving dots, flow particles, gradients, tapering, step numbers, "+" add-next buttons on ports, run or item counters, or "trigger" badges. Curves are symmetric in shape; only the arrowhead tells you the direction. |
 | C5 | Agent and Orchestrator **share one base silhouette**. The Orchestrator gets a **distinct marker that is not a shape**. | Both use the rounded rectangle. The Orchestrator adds a solid ink header band, a hub icon and the "ORCHESTRATOR" label (§3.2). |
 | C6 | Tool and External System have **clearly different silhouettes**. | Tool is a chamfered octagon. External System is a dashed, hatched parallelogram (§3.2). |
-| C7 | The custom accent changes **only the border and details** of a **component node**. It never changes the full fill. The default keeps the type styling. Groups stay neutral. | §4.3. Groups have no `accent` field and no picker. |
-| C8 | Color is never the only cue (TD 12). | The silhouette, icon and type label identify a type. The accent carries no meaning and is not announced, exported to Markdown, or used in aria-labels. |
+| C7 | A component's selected color (`accent`) is its **one palette entry**: it drives the node fill and every ink part, overriding the fixed type colors. Without a selection the type default applies. Groups stay neutral. | §4 (as built, `UI_COLOR_CONFIRMATION_DESIGN.md` §1). Groups have no `accent` field and no picker. |
+| C8 | Color is never the only cue (TD 12). | The silhouette, details, icon and type label identify a type and never change with the color. The color carries no meaning and is not announced, exported to Markdown, or used in aria-labels. |
 
 ---
 
@@ -53,7 +54,7 @@ All ratios use the WCAG 2.x formula and were computed for this report.
 | `--sa-port-invalid` | `var(--sa-color-danger)` | Connection line over an invalid target (unchanged v1 rule) | 6.6 |
 | `--sa-group-border` | `#857F72` (unchanged) | Group outline | 3.68 on canvas |
 | `--sa-group-fill` / `--sa-group-header-fill` | unchanged | Group body / header | decorative |
-| `--sa-node-surface` | `#FFFFFF` | Icon chip background in the default (type) style | — |
+| `--sa-node-surface` | `#FFFFFF` | Icon chip plate, on every node and with every color | — |
 
 The type ink and fill tokens (UH §2.3) are **unchanged**. Their contrast against the new canvas:
 
@@ -96,11 +97,11 @@ The type ink and fill tokens (UH §2.3) are **unchanged**. Their contrast agains
 
 ### 2.3 Accent palette (16 fixed IDs)
 
-Each accent has an **ink** (the silhouette stroke and icon glyph) and a **tint** (the pastel icon-chip background). The IDs are the persisted values; they are stable and never renamed or recolored in place (see §5.4). CSS tokens: `--sa-accent-{id}-ink`, `--sa-accent-{id}-tint`. The TS source of truth is `ACCENT_IDS` and `ACCENTS` in `src/domain/constants.ts`, in this order (the picker uses the same order).
+Each accent has an **ink** (silhouette stroke, icon chip ring and glyph, type label, Memory rim, External hatch, Orchestrator band) and a **tint** (the node fill). As built, the accent is the component's one palette entry (C7, §4); the UI calls it "Color". The IDs are the persisted values; they are stable and never renamed or recolored in place (see §5.4). CSS tokens: `--sa-accent-{id}-ink`, `--sa-accent-{id}-tint`. The TS source of truth is `ACCENT_IDS` and `ACCENTS` in `src/domain/constants.ts`, in this order (the picker uses the same order).
 
-| # | ID | Display name | Ink | Tint | Ink : canvas | Ink : lowest of (white, canvas, every type fill) | Ink : own tint (icon) |
+| # | ID | Display name | Ink | Tint | Ink : canvas | Ink : lowest of (white, canvas, every type fill) | Ink : own tint (type label, ≥ 4.5) |
 |---|---|---|---|---|---|---|---|
-| 1 | `tomato` | Tomato | `#B23A2B` | `#F9D9D3` | 5.50 | 5.00 | 4.50 |
+| 1 | `tomato` | Tomato | `#B23A2B` | `#FADCD6` | 5.50 | 5.00 | 4.61 |
 | 2 | `coral` | Coral | `#A8452F` | `#FADFD2` | 5.46 | 4.97 | 4.65 |
 | 3 | `tangerine` | Tangerine | `#9A4D10` | `#FBE2C8` | 5.64 | 5.13 | 4.88 |
 | 4 | `mustard` | Mustard | `#7D5F00` | `#F6E7B0` | 5.54 | 5.04 | 4.84 |
@@ -117,7 +118,7 @@ Each accent has an **ink** (the silhouette stroke and icon glyph) and a **tint**
 | 15 | `rose` | Rose | `#A3355A` | `#F8D6E1` | 6.05 | 5.50 | 4.88 |
 | 16 | `cocoa` | Cocoa | `#6E4B35` | `#EBDDD1` | 7.14 | 6.49 | 5.81 |
 
-**WCAG non-text contrast (1.4.11).** Every ink is ≥ 4.97:1 against the canvas, the inspector surface and every type fill, and ≥ 4.50:1 against its own tint. That passes the 3:1 requirement with margin, so an accented outline is always a perceivable boundary and an accented icon is always legible on its chip. Tints are decorative (1.13–1.24:1 on the canvas). They never carry meaning and always sit inside an ink ring or behind an ink glyph. Text never uses an accent color (§4.3).
+**WCAG non-text contrast (1.4.11).** Every ink is ≥ 4.97:1 against the canvas, the inspector surface and every type fill, and ≥ 4.61:1 against its own tint (Tomato's tint was changed from `#F9D9D3`, unrounded 4.4985:1, to `#FADCD6` so the type label passes 4.5:1). Every palette entry, type defaults included, also passes ink:white ≥ 4.5 (logo on the white chip, white Orchestrator band text), text and muted text on the fill ≥ 4.5 and selection outline on the fill ≥ 3; `src/domain/palette.test.ts` checks all of them on the unrounded values. Tints are decorative fills (1.02–1.24:1 on the canvas) and always sit inside an ink stroke. The only text in the ink is the type label; name and description keep the neutral text colors.
 
 **Distinguishability.** The 16 hues are not designed to be told apart by color alone (16 categorical hues cannot be). That is acceptable because accents carry no product meaning (C8). The picker shows each name in text (§6).
 
@@ -165,10 +166,10 @@ The coordinates are box-local: `(0, 0)` is the top-left of the node box, `w × h
 | Type (`data-type` / `data-subtype`) | `ShapeKind` | Silhouette path | Type details (non-color cues) | Ports (anchor on outline) | Icon / label |
 |---|---|---|---|---|---|
 | **Agent** (`agent`) | `rounded` | Rounded rectangle, radius 12: `M12,0 H w-12 A12,12 0 0 1 w,12 V h-12 A12,12 0 0 1 w-12,h H12 A12,12 0 0 1 0,h-12 V12 A12,12 0 0 1 12,0 Z` | None (baseline) | top `(w/2, 0)`, right `(w, h/2)`, bottom `(w/2, h)`, left `(0, h/2)` | person-in-circle / "AGENT" |
-| **Orchestrator** (`agent` + `orchestrator`) | `rounded` (**same as Agent**, C5) | Same path; stroke `ORCHESTRATOR_STROKE` 2 px | **Non-shape marker:** a solid header band 24 px high, filled with `--sa-type-orchestrator-ink` and clipped to the top of the rounded rectangle (`M0,24 V12 A12,12 0 0 1 12,0 H w-12 A12,12 0 0 1 w,12 V24 Z`). The type row sits inside the band in white (12.36:1). It also uses the hub icon and the "ORCHESTRATOR" label. The band **never** takes the accent (§4.3). | Same as Agent | hub / "ORCHESTRATOR" |
+| **Orchestrator** (`agent` + `orchestrator`) | `rounded` (**same as Agent**, C5) | Same path; stroke `ORCHESTRATOR_STROKE` 2 px | **Non-shape marker:** a solid header band 24 px high, filled with the node's effective ink (`--sa-node-ink`: the Orchestrator ink by default, the selected color's ink otherwise) and clipped to the top of the rounded rectangle (`M0,24 V12 A12,12 0 0 1 12,0 H w-12 A12,12 0 0 1 w,12 V24 Z`). The type row sits inside the band in white (12.36:1 on the default ink, ≥ 5.90:1 on every color ink). It also uses the hub icon and the "ORCHESTRATOR" label. | Same as Agent | hub / "ORCHESTRATOR" |
 | **Tool** (`tool`) | `octagon` | Chamfered octagon, 12 px cuts: `M12,0 H w-12 L w,12 V h-12 L w-12,h H12 L0,h-12 V12 Z` | The v1 left ink bar is removed (the silhouette carries the cue now) | top `(w/2, 0)`, right `(w, h/2)`, bottom `(w/2, h)`, left `(0, h/2)` | wrench / "TOOL" |
 | **Memory / Data Store** (`memory`) | `cylinder` | Cylinder seen from the side, `ry = CYLINDER_CAP_RY`: `M0,ry A w/2,ry 0 0 1 w,ry V h-ry A w/2,ry 0 0 1 0,h-ry Z` | **Lid rim:** a second arc `M0,ry A w/2,ry 0 0 0 w,ry` stroked 1 px in the node border color (the front of the lid) | top `(w/2, 0)` (apex of the lid), right `(w, h/2)`, bottom `(w/2, h)` (apex of the base), left `(0, h/2)` | stacked disks / "DATA STORE" |
-| **External System** (`external_system`) | `parallelogram` | Right-leaning parallelogram, skew `s = 14`: `M s,0 H w L w-s,h H0 Z` | **Dashed** stroke `stroke-dasharray: 6 4` ("outside the modeled boundary", PC 14) **plus** a 45° hatch: `hatchSegments(w, h, 8)` stroked 1 px `--sa-type-external-hatch` | top `(w/2, 0)`, right `(w - s/2, h/2)`, bottom `(w/2, h)`, left `(s/2, h/2)`. The side anchors are the midpoints of the slanted sides. | box-with-arrow / "EXTERNAL" |
+| **External System** (`external_system`) | `parallelogram` | Right-leaning parallelogram, skew `s = 14`: `M s,0 H w L w-s,h H0 Z` | **Dashed** stroke `stroke-dasharray: 6 4` ("outside the modeled boundary", PC 14) **plus** a 45° hatch: `hatchSegments(w, h, 8)` stroked 1 px in the node ink at `stroke-opacity: 0.16` | top `(w/2, 0)`, right `(w - s/2, h/2)`, bottom `(w/2, h)`, left `(s/2, h/2)`. The side anchors are the midpoints of the slanted sides. | box-with-arrow / "EXTERNAL" |
 | **Decision / Routing Rule** (`decision`) | `hexagon` | Horizontal hexagon, point depth `p = 20`: `M p,0 H w-p L w,h/2 L w-p,h H p L0,h/2 Z` (a readable nod to the flowchart diamond) | None beyond the pointed sides | top `(w/2, 0)`, right `(w, h/2)` (vertex), bottom `(w/2, h)`, left `(0, h/2)` (vertex) | fork / "DECISION" |
 | **Group** (container, not a component) | n/a (not in `shapes.ts`) | v1 group outline unchanged: 1.5 px dashed (8 4) `--sa-group-border`, radius 8 | v1 header unchanged | **None.** Groups are never relationship endpoints (TD 6.3). | grip / name + member count |
 
@@ -191,34 +192,36 @@ The coordinates are box-local: `(0, 0)` is the top-left of the node box, `w × h
 
 ### 3.4 Node anatomy (unchanged from v1 except where noted)
 
-Type row: a 24 × 24 **icon chip** (new) followed by the type label. The chip is a 6 px-radius square, 1 px stroke in the node border color, with a 16 px glyph centered in it. Then the name (`--sa-text-md`, one line, ellipsis) and the optional description (`--sa-text-xs` muted, at most 2 lines). Nothing else appears on a node. In the default style the chip fill is `--sa-node-surface` (white) and the glyph is the type ink. In the Orchestrator band the chip is omitted and the glyph is white, as in v1.
+Type row: a 24 × 24 **icon chip** (new) followed by the type label. The chip is a 6 px-radius square, 1 px stroke in the node border color, with a 16 px glyph centered in it. Then the name (`--sa-text-md`, one line, ellipsis) and the optional description (`--sa-text-xs` muted, at most 2 lines). Nothing else appears on a node. The chip fill is always `--sa-node-surface` (white) and the ring and glyph are the node's effective ink. In the Orchestrator band the chip is omitted and the glyph is white, as in v1.
 
 ---
 
-## 4. Node styling variables and the accent rule
+## 4. Node styling variables and the color rule (as built)
 
 ### 4.1 CSS custom properties per node
 
-`ComponentNode` sets `data-type`, `data-subtype` (v1) and **`data-accent="{id}"`** (new, only when `component.accent` is set). CSS resolves:
+`ComponentNode` sets `data-type`, `data-subtype`, **`data-palette="{entry}"`** = `effectivePaletteId(component)` (`src/domain/palette.ts`: the accent when valid, else `type-agent`, `type-orchestrator`, `type-tool`, `type-memory`, `type-external` or `type-decision`) and, only when an accent is set, `data-accent` (kept for tests; no CSS rule reads it). One `[data-palette]` rule per entry in `tokens.css` sets `--sa-palette-ink` and `--sa-palette-fill`; `.sa-node` is the only rule that maps them, and type and subtype rules set geometry only (for example the Orchestrator's 2 px stroke). CSS resolves:
 
-| Variable | Default (no accent) | With `data-accent="{id}"` |
-|---|---|---|
-| `--sa-node-fill` | type fill | **type fill (unchanged)** |
-| `--sa-node-border` | type ink | `--sa-accent-{id}-ink` |
-| `--sa-node-chip-fill` | `--sa-node-surface` | `--sa-accent-{id}-tint` |
-| `--sa-node-chip-ink` (icon glyph, chip ring) | type ink | `--sa-accent-{id}-ink` |
-| `--sa-node-label-ink` (type label text) | type ink | **type ink (unchanged)** |
-| Name and description text | `--sa-color-text` / `--sa-color-text-muted` | **unchanged** |
-| Lid rim (Memory) | type ink | accent ink |
-| External hatch | `--sa-type-external-hatch` | **unchanged** (texture, not border) |
-| Orchestrator band | orchestrator ink | **orchestrator ink (unchanged)**: white-on-pastel would fail 4.5:1, and the band is the Orchestrator's identity marker |
+| Variable or part | Value (type default or selected color) |
+|---|---|
+| `--sa-node-fill` (silhouette body) | entry fill (type fill, or the color's tint) |
+| `--sa-node-border` (silhouette stroke) | entry ink |
+| `--sa-node-chip-fill` | `--sa-node-surface` (white), always |
+| `--sa-node-chip-ink` (icon glyph, chip ring) | entry ink |
+| `--sa-node-label-ink` (type label text) | entry ink |
+| Name and description text | `--sa-color-text` / `--sa-color-text-muted`, unchanged |
+| Lid rim (Memory) | entry ink |
+| External hatch | entry ink at `stroke-opacity: 0.16` |
+| Orchestrator band | entry ink; its type row stays white |
 
-Generate the 16 `.sa-node[data-accent="…"]` rules from `ACCENT_IDS` in a single CSS block (16 hand-written rules are fine and greppable). **Never** derive a CSS selector or class from user text (TD 3.4); `data-accent` takes only values that passed validation.
+The fallback when no entry applies is the neutral External pair. **Never** derive a CSS selector or class from user text (TD 3.4); `data-palette` and `data-accent` take only validated IDs.
 
-### 4.2 What "border and detail only" means (testable)
+### 4.2 Where a palette entry appears (testable)
 
-- The accent may appear only in: the silhouette stroke, the icon chip ring and glyph, the chip fill (tint), and the Memory lid rim.
-- The accent never appears in: the silhouette fill, any text, the Orchestrator band, the External hatch, edges, ports, terminals, groups, the minimap or the inspector chrome. The picker swatches are the one exception.
+- On a component node: fill, stroke, chip ring and glyph, type label, Memory rim, External hatch and Orchestrator band, all from the same entry. A selected color therefore overrides the type colors on every type.
+- Outside the node: the picker swatches (§6) and the component inspector header glyph and label (effective entry, matching the node); the palette panel item icons use their `type-*` entry because they represent types.
+- Never: edges, ports, terminals, groups, selection and focus, the minimap or app chrome.
+- Type cues never change with the color: `data-shape`, the `[data-detail]` set, the dash pattern, the icon and the type label are identical with no color and with each of the 16 colors (`ComponentNode.test.tsx`).
 
 ### 4.3 Groups stay neutral
 
@@ -245,7 +248,7 @@ accent?: AccentId; // absent = type default. "default" is never written.
 
 - **Serialization (TD 3.7):** `serializeComponent` emits `accent` right **after `size`** and before `properties`, only when it is defined. This keeps the output byte-stable and diff-friendly.
 - **Validation:** the shape schema accepts `accent: text(64).optional()`, kept as a string just like `subtype`. Semantic validation adds **`E_INVALID_ACCENT`**: "Component {id}: accent must be one of {ACCENT_IDS joined by ', '}." An unknown ID makes the import fail with a listed issue, which is consistent with `storeKind`/`accessScope`.
-- **Command:** `{ kind: "setComponentAccent"; ids: string[]; accent: AccentId | undefined }`. This is **one** undo entry labelled "Change accent color". It does nothing if no value changes. It throws the existing `E_COMPONENT_NOT_FOUND` for unknown IDs and for group IDs (a group is not a component), and `E_INVALID_ACCENT` for an accent outside `ACCENT_IDS`. The v2 UI dispatches it with one ID; the array form keeps multi-selection possible later (D2).
+- **Command:** `{ kind: "setComponentAccent"; ids: string[]; accent: AccentId | undefined }`. This is **one** undo entry labelled "Change color". It does nothing if no value changes. It throws the existing `E_COMPONENT_NOT_FOUND` for unknown IDs and for group IDs (a group is not a component), and `E_INVALID_ACCENT` for an accent outside `ACCENT_IDS`. The v2 UI dispatches it with one ID; the array form keeps multi-selection possible later (D2).
 - **Duplicate** (`duplicateComponents`) copies `accent`. **Retype** does not exist for components.
 - **Markdown export (TD 9.3):** `accent` is **not** emitted, because it is presentation, not architecture. **JSON export:** emitted as stored. **aria-labels:** unchanged, with no color names.
 
@@ -291,15 +294,15 @@ Pinned ports go in the existing open `relationship.visual` record, which TD 3.1 
 
 ---
 
-## 6. Accent picker (component inspector)
+## 6. Color picker (component inspector)
 
 **Placement:** a new collapsible **Appearance** section, last in the component inspector for every component type (after the type-specific fields and before the read-only Relationships list). It does not appear in the group, relationship, architecture or multi-selection inspectors (D2).
 
-**Structure:** a native `<fieldset>` with `<legend>Accent color</legend>`, containing **17 native `<input type="radio" name="accent-{componentId}">`**: "Type default" first, then the 16 accents in `ACCENT_IDS` order. Each radio has a visually hidden `<label>` with the display name ("Tomato") and `title` set to the same name. Native radios give arrow-key movement, a single tab stop and correct `checked` semantics without custom ARIA.
+**Structure:** a native `<fieldset>` with `<legend>Color</legend>`, containing **17 native `<input type="radio" name="accent-{componentId}">`**: "Type default" first, then the 16 accents in `ACCENT_IDS` order. Each radio has a visually hidden `<label>` with the display name ("Tomato") and `title` set to the same name. Native radios give arrow-key movement, a single tab stop and correct `checked` semantics without custom ARIA.
 
-**Layout:** "Type default" is a full-width row (a 28 px swatch showing the type fill with a type-ink ring, followed by the visible text "Type default"). Below it is a 4 × 4 grid of 28 × 28 px swatches with 8 px gaps (above the 24 px WCAG 2.5.8 minimum). A caption under the grid always shows the current value as text: "Accent: Tomato" or "Accent: Type default" (`--sa-text-xs`, muted, with `aria-live` off because the radio already announces it).
+**Layout:** "Type default" is a full-width row (a 28 px swatch showing the type fill with a type-ink ring, followed by the visible text "Type default"). Below it is a 4 × 4 grid of 28 × 28 px swatches with 8 px gaps (above the 24 px WCAG 2.5.8 minimum). A caption under the grid always shows the current value as text: "Color: Tomato" or "Color: Type default" (`--sa-text-xs`, muted, with `aria-live` off because the radio already announces it).
 
-**Swatch rendering:** a 6 px-radius square filled with the **tint**, plus a 2 px inner ring in the **ink**. The swatch boundary is the ink ring (≥ 4.97:1 on the white panel), so it passes 1.4.11 even though the tint alone is about 1.2:1.
+**Swatch rendering:** each swatch sets `data-palette` (the accent ID, or the component's `type-*` entry for "Type default"), so it reads the same CSS entry as the node: a 6 px-radius square filled with the entry **fill**, plus a 2 px inner ring in the **ink**. The swatch boundary is the ink ring (≥ 4.97:1 on the white panel), so it passes 1.4.11 even though the tint alone is about 1.2:1.
 
 **States:**
 
@@ -475,9 +478,9 @@ Add a read-only **Ports** row:
 
 ## 11. Accessibility criteria (v2 additions to TD 12 and UH §9.3)
 
-1. **Not color alone:** in a grayscale screenshot, the six component variants are distinguishable by silhouette, header band, dash and hatch, icon and label, both **with and without** any accent. **Status: completed (2026-10-21).** Coordinator manual review of the default-style grayscale screenshot, then an implementation re-check of a new color and grayscale capture of all six types, each in default style and with an accent (the capture used tomato, mustard, teal, plum, coral and cocoa). In grayscale all six are distinguishable with and without accents: rounded rectangle (Agent); rounded rectangle with a solid dark header band (Orchestrator); chamfered octagon (Tool); cylinder with a lid rim (Data Store); dashed, hatched parallelogram (External); hexagon (Decision). Each also has its icon chip and type label. Accents change only the border stroke, the chip tint and the glyph color. The Data Store name line is visible at default height. The screenshots are review artifacts kept outside the repository.
+1. **Not color alone:** in a grayscale screenshot, the six component variants are distinguishable by silhouette, header band, dash and hatch, icon and label, both **with and without** any accent. **Status: completed (2026-10-21).** Coordinator manual review of the default-style grayscale screenshot, then an implementation re-check of a new color and grayscale capture of all six types, each in default style and with an accent (the capture used tomato, mustard, teal, plum, coral and cocoa). In grayscale all six are distinguishable with and without accents: rounded rectangle (Agent); rounded rectangle with a solid dark header band (Orchestrator); chamfered octagon (Tool); cylinder with a lid rim (Data Store); dashed, hatched parallelogram (External); hexagon (Decision). Each also has its icon chip and type label. Accents change only the border stroke, the chip tint and the glyph color. The Data Store name line is visible at default height. The screenshots are review artifacts kept outside the repository. **Note:** this review predates the color update (C7), which now also recolors the fill, label and band. No new grayscale capture is recorded; structural parity across all 16 colors is covered by `ComponentNode.test.tsx` (shape, details, dash, icon and label unchanged).
 2. **Non-text contrast:** silhouette strokes (type ink or accent ink) ≥ 3:1 against the canvas and their own fill (actual ≥ 4.97:1). The selection outline ≥ 3:1 (6.34). Port ring ≥ 3:1 (5.34). Edge stroke and terminals ≥ 3:1 (5.34). Picker swatch rings ≥ 3:1 on white.
-3. **Text contrast:** unchanged (≥ 4.5:1), because accents never color text.
+3. **Text contrast:** ≥ 4.5:1 for name, description and the ink-colored type label on every palette fill, and for white band text on every ink (§2.3, `palette.test.ts`).
 4. **Selection is not only a color:** an extra outline at a 4 px offset plus the halo, distinct from the rectangular focus ring.
 5. **Picker:** fieldset and legend, native radios with accessible names equal to the display names, one tab stop, arrow keys, a visible checked indicator that is not color (check glyph and outer ring), a visible text caption of the current value, and targets ≥ 24 × 24 (actual 28).
 6. **Canvas semantics unchanged:** node and edge aria-labels contain no color or port wording. Direction is still announced only through `describeRelationship` (directed: "A delegates to B"; undirected: the v1 wording).
@@ -503,10 +506,10 @@ Add a read-only **Ports** row:
 
 **Component (Testing Library)**
 
-11. A node with `accent: "teal"` has `data-accent="teal"`. The body path fill computes to the type fill. The stroke computes to `#106A6E`. The name color is unchanged.
-12. The Orchestrator with an accent keeps the band fill `#1D3557`.
-13. Groups never render `data-accent`. The group inspector has no "Accent color" fieldset.
-14. Picker: a `group` role named "Accent color" with 17 radios. Names match §2.3. Exactly one is checked. Choosing one dispatches one command. Undo restores the previous checked radio. The caption text updates.
+11. A node with `accent: "teal"` has `data-accent="teal"` and `data-palette="teal"`. On every type the fill resolves to `#C9EAEA`, and the stroke, chip ink, type label and Memory rim resolve to `#106A6E`; the chip plate stays `#FFFFFF`. The name color is unchanged.
+12. The Orchestrator with an accent takes the band fill of the selected ink (`#106A6E` for teal); without one it is `#1D3557`.
+13. Groups never render `data-accent` or `data-palette`. The group inspector has no "Color" fieldset.
+14. Picker: a `group` role named "Color" with 17 radios, each swatch's `data-palette` equal to its value ("Type default" = `type-{type}`). Names match §2.3. Exactly one is checked. Choosing one dispatches one command. Undo restores the previous checked radio. The caption text updates.
 
 **End-to-end (Playwright)**
 
@@ -553,7 +556,7 @@ Suggested commits: one per stage. Each stage must leave `npm run typecheck && np
 | Agent and Orchestrator share a silhouette; Orchestrator non-shape marker | §0 C5, §3.2 |
 | Tool and External clearly different | §0 C6, §3.2 |
 | Memory, Decision and Group treatment | §3.2, §4.3 |
-| Accent on border and details only, default = type styling, groups neutral | §4 |
+| One palette entry drives fill and ink, default = type styling, groups neutral (as built, superseding "border and details only") | §4 |
 | 16-color stable palette, hex, WCAG non-text contrast | §2.3, §5.4, §11 |
 | Accessible picker states | §6 |
 | JSON persistence impact, migration, compatibility trade-offs | §5 |

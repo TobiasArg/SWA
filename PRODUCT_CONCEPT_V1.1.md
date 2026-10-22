@@ -350,8 +350,8 @@ The editor supports click-to-add or drag-to-add, select, move, connect, edit, de
 Interactions must be predictable:
 
 - Deleting a component also deletes its relationships, and the user sees it happen.
-- Destructive library actions require confirmation.
-- Canvas edits can be undone (Section 9, M2).
+- Every delete asks for confirmation first, in the app's own dialog, never a browser pop-up. This covers library deletions and every editor deletion.
+- Canvas edits can be undone (Section 9, M2). That includes a confirmed editor deletion.
 
 ## 9. MVP Scope (P0)
 
@@ -372,7 +372,7 @@ Interactions must be predictable:
   - JSON import,
   - exports.
 
-  Library deletions are protected by confirmation instead of undo.
+  Library deletions are protected by confirmation instead of undo. Editor deletions are confirmed first and can then also be undone.
 - History applies only to the current session and the open architecture. It is not persisted and starts empty when an architecture is opened.
 
 **M3 — Component types and groups.** The component types are Agent (including the Orchestrator subtype), Tool, Memory/Data Store and External System. Decision/Routing Rule is an optional component type, included only if it costs little effort. Groups are also required, but a Group is a separate container entity (Section 6.6 and M6), not a `ComponentType`.

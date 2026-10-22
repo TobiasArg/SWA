@@ -3,6 +3,7 @@
 **Status:** Visual design handoff, written before implementation starts.
 **Authority:** `PRODUCT_CONCEPT_V1.1.md` and `TECHNICAL_DESIGN.md` are authoritative. This document only sets visual values and the visual treatment of behavior those two documents already define. It adds no features, screens, controls or dependencies. If this document conflicts with either of them, they win.
 **UI v2 update:** sections 2.1 (canvas rows), 2.3 (accent), 2.4, 5.1–5.3, 6, 7 (node and edge states), 8.1 (Appearance), 9.3 and 12 describe the "ported canvas" as built; the full rationale, contrast tables and acceptance criteria are in `UI_V2_DESIGN.md`. Where the two differ, the code and this document describe what ships.
+**Color and confirmation update (as built):** sections 2.3 (component color), 5.1–5.2 (chip, band, hatch), 7.4, 8.1 (header, Appearance), 8.4 (dialogs), 9.3 and 12 describe the shipped behavior from the design record `UI_COLOR_CONFIRMATION_DESIGN.md`: one effective palette entry drives a component's fill and ink, every delete asks first in the app-styled `ConfirmDialog`, and no browser-native dialogs or notifications are used (the `beforeunload` prompt is browser-owned).
 **Implements into:** `src/ui/tokens.css` (all `--sa-*` tokens below), `src/ui/base.css`, and the per-module CSS files (TD 4.1). "TD x.y" refers to sections of `TECHNICAL_DESIGN.md`; "PC x.y" refers to `PRODUCT_CONCEPT_V1.1.md`.
 
 ---
@@ -80,9 +81,7 @@ Each type has an **ink** (border, icon, type label) and a **fill** (node backgro
 | Memory / Data Store | `--sa-type-memory-ink` `#2E6A4C` | `--sa-type-memory-fill` `#EBF4EE` | 5.7 / 5.8 |
 | External System | `--sa-type-external-ink` `#57534C` | `--sa-type-external-fill` `#F1EFEA` | 6.7 / 6.9 |
 | Decision / Routing Rule | `--sa-type-decision-ink` `#6C3D74` | `--sa-type-decision-fill` `#F5EEF6` | 7.2 / 7.4 |
-| External hatch | `--sa-type-external-hatch` `#E4E0D7` | — | decorative |
-
-**Component accent (UI v2).** A component may carry one of 16 fixed accent IDs (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; values `ACCENTS` in `src/domain/constants.ts`, CSS `--sa-accent-{id}-ink` / `--sa-accent-{id}-tint`, every ink ≥ 4.97:1 on the canvas and every type fill). The accent recolors **only** the silhouette stroke, the icon chip ring and glyph, the chip fill (tint) and the Memory lid rim, through `.sa-node[data-accent="{id}"]`. It never changes the node fill, any text, the Orchestrator band, the External hatch, edges, ports or groups. Accents carry no meaning and are not announced.
+**Component color.** A component may carry one of 16 fixed color IDs, persisted as `accent` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; values `ACCENTS` in `src/domain/constants.ts`, CSS `--sa-accent-{id}-ink` / `--sa-accent-{id}-tint`; Tomato's tint is `#FADCD6`). Each component has exactly **one effective palette entry**: the selected color, or the type default above (`type-agent` … `type-decision`) when none is set. `ComponentNode` sets `data-palette` to it, one `[data-palette]` rule per entry in `tokens.css` sets `--sa-palette-ink` / `--sa-palette-fill`, and only `.sa-node` maps them, so type rules set geometry only and a selected color always wins. The entry supplies **both** the node fill (the tint for a selected color) **and** the ink: silhouette stroke, icon chip ring and glyph (the module logo), type label, Memory lid rim, External hatch (ink at 16 % opacity) and Orchestrator band. The chip plate is always white (`--sa-node-surface`). Name and description keep `--sa-color-text` / `--sa-color-text-muted`. Every entry passes ink:fill, ink:white, text:fill and muted:fill ≥ 4.5:1 and ink:canvas and selection:fill ≥ 3:1 (checked in `palette.test.ts`). Edges, ports, groups, selection, focus and chrome never take a palette entry. Colors carry no meaning and are not announced.
 
 Agent and Orchestrator share a hue family on purpose: an Orchestrator *is* an Agent (PC 6.2). They are told apart by structure (section 5), not by hue.
 
@@ -161,7 +160,7 @@ Nodes and panels have **no** shadow. Panels are separated from the canvas by a `
 
 Nodes use the default sizes from TD 3.3. Each node draws its **silhouette as one inline SVG** that fills the node box (`svg.sa-node__shape`: halo, selection outline, body, type details; no `url(#…)` references, so PNG export needs no ID resolution). The React Flow box stays a rectangle for drag, box selection and resizing. HTML content sits above the SVG, inset per shape so text never crosses the outline (Agent 10/12/8/12, Orchestrator 0/12/6/12, Tool 10/14/8/14, Memory `2·ry+4`/12/`ry+4`/12, External 10/26/8/26, Decision 10/28/8/28 px). The content stacks top to bottom:
 
-1. **Type row:** a 24 px **icon chip** (6 px radius, 1 px ring in the node border color, white fill by default, 16 px type icon) then the type label (`--sa-text-2xs`, mono, uppercase, ink color): "AGENT", "ORCHESTRATOR", "TOOL", "DATA STORE", "EXTERNAL", "DECISION". The Orchestrator has no chip; its icon and label are white inside the band.
+1. **Type row:** a 24 px **icon chip** (6 px radius, 1 px ring in the node ink, always a white plate, 16 px type icon in the node ink) then the type label (`--sa-text-2xs`, mono, uppercase, ink color): "AGENT", "ORCHESTRATOR", "TOOL", "DATA STORE", "EXTERNAL", "DECISION". The Orchestrator has no chip; its icon and label are white inside the band.
 2. **Name:** `--sa-text-md`, `--sa-color-text`, one line with ellipsis.
 3. **Description** (if present): `--sa-text-xs`, `--sa-color-text-muted`, at most 2 lines, then ellipsis. Omit the row when there is no description.
 
@@ -172,13 +171,15 @@ Nothing else is shown on a node (PC 14). If a node belongs to a group, the group
 | Type | Silhouette and details (primary cue) | Fill | Icon (inline SVG, `ui/icons.tsx`) |
 |---|---|---|---|
 | **Agent** | Rounded rectangle, radius 12, 1.5 px solid ink stroke. The plain baseline. | agent-fill | Person-in-circle |
-| **Orchestrator** | **Same rounded rectangle as Agent** (an Orchestrator is an Agent), 2 px stroke, plus a **solid ink header band** (24 px, clipped to the top) holding the white type row. The band is a marker, not a shape, and never takes an accent. | orchestrator-fill (body) | Hub: a center dot with three spokes |
+| **Orchestrator** | **Same rounded rectangle as Agent** (an Orchestrator is an Agent), 2 px stroke, plus a **solid ink header band** (24 px, clipped to the top) holding the white type row. The band is a marker, not a shape; it is filled with the node's effective ink (the Orchestrator ink by default, the selected color's ink when one is set; white on every ink ≥ 5.9:1). | orchestrator-fill (body) | Hub: a center dot with three spokes |
 | **Tool** | **Chamfered octagon**, 12 px 45° cuts on all four corners, 1.5 px solid stroke. (The v1 left ink bar is gone.) | tool-fill | Wrench |
 | **Memory / Data Store** | **Cylinder** seen from the side (elliptical lid and base, `ry = min(8, h/7)`) plus a 1 px **lid rim** arc in the border color. | memory-fill | Stacked disks |
-| **External System** | Right-leaning **parallelogram** (skew 14), **dashed** stroke (6 4) and a 45° **hatch** of `--sa-type-external-hatch` 1 px lines every 8 px, computed as explicit segments clipped to the shape ("outside the modeled boundary", PC 14, TD 12). | external-fill + hatch | Box with an arrow leaving it |
+| **External System** | Right-leaning **parallelogram** (skew 14), **dashed** stroke (6 4) and a 45° **hatch** of 1 px lines in the node ink at 16 % opacity every 8 px, computed as explicit segments clipped to the shape ("outside the modeled boundary", PC 14, TD 12). | external-fill + hatch | Box with an arrow leaving it |
 | **Decision / Routing Rule** | Horizontal **hexagon** (pointed left and right, point depth 20), 1.5 px solid stroke. (v1 used chamfered corners; chamfers now belong to Tool.) | decision-fill | Fork |
 
-**Grayscale check (acceptance):** in a grayscale screenshot, all six types must remain distinguishable by silhouette, header band, dash and hatch, and icon, **with and without an accent**. This is the "not color alone" requirement for nodes.
+The **Fill** column is the type default; a selected color replaces it with that color's tint on every type (2.3).
+
+**Grayscale check (acceptance):** in a grayscale screenshot, all six types must remain distinguishable by silhouette, header band, dash and hatch, and icon, **with and without a selected color**. This is the "not color alone" requirement for nodes. `ComponentNode.test.tsx` checks that shape, details, dash, icon and type label are identical with no color and with each of the 16 colors.
 
 ### 5.3 Ports and resize
 
@@ -284,6 +285,8 @@ Empty states are text-first and calm, with no illustrations or mascots.
 | **Tab conflict banner** (TD 8.6) | A 32 px strip directly under the toolbar on `--sa-color-warning-soft` with `--sa-color-warning-text` and a warning icon. It does not overlay the canvas; it pushes the canvas down. |
 | **Damaged library row** | Name in muted text, a warning icon plus "Can't be opened", and the first issue in `--sa-text-xs`. Only the allowed actions are shown. |
 | **Toast** (TD 5.3, 10, 13) | Bottom-center of the canvas, 16 px above the bottom edge, `--sa-color-toast-bg`, `--sa-radius-lg`, `--sa-shadow-dialog`, max 480 px wide. Text in toast-text; action ("Undo") as a text button in toast-action. It never covers the toolbar or the panels. |
+| **Delete confirmation** (TD 11.2, 11.3) | The `ConfirmDialog` from 8.4, before every editor and library deletion. After a confirmed editor delete, the existing Undo toast and announcement follow, unchanged; Cancel shows nothing. |
+| **Leave-page prompt** (TD 8.5) | Browser-owned `beforeunload` prompt while a save is pending or failed. It is not styled, cannot be re-worded and is the only native prompt; never describe it as app-styled. |
 | **Import error dialog** (TD 9.2) | The dialog style from 8.3, 560 px wide. The issues are a scrollable list (max 50vh) in `--sa-text-xs` with IDs in mono, then "Nothing was saved." in semibold. |
 
 ---
@@ -292,9 +295,9 @@ Empty states are text-first and calm, with no illustrations or mascots.
 
 ### 8.1 Inspector layout
 
-- **Header:** a sticky bar at the top of the panel with the type icon and mono type label (or "RELATIONSHIP", "GROUP", "ARCHITECTURE", "SELECTION"), then the element name in `--sa-text-lg` on the next line.
+- **Header:** a sticky bar at the top of the panel with the type icon and mono type label (or "RELATIONSHIP", "GROUP", "ARCHITECTURE", "SELECTION"), then the element name in `--sa-text-lg` on the next line. For a component, the icon and label use the component's effective palette ink (`data-palette`), so they match the node.
 - **Sections** (`<details>`): the summary row is 36 px tall on `--sa-color-surface-sunken`, `--sa-text-sm` semibold, with a chevron that rotates on open and a 1 px `--sa-color-border` below. The section body has 16 px padding and 16 px gaps between fields.
-- **Appearance** (component inspectors, UI v2): a collapsible section (open by default) after the type-specific fields and before Relationships. It holds a `<fieldset>` "Accent color" with 17 native radios: a full-width "Type default" row (28 px swatch with the type fill and ink ring + visible text) and a 4 × 4 grid of 28 px swatches (8 px gaps; tint fill, 2 px ink ring, 6 px radius; checked = 16 px check glyph + 2 px text-color outer ring; hover = 1 px `--sa-color-border-strong` ring; focus = the standard ring outermost), each with a hidden label and `title` of its name. A caption "Accent: {name}" shows the value as text. Changes apply immediately (one undo entry each). Relationship inspectors get a read-only **Ports** row and a secondary "Reset ports to automatic" button (only while a pin exists).
+- **Appearance** (component inspectors, UI v2): a collapsible section (open by default) after the type-specific fields and before Relationships. It holds a `<fieldset>` "Color" with 17 native radios: a full-width "Type default" row (28 px swatch with the type fill and ink ring + visible text) and a 4 × 4 grid of 28 px swatches (8 px gaps; each swatch sets `data-palette`, so it shows the same fill and ink the node will use: fill, 2 px ink ring, 6 px radius; checked = 16 px check glyph + 2 px text-color outer ring; hover = 1 px `--sa-color-border-strong` ring; focus = the standard ring outermost), each with a hidden label and `title` of its name. A caption "Color: {name}" (or "Color: Type default") shows the value as text. Changes apply immediately (one undo entry each, labelled "Change color"). Relationship inspectors get a read-only **Ports** row and a secondary "Reset ports to automatic" button (only while a pin exists).
 - **Footer actions** (Connect…, Duplicate, Delete): a row of secondary buttons at the end of the scroll content. Delete uses the destructive *outline* variant there; the solid destructive fill is reserved for confirmation dialogs.
 
 ### 8.2 Fields
@@ -329,7 +332,8 @@ All buttons use `--sa-text-sm` semibold labels, `--sa-radius-sm` and `--sa-contr
 
 - Width 440 px (import error 560 px, ConnectDialog 400 px), max width `calc(100vw - 32px)`. Padding 24 px, `--sa-radius-lg`, `--sa-shadow-dialog`, backdrop `--sa-color-backdrop`.
 - The title is `--sa-text-lg`, followed by the body with a 16 px gap and the button row with a 24 px gap. Buttons are right-aligned in the order **Cancel, then confirm** (confirm last).
-- **Delete confirmation:** the confirm label is "Delete" in the destructive variant, and **Cancel has initial focus** (TD 11.2).
+- **Delete confirmation** (`ConfirmDialog`, every editor and library delete, TD 11.2, 11.3): a specific confirm verb ("Delete", or "Ungroup" for a group ungroup) in the destructive variant, never "OK". The consequence text is the dialog description (`aria-describedby`). **Cancel has initial focus**, Escape cancels, and a backdrop click does nothing. While a library delete runs, both buttons are disabled, the confirm label reads "Deleting…" and Escape cannot close it. A failure appears inline above the buttons (`role="alert"`, alert icon + text, `--sa-color-danger` on `--sa-color-danger-soft`), never as a toast behind the backdrop. Focus after closing never falls to `<body>`.
+- **No browser-native dialogs or notifications:** confirmations are `ConfirmDialog`/`Dialog` and notices are toasts; `window.alert`/`confirm`/`prompt` and `Notification` are lint errors. The browser's `beforeunload` prompt is the one exception (7.4).
 - **Relationship type picker** (TD 6.3): a popover, not a modal. 280 px wide, `--sa-shadow-popover`, `--sa-radius-md`. Each option is two lines: the display name (`--sa-text-sm` semibold) and the "reads as" hint (`--sa-text-xs` muted). The active option uses accent-soft plus a 2 px accent left bar. Shares Context With shows a small "↔ undirected" tag in mono muted, so the direction rule is visible before it is chosen.
 
 ---
@@ -356,11 +360,11 @@ A single focus style used everywhere through `:focus-visible`: `outline: 2px sol
 
 1. All text meets 4.5:1 against its actual background (values in section 2).
 2. Control boundaries, selection outlines, group outlines and edges meet 3:1 against the canvas or surface.
-3. Component types differ by silhouette, icon and label (5.2); the grayscale check passes with and without accents. Accent inks, port rings and edge strokes are ≥ 3:1 against the canvas.
+3. Component types differ by silhouette, icon and label (5.2); the grayscale check passes with and without a selected color. Palette inks, port rings and edge strokes are ≥ 3:1 against the canvas.
 4. Directed and undirected edges differ by arrowhead and dash pattern (terminal rings are identical on both).
 5. Save status, errors and warnings always pair an icon with words.
 6. Selection and focus differ in shape, not only in color.
-7. **Forced colors** (`@media (forced-colors: active)`): borders and dash patterns carry the meaning. Use `CanvasText` for strokes, `Highlight` for selection outlines and keep the dash patterns for External Systems, groups and undirected edges. The hatch, accents and fills may disappear; that is acceptable because the silhouettes remain.
+7. **Forced colors** (`@media (forced-colors: active)`): borders and dash patterns carry the meaning. Use `CanvasText` for strokes, `Highlight` for selection outlines and keep the dash patterns for External Systems, groups and undirected edges. The hatch, palette colors and fills may disappear; that is acceptable because the silhouettes remain.
 
 ---
 
@@ -421,13 +425,14 @@ Rules:
 All tokens are declared on `:root` with the `--sa-` prefix:
 
 - `--sa-color-*` (neutrals, interaction, status, toast)
-- `--sa-type-{agent|orchestrator|tool|memory|external|decision}-{ink|fill}`, plus `--sa-type-external-hatch`
+- `--sa-type-{agent|orchestrator|tool|memory|external|decision}-{ink|fill}`
 - `--sa-edge-*`, `--sa-group-*`, `--sa-port-*`, `--sa-node-surface`, `--sa-accent-{id}-{ink|tint}` (16 accents)
+- `--sa-palette-{ink|fill}`, set only by the 22 `[data-palette="…"]` rules at the end of `tokens.css` (6 type entries + 16 colors)
 - `--sa-font-*`, `--sa-text-*` (set the size and line height through paired `--sa-text-{step}-size` / `--sa-text-{step}-lh` tokens if a single shorthand token is awkward), `--sa-weight-*`
 - `--sa-space-1` … `--sa-space-8`, `--sa-control-*`, `--sa-icon-*`, `--sa-radius-*`, `--sa-stroke-*`, `--sa-shadow-*`, `--sa-duration-*`, `--sa-ease`
 - `--sa-toolbar-h`, `--sa-palette-w`, `--sa-palette-w-collapsed`, `--sa-inspector-w`
 
-Module CSS references tokens only; no raw hex values outside `tokens.css`. The PNG exporter reads `--sa-color-canvas` for `backgroundColor` (TD 10) with `getComputedStyle`. Node component CSS selects the type treatment through a data attribute derived from the domain (for example `data-type="memory"` and `data-subtype="orchestrator"` on the node root), never from user-provided IDs (TD 3.4).
+Module CSS references tokens only; no raw hex values outside `tokens.css`. The PNG exporter reads `--sa-color-canvas` for `backgroundColor` (TD 10) with `getComputedStyle`. Node component CSS selects the type geometry through a data attribute derived from the domain (for example `data-type="memory"` and `data-subtype="orchestrator"` on the node root) and the color only through `data-palette`, never from user-provided IDs (TD 3.4).
 
 ---
 

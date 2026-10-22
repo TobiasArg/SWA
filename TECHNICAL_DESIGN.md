@@ -5,6 +5,7 @@
 **Scope guard:** No backend, no accounts or authentication, no AI/LLM calls, no collaboration, no runtime, workflow engine, executable conditions or state machine. The app is a static, local-first web app.
 **Date of research:** 2026-10-21.
 **UI v2 update:** Sections 3.1, 3.5, 3.6, 3.7, 5.1, 6.1, 6.3, 6.4, 7.1, 7.3, 10, 12 and 15.3 describe the "ported canvas" as built (`UI_V2_DESIGN.md`): per-type silhouettes, component accent, port pins on relationships, curved edges, schema version 2. **Release note:** schema v2 is *rollback-incompatible* (not destructive): a build that only knows v1 rejects v2 files and shows v2 IndexedDB records as damaged; no data is deleted and everything opens again after rolling forward. **UI v2 refinement (2026-10-21):** curves carry a minimum bow and tangent-aligned arrowheads, edge labels are placed clear of nodes (callout fallback), and the PNG margin is exact (§6.4, §10, §17.5). Render-only: the schema stays v2 and the saved JSON is unchanged.
+**Color and delete-confirmation update (as built):** sections 3.1, 5.1, 5.3, 6.1, 6.2, 6.5, 6.7, 7.1, 8.5, 11.2, 11.3, 12, 13 and 15 describe shipped behavior from the design record `UI_COLOR_CONFIRMATION_DESIGN.md`. A component's one effective palette entry (selected color, else type default) supplies node fill and ink. Every editor deletion is confirmed in the app-styled `ConfirmDialog` before it is dispatched and stays undoable. The app uses no browser-native dialogs or notifications, except the browser-owned `beforeunload` prompt (8.5). No schema or JSON change.
 
 ---
 
@@ -138,7 +139,7 @@ export interface Component {
   links?: ExternalLink[];
   position: Position;                  // absolute canvas coordinates, top-left of node
   size?: Size;                         // set only after a user resize
-  accent?: AccentId;                   // v2: decoration only (border and details); absent = type default
+  accent?: AccentId;                   // v2: decoration only; the selected color (node fill and ink); absent = type default
   properties?: Record<string, string>; // type-specific fields (3.3)
   behavior?: AgentBehavior;            // only when type === "agent"
 }
@@ -191,7 +192,7 @@ export interface Selection {
 
 Rules carried over verbatim from the spec: components have no `groupId` and no association lists; Orchestrator = `type: "agent"`, `subtype: "orchestrator"` with the same schema as Agent.
 
-**Accent [UI v2]:** `AccentId` is one of the 16 fixed IDs in `ACCENT_IDS` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; display names, ink and tint in `ACCENTS`, `src/domain/constants.ts`). The accent recolors only the node's border and icon chip, never the fill, text or the Orchestrator band. IDs are persisted, so they are never renamed or removed; adding one is a schema bump. Components only: groups have no `accent` (an `accent` key on a group is stripped on import). `accent` is not exported to Markdown (9.3) and does not appear in aria-labels.
+**Accent [UI v2]:** `AccentId` is one of the 16 fixed IDs in `ACCENT_IDS` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; display names, ink and tint in `ACCENTS`, `src/domain/constants.ts`). A valid accent is the component's **selected color**: `effectivePaletteId` (`src/domain/palette.ts`) returns it, or the type default (`type-agent`, `type-orchestrator`, `type-tool`, `type-memory`, `type-external`, `type-decision`) when `accent` is absent or invalid. That one entry supplies both the node fill and the ink (stroke, icon chip ring and glyph, type label, Memory rim, External hatch, Orchestrator band); type rules carry geometry only, so a selected color always wins over the type colors. Name and description text keep the neutral text colors. The persisted field and its UI copy stay separate: the field is `accent`, the UI says "Color". IDs are persisted, so they are never renamed or removed; adding one is a schema bump. Components only: groups have no `accent` (an `accent` key on a group is stripped on import). `accent` is not exported to Markdown (9.3) and does not appear in aria-labels.
 
 **Port pins [UI v2]:** a relationship may carry `visual: { ports: { source?: "top"|"right"|"bottom"|"left", target?: … } }` (`readPortPins`, `src/domain/ports.ts`). An absent key means *automatic* for that end (6.4). A malformed value is treated as automatic and preserved verbatim. No schema field was added for this; ports are not typed (no input/output roles) and never change which end is the source.
 
@@ -471,7 +472,7 @@ export function applyCommand(a: Architecture, c: Command): CommandResult; // pur
 | `addRelationship` | Append. Direction must be allowed for the type. | Endpoints must be existing components (not groups), distinct. |
 | `retypeRelationship` | Change `type`. New direction: fixed types → their fixed direction; to `generic` → keep current direction. `label`/`description`/endpoints unchanged. | — |
 | `setRelationshipDirection` | Change direction. | `type === "generic"` only. |
-| `setComponentAccent` | Set or remove `accent` on the listed components (one undo entry, "Change accent color"; no-op when nothing changes). | Components only: unknown or group IDs → `E_COMPONENT_NOT_FOUND`; unknown accent → `E_INVALID_ACCENT`. |
+| `setComponentAccent` | Set or remove `accent` on the listed components (one undo entry, "Change color"; no-op when nothing changes). | Components only: unknown or group IDs → `E_COMPONENT_NOT_FOUND`; unknown accent → `E_INVALID_ACCENT`. |
 | `setRelationshipPorts` | Replace only `visual.ports`, keeping other `visual` keys; `null` removes `ports` (an empty `visual` becomes absent). Undo label "Reset relationship ports". | Unknown ID → `E_RELATIONSHIP_NOT_FOUND`; a side outside `top|right|bottom|left` → `E_INVALID_PORT`. |
 | `reverseRelationship` | Swap `sourceId`/`targetId` **and** `visual.ports.source`/`target`, so the line keeps its physical attachment and only the arrowhead moves. | `type === "generic"` and `direction === "directed"` only. |
 | `createGroup` | Remove `memberIds` from any current group (explicit reassignment), create group with those members, compute bounds. | ≥ 1 member; members are components. |
@@ -540,7 +541,8 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 - After every architecture change (including undo/redo), selection is pruned to existing IDs.
 - `context.tsx`: `EditorProvider`, `useEditorStore()`, `useEditorState<T>(selector, isEqual?)` via `useSyncExternalStore`.
 - `actions.ts` (UI-agnostic helpers used by canvas, inspector, toolbar and shortcuts so behavior is identical everywhere):
-  - `deleteSelection(store)` → dispatches `deleteElements`, then shows a toast "Deleted 1 component and 3 relationships." with an **Undo** button and announces it via the live region (spec 8.3 "the user sees it happen").
+  - `deleteSelection(store)` → dispatches `deleteElements`, then shows a toast "Deleted 1 component and 3 relationships." with an **Undo** button and announces it via the live region (spec 8.3 "the user sees it happen"). UI routes never call it directly: they go through the confirmation below, which calls it unchanged after Confirm.
+  - Confirmation helpers (pure): `deletionTargets(selection, intent)` (`"delete"` = the whole selection, `"ungroup"` = only the selected groups), `previewDeletion(architecture, ids)` (runs `applyCommand` with the same `deleteElements` command without dispatching, so the counts equal the real summary, cascaded relationships included; `null` when nothing would be deleted or the command is rejected) and `deletionConfirmCopy(preview, intent)` (title, description and confirm label, 11.3).
   - `duplicateSelection(store)`, `groupSelection(store)` (name "Group", "Group 2", …; selects the new group), `ungroupSelection(store)` (6.5), `nudgeSelection(store, dx, dy)`.
 
 ---
@@ -554,7 +556,7 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 | `nodes`, `edges` | from `projection.ts` + transient drag/resize/selection state | Controlled flow. |
 | `onNodesChange` | apply only `position` (while dragging), `dimensions`, `select` changes to local transient state via `applyNodeChanges`; ignore `remove` | Domain is changed only through commands. |
 | `onEdgesChange` | apply only `select`; ignore `remove` | Same. |
-| `deleteKeyCode` | `null` | Deletion is handled by `app/shortcuts.ts` → `actions.deleteSelection`. |
+| `deleteKeyCode` | `null` | Deletion is handled by `app/shortcuts.ts` → the editor delete confirmation (11.3) → `actions.deleteSelection`. |
 | `connectionMode` | `ConnectionMode.Loose` | Every port is a `source` handle; the node you drag from is the source. |
 | `connectionRadius` | `20` | Snaps to a port within 20 px (`CONNECTION_RADIUS`). |
 | `isValidConnection` | both ends are component nodes and `source !== target` | Groups can never be endpoints; no self-relationships. |
@@ -582,7 +584,7 @@ toFlowEdges(a: Architecture, selection: Selection): Edge[]
 ```
 
 - **Group nodes first**, then component nodes (array order). Group node: `id = group.id`, `type: "group-container"`, `position = {bounds.x, bounds.y}`, `width/height = bounds`, `draggable: true`, `dragHandle: ".sa-group-header"`, `connectable: false`, `selectable: true`, `zIndex: 0`, `data: { group }`.
-- Component node: `id = component.id`, `type: "component"`, `position`, `width/height` = effective size, `zIndex: 10`, `data: { component, groupName? }` (the node renders `data-type`, `data-subtype` and, only for a validated accent, `data-accent`; its silhouette is an inline SVG per `ShapeKind`, `canvas/shapes.ts`), `domAttributes: { "aria-roledescription": "component" }`, `ariaLabel`/`aria-label` = "{Type display}: {name}. {description}".
+- Component node: `id = component.id`, `type: "component"`, `position`, `width/height` = effective size, `zIndex: 10`, `data: { component, groupName? }` (the node renders `data-type`, `data-subtype`, `data-palette` = `effectivePaletteId(component)` (the only attribute CSS reads for color) and, only for a validated accent, `data-accent` (read by tests, not by CSS); its silhouette is an inline SVG per `ShapeKind`, `canvas/shapes.ts`), `domAttributes: { "aria-roledescription": "component" }`, `ariaLabel`/`aria-label` = "{Type display}: {name}. {description}".
 - Edge: `id = rel.id`, `type: "relationship"`, `source = rel.sourceId`, `target = rel.targetId`, `markerEnd = { type: MarkerType.ArrowClosed }` **only if directed**, no `markerStart` ever, `zIndex: 5`, `interactionWidth: 16`, `ariaLabel = describeRelationship(...)`, `data: { relationship, parallelOffset, labelPosition }` (parallel-pair spreading, 6.4). The edge component resolves ports and geometry itself from the live node rects.
 - No `parentId` is used. Positions are absolute. Groups are siblings, not parents.
 
@@ -659,7 +661,7 @@ Bounds are always the tight padded box (they shrink as well as grow). They never
 | Interaction | Result |
 |---|---|
 | **Group** (toolbar, `Mod+G`, multi-selection inspector) with ≥1 component selected | `createGroup` with selected components; any that were in another group are moved (never in two groups). Selected groups/relationships in the selection are ignored. New group selected. |
-| **Ungroup** (`Mod+Shift+G`) with group(s) selected | Delete those groups (members and relationships kept) = same as deleting the group. |
+| **Ungroup** (toolbar, `Mod+Shift+G`) with group(s) selected | Asks first ("Ungroup 1 group?", confirm label "Ungroup", 11.3), then deletes those groups (members and relationships kept) = same as deleting the group. No toast; `Mod+Z` undoes it. |
 | **Ungroup** with component(s) selected | `assignToGroup(componentIds, null)`; groups remain (possibly empty). |
 | Inspector "Group" select on a component | `assignToGroup([id], groupId \| null)`. |
 | Group inspector member row "Remove from group" | `assignToGroup([id], null)`. |
@@ -695,7 +697,7 @@ Resize: `NodeResizer` on selected component nodes (`minWidth/minHeight` = MIN_SI
 |---|---|---|
 | `Mod+Z` | Undo | Always in the editor (also in text fields: app undo replaces native text undo; consecutive typing is one step). `preventDefault`. |
 | `Mod+Shift+Z`, `Ctrl+Y` | Redo | Always in the editor. |
-| `Delete`, `Backspace` | Delete selection (`actions.deleteSelection`) | Not in editable focus. |
+| `Delete`, `Backspace` | Delete selection after the confirmation dialog (11.3) | Not in editable focus. Ignored while a dialog is open. |
 | `Escape` | Close topmost popover/dialog → cancel in-progress connection → clear selection | Always. |
 | `Mod+D` | Duplicate selected components | Not in editable focus. `preventDefault`. |
 | `Mod+G` / `Mod+Shift+G` | Group / Ungroup | Not in editable focus. |
@@ -721,7 +723,7 @@ All inputs have visible `<label>`s. Text edits dispatch on change with a coalesc
 | | Group (`Group.memberComponentIds`) | select: "None" + groups by name → `assignToGroup` |
 | **Responsibilities** | Responsibilities (`behavior.responsibilities`), Boundaries (`behavior.boundaries`) | `ListField`: textarea, one item per line; committed as trimmed non-empty lines |
 | **Behavior** | Activation, Behavioral Rules (`rules`, ListField), Delegation, Outputs, Failure Handling | textareas |
-| **Appearance** (UI v2) | Accent color (`accent`) | `AccentPicker`: `<fieldset>` with legend "Accent color" and 17 native radios ("Type default" + the 16 accents in `ACCENT_IDS` order, accessible names = display names) and a text caption "Accent: {name}". A change dispatches `setComponentAccent` immediately (one undo entry per change; nothing is announced beyond the radio). Placed after the type-specific fields and before Relationships, **open by default** (as built). Present for every component type; not in the group, relationship, architecture or multi-selection inspectors. |
+| **Appearance** (UI v2) | Color (`accent`) | `AccentPicker`: `<fieldset>` with legend "Color" and 17 native radios ("Type default" + the 16 accents in `ACCENT_IDS` order, accessible names = display names) and a text caption "Color: {name}" / "Color: Type default". Each swatch sets `data-palette` to the entry the node would use (`type-*` for "Type default"), so swatch and node share one CSS source. A change dispatches `setComponentAccent` immediately (one undo entry per change; nothing is announced beyond the radio). Placed after the type-specific fields and before Relationships, **open by default** (as built). Present for every component type; not in the group, relationship, architecture or multi-selection inspectors. |
 | **Relationships** | read-only `RelationshipList` (7.4) | — |
 | **Documentation** | Notes (`notes`, Markdown source), External links (`links`) | `NotesField`: textarea (monospace hint "Markdown") with an Edit/Preview toggle (two `aria-pressed` buttons; Preview renders `ui/MarkdownPreview`, see 14); `LinksField` rows of label + URL with add/remove buttons |
 | Footer actions | Connect…, Duplicate, Delete | buttons → `actions.*` |
@@ -730,7 +732,7 @@ Sections are collapsible (`<details>`/`<summary>`); Identity and Appearance open
 
 ### 7.2 Component inspector — other types
 
-All component types get the same **Appearance** section as 7.1 (the accent picker).
+All component types get the same **Appearance** section as 7.1 (the color picker). The component inspector header's type glyph and label use the component's effective palette ink, so they match the node.
 
 Identity (Name, Description, Group), then **type fields** (`TypeFields.tsx`), then Relationships, then Documentation (Notes, Links).
 
@@ -830,7 +832,7 @@ export function startAutosave(store: EditorStore, repo: Repository): SaveControl
 
 ### 8.5 Unload guard and storage durability
 
-- `unloadGuard.ts`: `beforeunload` handler calls `preventDefault()` (and sets `returnValue`) while status is `pending`, `saving` or `error` (spec 12.2 "Unsaved changes").
+- `unloadGuard.ts`: `beforeunload` handler calls `preventDefault()` (and sets `returnValue = ""`) while status is `pending`, `saving` or `error` (spec 12.2 "Unsaved changes"). The resulting leave-page prompt is **browser-owned**: the app cannot style it, change its text or replace it with an app dialog. It is the only native prompt left and is not an app interaction; in-app navigation uses `flush()` and the app toast instead.
 - On the first architecture creation or import, call `navigator.storage?.persist?.()` once (user-initiated moment; Chromium/Safari decide silently, Firefox may prompt). The result is not required for operation.
 - The library shows a persistent backup notice: "Your architectures are stored only in this browser. Clearing site data erases them. Export to JSON to keep a backup." (dismissible banner + always-visible footer line) (spec 18).
 
@@ -906,7 +908,7 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void>;
    ```
 6. Remove `sa-exporting` in `finally`; download as `{slug}.png`.
 
-**UI v2 rendering notes:** node silhouettes, accents, terminal rings and inline arrowheads are plain SVG with CSS-variable fills (no `url(#…)` references), so they export as rendered. Ports are excluded (`exportFilter` drops `react-flow__handle`). `<Background>` dots sit outside `.react-flow__viewport`, so the PNG has a flat `--sa-color-canvas` (`#F7F6F3`) background by design.
+**UI v2 rendering notes:** node silhouettes, palette colors, terminal rings and inline arrowheads are plain SVG with CSS-variable fills (no `url(#…)` references), so they export as rendered. Ports are excluded (`exportFilter` drops `react-flow__handle`). `<Background>` dots sit outside `.react-flow__viewport`, so the PNG has a flat `--sa-color-canvas` (`#F7F6F3`) background by design.
 
 Why this satisfies Scenario H: group nodes and edges (with SVG-text labels, 6.4) are all inside `.react-flow__viewport`; MiniMap, attribution and toolbar are outside it. System fonts avoid web-font embedding issues.
 
@@ -931,7 +933,7 @@ Failure → toast "Image export failed. Try zooming out or reducing the diagram 
 - **List:** a `<table>` (name, last edited (relative + exact in `title`), counts) sorted by `updatedAt` desc. Row actions: Open (row name is a link to `#/a/<id>`), Rename, Duplicate, Export JSON, Export Markdown, Delete.
 - **New architecture:** dialog with Name (default "Untitled architecture", required) → `repo.create` → open editor (Scenario A: it appears in the library).
 - **Rename:** dialog with Name.
-- **Delete:** `ConfirmDialog` "Delete '{name}'? This cannot be undone. Export it to JSON first if you want a backup." with **Delete** (destructive) / Cancel; Cancel is focused by default.
+- **Delete:** `ConfirmDialog` titled "Delete '{name}'?" with the description "This cannot be undone. Export it to JSON first if you want a backup." (exposed via `aria-describedby`) and Cancel / **Delete** (destructive); Cancel is focused when it opens. While `repository.remove` runs, both buttons are disabled, the confirm label reads "Deleting…", Escape cannot close it and a second confirm is ignored. A failure keeps the dialog open with an inline `role="alert"` message (no toast behind the backdrop). Focus afterwards: Cancel → the row's Delete button; success → the next row's name link, else the previous row's, else "New architecture". Success is announced ("Deleted {name}.").
 - **Damaged rows:** marked "Can't be opened" with the first issue message; actions Export raw JSON, Delete.
 - **Storage unavailable:** full-page error (13).
 - Backup notice (8.5).
@@ -941,6 +943,16 @@ Failure → toast "Image export failed. Try zooming out or reducing the diagram 
 Layout: toolbar (top, `<header>`), palette (left, `<aside aria-label="Component library">`, collapsible), canvas (`<main>`), inspector (right, `<aside aria-label="Inspector">`, collapsible). Collapse buttons use `aria-expanded`; state remembered in `localStorage`.
 
 Lifecycle: `repo.get(id)` → if ok, `createEditorStore(file.architecture)` → `startAutosave` → `tabSync.open(id)` → render. On leave: `await saveController.flush()`, dispose.
+
+**Delete confirmation.** Every UI route that dispatches `deleteElements` goes through one `requestDelete(store, intent)` and one app-styled `ConfirmDialog`: Delete and Backspace, toolbar Delete, the component, relationship, multi-selection and group ("Delete group (keeps members)") inspector Delete buttons, and toolbar Ungroup / `Mod+Shift+G` when groups are selected. An empty selection (or a preview that deletes nothing) opens no dialog; Ungroup with only components selected stays an immediate `assignToGroup`. Copy from `deletionConfirmCopy`:
+
+| Case | Title | Description | Confirm |
+|---|---|---|---|
+| Delete | "Delete {list}?" (e.g. "Delete 1 component and 3 relationships?") | "You can undo this with Undo or ⌘Z / Ctrl+Z.", prefixed with "Connected relationships are deleted with their components." when relationships cascade | "Delete" |
+| Groups only | "Delete 1 group?" | "Its components stay on the canvas." (plural: "Their") + the undo sentence | "Delete" |
+| Ungroup | "Ungroup 1 group?" / "Ungroup 2 groups?" | "The group is removed. Its components stay on the canvas. You can undo this with ⌘Z / Ctrl+Z." (plural forms for several groups) | "Ungroup" |
+
+Cancel (button, Escape) dispatches nothing, shows no toast or announcement and returns focus to the opener if it is still connected and enabled, else to the canvas region (`<main data-sa-canvas tabIndex={-1}>`). Confirm closes the dialog synchronously first, then calls `actions.deleteSelection` / `ungroupSelection` unchanged (same single history entry, toast and announcement), but only if the selection still equals the one the dialog described; focus then moves to the canvas region. While the dialog is open the background is inert and shortcuts are ignored, so no second dialog opens.
 
 ### 11.4 Toolbar (`toolbar/`)
 
@@ -956,10 +968,11 @@ All icon buttons have `aria-label` and a tooltip with the shortcut.
 Targets: spec section 18 (labelled forms, legible text and contrast, clear selection, keyboard delete/undo/redo/Escape, form/panel navigation). Aim for WCAG 2.2 AA on all non-canvas UI.
 
 - **Forms:** every control has a `<label>`; errors use `aria-invalid` + `aria-describedby`.
-- **Dialogs:** native `<dialog>` with `showModal()` (built-in focus containment and Escape); focus returns to the opener on close.
+- **Dialogs:** native `<dialog>` with `showModal()` (built-in focus containment and Escape); focus returns to the opener on close. `ConfirmDialog` (`ui/ConfirmDialog.tsx`, used by every editor and library delete) focuses Cancel on open, cancels on Escape, ignores backdrop clicks, exposes its consequence text via `aria-describedby`, cannot be dismissed or confirmed twice while busy, and shows failures inline (`role="alert"`). Focus after close is set by the caller (11.2, 11.3) and never falls to `<body>`.
+- **No browser-native dialogs or notifications:** app code never calls `window.alert`, `confirm` or `prompt` or uses the `Notification` API; ESLint enforces it (`no-alert`, `no-restricted-globals` / `no-restricted-properties` for `Notification`). Confirmations are `ConfirmDialog`/`Dialog`, notices are `Toast` plus `LiveRegion`. The `beforeunload` prompt is browser-owned and outside this rule (8.5).
 - **Live announcements:** one polite `LiveRegion` (`ui/LiveRegion.tsx`) for deletions, undo/redo ("Undid: Delete component"), save failures, import results.
 - **Canvas:** nodes and edges focusable; node `aria-label` = "{Type}: {name}. {description}"; edge `aria-label` = `describeRelationship`; `ariaLabelConfig` overrides React Flow's default help text to mention our shortcuts. Arrow-key nudge and Connect dialog give keyboard-only paths for move and connect.
-- **Not color alone:** each component type differs by silhouette **and** icon **and** type text (Agent/Orchestrator rounded rectangle, Tool chamfered octagon, Memory cylinder, External System dashed hatched parallelogram, Decision hexagon); the Orchestrator differs from the Agent by a solid header band + hub icon + "ORCHESTRATOR" label (a marker, not a shape); undirected edges are dashed and have no arrowheads. The accent color carries no meaning: it is not announced, not in aria-labels and not in Markdown export. The accent picker is a native radio group with text names and a visible text caption.
+- **Not color alone:** each component type differs by silhouette **and** icon **and** type text (Agent/Orchestrator rounded rectangle, Tool chamfered octagon, Memory cylinder, External System dashed hatched parallelogram, Decision hexagon); the Orchestrator differs from the Agent by a solid header band + hub icon + "ORCHESTRATOR" label (a marker, not a shape); undirected edges are dashed and have no arrowheads. The selected color (fill and ink) carries no meaning: it is not announced, not in aria-labels and not in Markdown export, and it never changes a type's silhouette, details, dash, icon or label. The color picker is a native radio group with text names and a visible text caption.
 - **Ports:** not keyboard tab stops; the Connect dialog (automatic ports) is the keyboard path for every relationship the pointer can make. Node and edge aria-labels contain no color or port wording.
 - **Selection:** a 2 px outline that follows the silhouette, inflated 4 px, plus an 8 px halo, with ≥ 3:1 contrast against the canvas; the keyboard focus ring stays on the rectangular node wrapper, distinct from selection.
 - **Contrast:** text ≥ 4.5:1; tokens validated by design agents.
@@ -984,7 +997,8 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 | PNG export failure | `toPng` rejects | Toast (10) | none |
 | Open unknown architecture | router | Library + toast | none |
 | Same architecture in two tabs | `tabSync` | Banner (8.6) | last write wins |
-| Leaving with pending/failed save | `beforeunload` | Browser leave-page prompt | — |
+| Library delete failed | `repo.remove` rejects | Inline `role="alert"` message inside the still-open confirm dialog; no toast | record kept |
+| Leaving with pending/failed save | `beforeunload` | Browser-owned leave-page prompt (not app-styled; text cannot be customized) | — |
 
 ---
 
@@ -1022,13 +1036,18 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 | `canvas/projection` | group nodes before components; directed → `markerEnd`, undirected → none; no `parentId`; sizes |
 | `canvas/dragController` (pure part) | moving set dedup (group + selected member); deltas; zero-delta no-op |
 | `inspector` (RTL) | Agent fields edit + persist through store; generic direction controls shown/hidden per type; relationship list read-only and selection behavior; name required; group select assignment |
-| `library` (RTL + fake repo) | empty/loading/list states; delete requires confirmation |
+| `library` (RTL + fake repo) | empty/loading/list states; delete requires confirmation; Cancel focused, Escape cancels, busy blocks dismissal and double confirm, failure shown inline, focus restored |
+| `domain/palette` | `effectivePaletteId` (accent, else type default); `PALETTE` mirrors `tokens.css`; one `[data-palette]` rule per entry; every entry passes the paired contrast checks (ink:fill, ink:white, text and muted on fill ≥ 4.5; ink:canvas, selection:fill ≥ 3) |
+| `canvas/ComponentNode` | `data-palette`; only `.sa-node` maps the palette and no rule reads `data-accent`; a selected color drives fill, border, chip, label, rim and band on every type; default colors unchanged; shape, details, dash, icon and label identical with every color; groups never carry `data-palette` |
+| `ui/ConfirmDialog` | title and description, Cancel focused first, Cancel/Enter/Escape cancel, backdrop ignored, busy blocks dismissal and confirm, inline error |
+| `editor/actions`, `app` integration | `previewDeletion` counts equal the dispatched summary; confirmation copy; every editor delete route opens the dialog and dispatches nothing until confirmed; Cancel changes nothing and restores focus; Confirm deletes once, then shows the Undo toast and announcement; ungroup confirmation |
 
 ### 15.3 End-to-end (Playwright, Chromium required; Firefox and WebKit run in CI if available)
 
-One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, accent persistence/undo/duplicate/round trip, schema v1 → v2 import, PNG bounds for a bulging curve, and the UI v2 refinement checks E1–E4: curve bow, label clearance and PNG margins at 48 CSS px and at the 4096 px cap), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
+One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, color persistence/undo/duplicate/round trip, every color driving body fill and logo on a Tool, a selected color winning on every type with PNG export, schema v1 → v2 import, PNG bounds for a bulging curve, and the UI v2 refinement checks E1–E4: curve bow, label clearance and PNG margins at 48 CSS px and at the 4096 px cap), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
 
 - **H (PNG):** export, read the downloaded file, assert PNG signature, dimensions and a clean frame (no content cropped at the edge), no selection-colored pixels, and the presence of both terminal rings and the arrowhead in the DOM before export. There is no stored image baseline: the check is pixel-statistical against the v2 canvas background `#F7F6F3`. Set `SA_E2E_PNG_DIR=<dir>` to also write the exported PNGs for human review.
+- **Delete confirmation:** `a11y-keyboard` (Delete opens the dialog with Cancel focused; Escape keeps the node and returns focus to it; Backspace, Tab, Enter deletes, focus stays in the canvas and the toast's Undo restores), `scenario-i` (toolbar Delete: Cancel keeps everything and refocuses the button, then Delete deletes) and `scenario-e` (group delete confirms first).
 - **J (no external services):** `page.route("**/*", ...)` aborts and records any request whose host is not the preview server; run the full A–I flow; assert zero recorded requests. No login screens exist.
 - **Performance check (spec 18):** with the performance fixture, measure time for: select (click → inspector shows) < 100 ms, drag of a group with 10 members stays smooth (record frame times via `requestAnimationFrame` sampling during a scripted drag; target median ≤ 32 ms), zoom/pan responsive. These are the established targets for "dozens" (with headroom) **[Design decision]**; failures are reported, tuned (memoized node components, `onlyRenderVisibleElements`), and re-measured.
 
