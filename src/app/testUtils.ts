@@ -10,6 +10,15 @@ export function installDialogPolyfill(): void {
   proto.__saPolyfill = true;
   proto.showModal = function showModal(this: HTMLDialogElement) {
     this.setAttribute("open", "");
+    // Escape fires a cancelable `cancel` and closes the dialog unless it was prevented.
+    if (!this.dataset.saEscape) {
+      this.dataset.saEscape = "1";
+      this.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !this.hasAttribute("open")) return;
+        event.preventDefault();
+        if (this.dispatchEvent(new Event("cancel", { cancelable: true }))) this.close();
+      });
+    }
     // Browsers focus the first focusable element when a modal dialog opens.
     this.querySelector<HTMLElement>("input, select, textarea, button, a[href], [tabindex]:not([tabindex='-1'])")?.focus();
   };

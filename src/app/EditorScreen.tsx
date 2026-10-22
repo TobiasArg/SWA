@@ -1,14 +1,24 @@
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { CanvasApiContext, type CanvasApi } from "../canvas/canvasApi";
+import {
+  deletionConfirmCopy,
+  deletionTargets,
+  previewDeletion,
+  type DeletionConfirmCopy,
+  type DeletionIntent,
+} from "../editor/actions";
 import { EditorProvider } from "../editor/context";
 import type { EditorStore } from "../editor/storeTypes";
 import { ImportErrorDialog } from "../library/dialogs";
 import type { Repository, SaveController } from "../persistence/types";
 import { Glyph } from "../toolbar/glyphs";
 import { Toolbar } from "../toolbar/Toolbar";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Icon } from "../ui/icons";
 import { announce } from "../ui/LiveRegion";
 import { useToast } from "../ui/Toast";
+import type { Selection } from "../domain/types";
 import type { ValidationIssue } from "../domain/validation/issues";
 import {
   initialPanelExpanded,
@@ -30,6 +40,27 @@ export const LEAVE_SAVE_FAILED_MESSAGE =
 interface EditorSession {
   store: EditorStore;
   controller: SaveController;
+}
+
+/** A delete or ungroup waiting for the user's answer in the confirmation dialog. */
+interface PendingDelete {
+  store: EditorStore;
+  intent: DeletionIntent;
+  ids: Selection;
+  copy: DeletionConfirmCopy;
+  opener: HTMLElement | null;
+}
+
+function sameIds(a: Selection, b: Selection): boolean {
+  const same = (x: string[], y: string[]) => x.length === y.length && x.every((id, index) => id === y[index]);
+  return (
+    same(a.componentIds, b.componentIds) && same(a.relationshipIds, b.relationshipIds) && same(a.groupIds, b.groupIds)
+  );
+}
+
+/** The canvas focus target after a delete dialog closes (UI_COLOR_CONFIRMATION_DESIGN ED7). */
+function focusCanvas(): void {
+  document.querySelector<HTMLElement>("[data-sa-canvas]")?.focus({ preventScroll: true });
 }
 
 interface PendingConnectFocusReturn {
@@ -156,6 +187,8 @@ function EditorWorkspace({
   const pendingConnectFocusRef = useRef<PendingConnectFocusReturn | null>(null);
   const [connectSource, setConnectSource] = useState<string | null>(null);
   const [importIssues, setImportIssues] = useState<ValidationIssue[] | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const pendingDeleteRef = useRef<PendingDelete | null>(null);
   const [paletteExpanded, setPaletteExpanded] = useState(() => initialPanelExpanded("palette", PALETTE_WIDE_QUERY));
   const [inspectorExpanded, setInspectorExpanded] = useState(() =>
     initialPanelExpanded("inspector", INSPECTOR_DOCKED_QUERY),
@@ -244,14 +277,69 @@ function EditorWorkspace({
     });
   }, [store]);
 
+  // Every UI route that dispatches `deleteElements` asks first (UI_COLOR_CONFIRMATION_DESIGN §2.3).
+  const requestDelete = useCallback((target: EditorStore, intent: DeletionIntent) => {
+    if (pendingDeleteRef.current) return;
+    const { architecture, selection } = target.getState();
+    const ids = deletionTargets(selection, intent);
+    const preview = previewDeletion(architecture, ids);
+    if (!preview) return;
+    const active = document.activeElement;
+    const pending: PendingDelete = {
+      store: target,
+      intent,
+      ids,
+      copy: deletionConfirmCopy(preview, intent),
+      opener: active instanceof HTMLElement && active !== document.body ? active : null,
+    };
+    pendingDeleteRef.current = pending;
+    setPendingDelete(pending);
+  }, []);
+
+  /** Closes the dialog synchronously, so nothing that follows renders behind its backdrop. */
+  const closeDeleteDialog = useCallback(() => {
+    const pending = pendingDeleteRef.current;
+    pendingDeleteRef.current = null;
+    flushSync(() => setPendingDelete(null));
+    return pending;
+  }, []);
+
+  const cancelDelete = useCallback(() => {
+    const pending = closeDeleteDialog();
+    if (!pending) return;
+    const { opener } = pending;
+    if (opener?.isConnected && !opener.matches(":disabled")) opener.focus({ preventScroll: true });
+    else focusCanvas();
+  }, [closeDeleteDialog]);
+
+  const confirmDelete = useCallback(() => {
+    const pending = closeDeleteDialog();
+    if (!pending) return;
+    const { store: target, intent, ids } = pending;
+    // The background is inert while the dialog is open; never delete a selection the user did not see.
+    if (sameIds(deletionTargets(target.getState().selection, intent), ids)) {
+      if (intent === "ungroup") services.actions.ungroupSelection(target, feedback);
+      else services.actions.deleteSelection(target, feedback);
+    }
+    focusCanvas();
+  }, [closeDeleteDialog, feedback, services]);
+
+  const ungroupSelection = useCallback(
+    (target: EditorStore) => {
+      if (target.getState().selection.groupIds.length > 0) requestDelete(target, "ungroup");
+      else services.actions.ungroupSelection(target, feedback);
+    },
+    [feedback, requestDelete, services],
+  );
+
   const inspectorActions = useMemo<InspectorActions>(
     () => ({
-      deleteSelection: (target) => services.actions.deleteSelection(target, feedback),
+      deleteSelection: (target) => requestDelete(target, "delete"),
       duplicateSelection: (target) => services.actions.duplicateSelection(target, feedback),
       groupSelection: (target) => services.actions.groupSelection(target, feedback),
       openConnectDialog: openConnectFor,
     }),
-    [feedback, openConnectFor, services],
+    [feedback, openConnectFor, requestDelete, services],
   );
 
   const togglePalette = () => {
@@ -276,10 +364,10 @@ function EditorWorkspace({
       getCanvasApi: () => canvasApiRef.current,
       undo,
       redo,
-      deleteSelection: () => services.actions.deleteSelection(store, feedback),
+      deleteSelection: () => requestDelete(store, "delete"),
       duplicateSelection: () => services.actions.duplicateSelection(store, feedback),
       groupSelection: () => services.actions.groupSelection(store, feedback),
-      ungroupSelection: () => services.actions.ungroupSelection(store, feedback),
+      ungroupSelection: () => ungroupSelection(store),
       nudgeSelection: (dx, dy) => services.actions.nudgeSelection(store, dx, dy),
       openConnectDialog,
       closeOverlay: () => {
@@ -291,7 +379,7 @@ function EditorWorkspace({
     });
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [feedback, isMac, openConnectDialog, redo, services, store, undo]);
+  }, [feedback, isMac, openConnectDialog, redo, requestDelete, services, store, undo, ungroupSelection]);
 
   // Save failures are announced once per transition into the error state (TD 12).
   useEffect(() => {
@@ -358,9 +446,9 @@ function EditorWorkspace({
           onUndo={undo}
           onRedo={redo}
           onGroup={() => services.actions.groupSelection(store, feedback)}
-          onUngroup={() => services.actions.ungroupSelection(store, feedback)}
+          onUngroup={() => ungroupSelection(store)}
           onConnect={openConnectDialog}
-          onDelete={() => services.actions.deleteSelection(store, feedback)}
+          onDelete={() => requestDelete(store, "delete")}
           onExportJson={() => services.exportArchitectureJson(store.getState().architecture)}
           onExportMarkdown={() => services.exportArchitectureMarkdown(store.getState().architecture)}
           onExportPng={exportPng}
@@ -393,7 +481,7 @@ function EditorWorkspace({
             </div>
           </aside>
 
-          <main className="sa-editor__canvas" data-sa-canvas aria-label="Canvas">
+          <main className="sa-editor__canvas" data-sa-canvas aria-label="Canvas" tabIndex={-1}>
             <CanvasView />
           </main>
 
@@ -425,6 +513,14 @@ function EditorWorkspace({
 
         <ConnectDialog open={connectSource !== null} sourceId={connectSource} onClose={closeConnectDialog} />
         <ImportErrorDialog issues={importIssues} onClose={() => setImportIssues(null)} />
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          title={pendingDelete?.copy.title ?? "Delete?"}
+          description={pendingDelete?.copy.description}
+          confirmLabel={pendingDelete?.copy.confirmLabel}
+          onCancel={cancelDelete}
+          onConfirm={confirmDelete}
+        />
       </div>
     </>
   );

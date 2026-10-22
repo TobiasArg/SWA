@@ -45,6 +45,12 @@ button:disabled {
   box-shadow: 0 0 0 2px var(--sa-color-focus-gap);
 }
 
+/* The canvas region takes focus after an editor delete dialog closes; keep its ring inside. */
+[data-sa-canvas]:focus-visible {
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
 .sa-foundation {
   display: grid;
   min-height: 100vh;
@@ -189,6 +195,19 @@ button:disabled {
   justify-content: flex-end;
   gap: var(--sa-space-3);
   margin-top: var(--sa-space-6);
+}
+
+/* Inline failure inside a dialog: a full-width line above the buttons (CD7). */
+.sa-dialog__error {
+  display: flex;
+  flex-basis: 100%;
+  align-items: flex-start;
+  gap: var(--sa-space-2);
+  margin: 0;
+  padding: var(--sa-space-3);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-color-danger-soft);
+  color: var(--sa-color-danger);
 }
 
 .sa-toast-region {

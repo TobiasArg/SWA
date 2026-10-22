@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 
 export type ButtonVariant =
   | "primary"
@@ -8,6 +8,7 @@ export type ButtonVariant =
   | "destructive-outline";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   variant?: ButtonVariant;
   size?: "standard" | "compact";
   iconOnly?: boolean;

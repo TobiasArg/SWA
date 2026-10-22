@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { placeholderServices } from "../app/defaultServices";
@@ -128,16 +128,77 @@ describe("LibraryScreen", () => {
 
     await user.click(await screen.findByRole("button", { name: "Delete Old" }));
     const dialog = screen.getByRole("dialog", { name: "Delete 'Old'?" });
-    expect(within(dialog).getByText(/This cannot be undone/)).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleDescription("This cannot be undone. Export it to JSON first if you want a backup.");
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
 
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Old" })).toHaveFocus();
     expect(await repository.exists("arch_old")).toBe(true);
 
     await user.click(screen.getByRole("button", { name: "Delete Old" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Old" })).toHaveFocus();
+    expect(await repository.exists("arch_old")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Delete Old" }));
+    await user.click(screen.getByRole("dialog", { name: "Delete 'Old'?" }));
+    expect(screen.getByRole("dialog", { name: "Delete 'Old'?" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("dialog", { name: "Delete 'Old'?" })).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.queryByRole("link", { name: "Old" })).not.toBeInTheDocument());
     expect(await repository.exists("arch_old")).toBe(false);
+    // "Old" was the last row, so focus moves to the previous row's name link.
+    await waitFor(() => expect(screen.getByRole("link", { name: "New" })).toHaveFocus());
+
+    await user.click(screen.getByRole("button", { name: "Delete New" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Delete 'New'?" })).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "New architecture" })).toHaveFocus());
+  });
+
+  it("focuses the next row after a delete", async () => {
+    const user = userEvent.setup();
+    const repository = seeded();
+    renderLibrary(repository);
+
+    await user.click(await screen.findByRole("button", { name: "Delete New" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Delete 'New'?" })).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "Old" })).toHaveFocus());
+  });
+
+  it("keeps the delete dialog open while removing, and shows failures inline instead of a toast", async () => {
+    const user = userEvent.setup();
+    const repository = seeded();
+    let reject: (error: Error) => void = () => undefined;
+    const remove = vi.fn(
+      () =>
+        new Promise<void>((_, fail) => {
+          reject = fail;
+        }),
+    );
+    renderLibrary({ ...repository, list: () => repository.list(), remove });
+
+    await user.click(await screen.findByRole("button", { name: "Delete Old" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete 'Old'?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Deleting…" })).toBeDisabled();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(dialog).toHaveAttribute("open");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Deleting…" }));
+    expect(remove).toHaveBeenCalledTimes(1);
+
+    await act(async () => reject(new Error("disk full")));
+    expect(dialog).toHaveAttribute("open");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("The architecture could not be deleted (disk full).");
+    expect(document.querySelector(".sa-toast")).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Delete" })).toBeEnabled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Delete Old" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Delete Old" }));
+    expect(within(screen.getByRole("dialog", { name: "Delete 'Old'?" })).queryByRole("alert")).toBeNull();
   });
 
   it("exports rows; damaged rows can only export raw JSON or be deleted", async () => {

@@ -28,6 +28,18 @@ export default tseslint.config(
       ],
       // Shared context modules intentionally export hooks alongside providers/components.
       "react-refresh/only-export-components": "off",
+      // App-styled ConfirmDialog/Dialog and Toast only; no browser-native dialogs or notifications
+      // (UI_COLOR_CONFIRMATION_DESIGN D-N3). `beforeunload` stays browser-owned (§2.7).
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        { name: "Notification", message: "Use Toast (UI_COLOR_CONFIRMATION_DESIGN D-N3)." },
+      ],
+      "no-restricted-properties": [
+        "error",
+        { object: "window", property: "Notification", message: "Use Toast (UI_COLOR_CONFIRMATION_DESIGN D-N3)." },
+        { object: "globalThis", property: "Notification", message: "Use Toast (UI_COLOR_CONFIRMATION_DESIGN D-N3)." },
+      ],
       "no-restricted-syntax": [
         "error",
         {

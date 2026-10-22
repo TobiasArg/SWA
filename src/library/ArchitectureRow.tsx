@@ -65,7 +65,7 @@ export function ArchitectureRow({
 
   if (record.status === "damaged") {
     return (
-      <tr className="sa-library-row sa-library-row--damaged">
+      <tr className="sa-library-row sa-library-row--damaged" data-record-id={record.id}>
         <th scope="row" className="sa-library-row__name">
           <span className="sa-library-row__damaged-name">{name}</span>
           <span className="sa-library-row__damaged-note">
@@ -99,7 +99,7 @@ export function ArchitectureRow({
 
   const { file } = record;
   return (
-    <tr className="sa-library-row">
+    <tr className="sa-library-row" data-record-id={file.architecture.id}>
       <th scope="row" className="sa-library-row__name">
         <a className="sa-library-row__link" href={href}>
           {name}
