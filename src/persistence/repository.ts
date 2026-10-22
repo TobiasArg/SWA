@@ -13,7 +13,10 @@ import type { Repository, StoredRecord } from "./types";
 import {
   ARCHITECTURES_STORE,
   DATABASE_NAME,
+  SNAPSHOTS_STORE,
   openDatabase,
+  type DatabaseStatus,
+  type OpenDatabaseOptions,
   type SwarmArchitecturerDatabase,
 } from "./db";
 import { notifyArchitectureChanged } from "./tabSync";
@@ -110,15 +113,33 @@ function copyName(name: string): string {
 
 export async function openRepository(
   databaseName = DATABASE_NAME,
+  options: OpenDatabaseOptions = {},
 ): Promise<Repository & { close(): void; putIfAbsent(file: ArchitectureFile): Promise<boolean> }> {
   let database: IDBPDatabase<SwarmArchitecturerDatabase>;
+  let connectionFailure: DatabaseStatus | undefined;
+  let repositoryClosed = false;
   try {
     if (typeof indexedDB === "undefined") throw new Error("IndexedDB is not supported.");
-    database = await openDatabase(databaseName);
+    database = await openDatabase(databaseName, {
+      onStatus(status) {
+        if (status === "blocking" || status === "terminated") connectionFailure = status;
+        options.onStatus?.(status);
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "IndexedDB could not be opened.";
     throw new StorageUnavailableError(message);
   }
+
+  const assertWritable = (): void => {
+    if (repositoryClosed || connectionFailure !== undefined) {
+      const message =
+        connectionFailure === "blocking"
+          ? "The database was updated in another tab. Reload this tab to keep saving."
+          : "The local storage connection is closed. Reload this tab to keep saving.";
+      throw new SaveError(message);
+    }
+  };
 
   const rawRecord = async (id: string): Promise<unknown> =>
     database.get(ARCHITECTURES_STORE, id) as Promise<unknown>;
@@ -133,8 +154,10 @@ export async function openRepository(
         : undefined;
     if (oldVersion !== SCHEMA_VERSION) {
       try {
-        await database.put(ARCHITECTURES_STORE, parsed.value);
-        notifyArchitectureChanged(parsed.value.architecture.id);
+        if (!repositoryClosed && connectionFailure === undefined) {
+          await database.put(ARCHITECTURES_STORE, parsed.value);
+          notifyArchitectureChanged(parsed.value.architecture.id);
+        }
       } catch {
         // A migrated view is still usable even if opportunistic rewrite fails.
       }
@@ -153,6 +176,7 @@ export async function openRepository(
 
   const save = async (file: ArchitectureFile): Promise<void> => {
     try {
+      assertWritable();
       const canonical = canonicalize(file);
       await database.put(ARCHITECTURES_STORE, canonical);
       notifyArchitectureChanged(canonical.architecture.id);
@@ -165,6 +189,7 @@ export async function openRepository(
   const putIfAbsent = async (file: ArchitectureFile): Promise<boolean> => {
     let canonical: ArchitectureFile;
     try {
+      assertWritable();
       canonical = canonicalize(file);
       await database.add(ARCHITECTURES_STORE, canonical);
     } catch (error) {
@@ -241,7 +266,39 @@ export async function openRepository(
     },
 
     async remove(id) {
-      await database.delete(ARCHITECTURES_STORE, id);
+      assertWritable();
+      const transaction = database.transaction([ARCHITECTURES_STORE, SNAPSHOTS_STORE], "readwrite");
+      try {
+        const architectureStore = transaction.objectStore(ARCHITECTURES_STORE);
+        const snapshotsStore = transaction.objectStore(SNAPSHOTS_STORE);
+        const architectureDelete = architectureStore.delete(id);
+        const snapshotKeysRequest = snapshotsStore.getAllKeys();
+        const snapshotValuesRequest = snapshotsStore.getAll();
+        const [snapshotKeys, snapshotValues] = await Promise.all([
+          snapshotKeysRequest,
+          snapshotValuesRequest,
+          architectureDelete.then(() => undefined),
+        ]);
+        const deletes: Promise<unknown>[] = [];
+        snapshotValues.forEach((value, index) => {
+          const raw = value as unknown;
+          const architectureId =
+            raw !== null && typeof raw === "object"
+              ? (raw as { architectureId?: unknown }).architectureId
+              : undefined;
+          const key = snapshotKeys[index];
+          if (architectureId === id && key !== undefined) deletes.push(snapshotsStore.delete(key));
+        });
+        await Promise.all([...deletes, transaction.done]);
+      } catch (error) {
+        try {
+          transaction.abort();
+        } catch {
+          // The transaction may already have completed or been aborted by IndexedDB.
+        }
+        await transaction.done.catch(() => undefined);
+        throw error;
+      }
       notifyArchitectureChanged(id);
     },
 
@@ -250,6 +307,7 @@ export async function openRepository(
     },
 
     close() {
+      repositoryClosed = true;
       database.close();
     },
   };
