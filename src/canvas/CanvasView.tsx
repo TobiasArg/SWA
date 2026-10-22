@@ -55,6 +55,7 @@ import {
   type OnMoveEnd,
   type Viewport as FlowViewport,
 } from "@xyflow/react";
+import { componentRect } from "../domain/geometry";
 import type { Architecture, RelationshipType, Selection } from "../domain/types";
 import { useEditorState, useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
@@ -122,7 +123,14 @@ export const CANVAS_ARIA_LABELS: Partial<AriaLabelConfig> = {
 /** Lets CanvasView register its root element with the surrounding CanvasProvider. */
 const CanvasHostContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
 
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+const REVEAL_DURATION_MS = 200;
+
 function CanvasApiBridge({ children }: PropsWithChildren) {
+  const store = useEditorStore();
   const flow = useReactFlow<CanvasNode, RelationshipFlowEdge>();
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -150,8 +158,25 @@ function CanvasApiBridge({ children }: PropsWithChildren) {
           placements: placements.values(),
         });
       },
+      // The one exception to "no automatic panning" (TD 6.6): an explicit Quick Find.
+      revealComponent: async (id) => {
+        const component = store.getState().architecture.components.find((candidate) => candidate.id === id);
+        if (!component) return false;
+        // Components are never flow children (absolute positions), so the domain rect is the node's rect.
+        const rect = componentRect(component);
+        // Never zoom out: max(current, 1), within the canvas zoom range.
+        const zoom = Math.min(CANVAS_MAX_ZOOM, Math.max(CANVAS_MIN_ZOOM, flow.getZoom(), 1));
+        await flow.setCenter(rect.x + rect.width / 2, rect.y + rect.height / 2, {
+          zoom,
+          duration: prefersReducedMotion() ? 0 : REVEAL_DURATION_MS,
+        });
+        // Persist explicitly: onMoveEnd is not guaranteed for programmatic moves.
+        const viewport = flow.getViewport();
+        store.setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+        return true;
+      },
     }),
-    [flow],
+    [flow, store],
   );
 
   return (

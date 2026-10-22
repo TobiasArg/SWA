@@ -15,6 +15,12 @@ export interface CanvasApi {
    * label layout the canvas draws, so the export matches the screen.
    */
   getDiagramBounds(): Rect;
+  /**
+   * Centers the component and zooms to max(current, 1), clamped to [0.2, 2]
+   * (ROADMAP_V2_DESIGN 3.3). Resolves after the viewport settles and is stored;
+   * false if the component is unknown. The only automatic pan: explicit Quick Find.
+   */
+  revealComponent(id: string): Promise<boolean>;
 }
 
 export const CanvasApiContext = createContext<CanvasApi | null>(null);
