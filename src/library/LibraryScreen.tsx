@@ -414,7 +414,7 @@ export function LibraryScreen({
       <ConfirmDialog
         open={dialog.kind === "delete"}
         title={dialog.kind === "delete" ? `Delete '${recordName(dialog.record)}'?` : "Delete architecture?"}
-        description="This cannot be undone. Export it to JSON first if you want a backup."
+        description="This cannot be undone. Its saved versions are deleted too. Export it to JSON first if you want a backup."
         busy={busy}
         error={deleteError}
         onCancel={() => {
