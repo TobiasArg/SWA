@@ -141,6 +141,7 @@ export type PortSideName = "top" | "right" | "bottom" | "left";
 export interface V2Component {
   id: string;
   type: "agent" | "tool" | "memory" | "external_system" | "decision";
+  subtype?: "orchestrator";
   name: string;
   x: number;
   y: number;

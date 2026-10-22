@@ -72,12 +72,8 @@
   white-space: nowrap;
 }
 
-.sa-palette__item--orchestrator .sa-palette__icon { color: var(--sa-type-orchestrator-ink); }
-.sa-palette__item--agent .sa-palette__icon { color: var(--sa-type-agent-ink); }
-.sa-palette__item--tool .sa-palette__icon { color: var(--sa-type-tool-ink); }
-.sa-palette__item--memory .sa-palette__icon { color: var(--sa-type-memory-ink); }
-.sa-palette__item--external .sa-palette__icon { color: var(--sa-type-external-ink); }
-.sa-palette__item--decision .sa-palette__icon { color: var(--sa-type-decision-ink); }
+/* Types to add, not components: each item carries its data-palette="type-*" entry. */
+.sa-palette__item[data-palette] .sa-palette__icon { color: var(--sa-palette-ink); }
 
 /* Collapsed icon rail (48px wide container). */
 .sa-palette--collapsed {

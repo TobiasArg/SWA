@@ -1,4 +1,5 @@
 import { COMPONENT_TYPE_LABELS } from "../domain/constants";
+import { effectivePaletteId } from "../domain/palette";
 import type { Architecture, Component } from "../domain/types";
 import { Button } from "../ui/Button";
 import type { IconName } from "../ui/icons";
@@ -63,7 +64,7 @@ export function ComponentInspector({ architecture, component }: ComponentInspect
         kind={componentTypeLabel(component)}
         title={component.name}
         icon={componentIcon(component)}
-        inkType={component.subtype ?? component.type}
+        palette={effectivePaletteId(component)}
       />
       <InspectorSection title="Identity" defaultOpen>
         <TextField

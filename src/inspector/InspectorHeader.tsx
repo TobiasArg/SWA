@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
+import type { PaletteId } from "../domain/palette";
 import { Icon, type IconName } from "../ui/icons";
 
 export interface InspectorHeaderProps {
   kind: string;
   title: string;
   icon?: IconName;
-  /** Domain-derived type for the ink color (UI 12); never a user-provided value. */
-  inkType?: string;
+  /** Effective palette entry for the kind's ink (UI_COLOR_CONFIRMATION_DESIGN §1.8); never user text. */
+  palette?: PaletteId;
 }
 
-export function InspectorHeader({ kind, title, icon, inkType }: InspectorHeaderProps) {
+export function InspectorHeader({ kind, title, icon, palette }: InspectorHeaderProps) {
   return (
     <header className="sa-inspector__header">
-      <p className="sa-inspector__kind" data-ink={inkType}>
+      <p className="sa-inspector__kind" data-palette={palette}>
         {icon ? <Icon name={icon} /> : null}
         {kind}
       </p>

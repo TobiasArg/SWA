@@ -243,3 +243,33 @@ describe("ComponentInspector — other types", () => {
     expect(screen.getByLabelText("Outcomes")).toBeInTheDocument();
   });
 });
+
+describe("ComponentInspector — header color (AC-C10)", () => {
+  async function readCss(relative: string): Promise<string> {
+    const fsModule = "node:fs";
+    const fs = (await import(/* @vite-ignore */ fsModule)) as {
+      readFileSync(path: string, encoding: "utf8"): string;
+    };
+    return fs.readFileSync(decodeURIComponent(new URL(relative, import.meta.url).pathname), "utf8");
+  }
+
+  it("uses the node's effective palette entry for the kind glyph and label", async () => {
+    const architecture = fixture();
+    architecture.components = architecture.components.map((c) =>
+      c.id === "cmp_tool" ? { ...c, accent: "teal" } : c,
+    );
+    const view = renderInspector(architecture, { componentIds: ["cmp_tool"] });
+    expect(view.container.querySelector(".sa-inspector__kind")).toHaveAttribute("data-palette", "teal");
+    view.unmount();
+
+    const plain = renderInspector(fixture(), { componentIds: ["cmp_orch"] });
+    expect(plain.container.querySelector(".sa-inspector__kind")).toHaveAttribute("data-palette", "type-orchestrator");
+    plain.unmount();
+
+    // Header and node read the same palette ink variable, so they always match.
+    const css = await readCss("./inspector.css");
+    expect(css).toMatch(/\.sa-inspector__kind\[data-palette\] \{ color: var\(--sa-palette-ink\); \}/);
+    expect(css).not.toContain("data-ink");
+    expect(await readCss("../canvas/canvas.css")).toContain("--sa-node-ink: var(--sa-palette-ink,");
+  });
+});

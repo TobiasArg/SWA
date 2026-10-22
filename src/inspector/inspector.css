@@ -38,12 +38,7 @@
   text-transform: uppercase;
 }
 
-.sa-inspector__kind[data-ink="agent"] { color: var(--sa-type-agent-ink); }
-.sa-inspector__kind[data-ink="orchestrator"] { color: var(--sa-type-orchestrator-ink); }
-.sa-inspector__kind[data-ink="tool"] { color: var(--sa-type-tool-ink); }
-.sa-inspector__kind[data-ink="memory"] { color: var(--sa-type-memory-ink); }
-.sa-inspector__kind[data-ink="external_system"] { color: var(--sa-type-external-ink); }
-.sa-inspector__kind[data-ink="decision"] { color: var(--sa-type-decision-ink); }
+.sa-inspector__kind[data-palette] { color: var(--sa-palette-ink); }
 
 .sa-inspector__title {
   margin: var(--sa-space-2) 0 0;
@@ -421,7 +416,8 @@ textarea.sa-input {
   flex: none;
 }
 
-/* Accent picker (UI v2 §6). Swatch colors come from accent and type tokens. */
+/* Color picker (UI v2 §6, UI_COLOR_CONFIRMATION_DESIGN §1.8). Each swatch sets
+   data-palette, so swatch and node read the same palette entry (fill + 2 px ink ring). */
 
 .sa-accent-picker {
   --sa-swatch-size: 28px;
@@ -463,18 +459,14 @@ textarea.sa-input {
   flex: none;
   align-items: center;
   justify-content: center;
+  --sa-swatch-ink: var(--sa-palette-ink);
+  --sa-swatch-tint: var(--sa-palette-fill);
+
   border-radius: 6px;
   background: var(--sa-swatch-tint);
   box-shadow: inset 0 0 0 2px var(--sa-swatch-ink);
   color: var(--sa-swatch-ink);
 }
-
-.sa-accent-picker__swatch[data-ink="agent"] { --sa-swatch-ink: var(--sa-type-agent-ink); --sa-swatch-tint: var(--sa-type-agent-fill); }
-.sa-accent-picker__swatch[data-ink="orchestrator"] { --sa-swatch-ink: var(--sa-type-orchestrator-ink); --sa-swatch-tint: var(--sa-type-orchestrator-fill); }
-.sa-accent-picker__swatch[data-ink="tool"] { --sa-swatch-ink: var(--sa-type-tool-ink); --sa-swatch-tint: var(--sa-type-tool-fill); }
-.sa-accent-picker__swatch[data-ink="memory"] { --sa-swatch-ink: var(--sa-type-memory-ink); --sa-swatch-tint: var(--sa-type-memory-fill); }
-.sa-accent-picker__swatch[data-ink="external_system"] { --sa-swatch-ink: var(--sa-type-external-ink); --sa-swatch-tint: var(--sa-type-external-fill); }
-.sa-accent-picker__swatch[data-ink="decision"] { --sa-swatch-ink: var(--sa-type-decision-ink); --sa-swatch-tint: var(--sa-type-decision-fill); }
 
 .sa-accent-picker__check {
   display: none;

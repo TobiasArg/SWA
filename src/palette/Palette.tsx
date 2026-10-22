@@ -1,6 +1,7 @@
 import { useId, useRef, type DragEvent } from "react";
 import { useCanvasApi } from "../canvas/canvasApi";
 import { DUPLICATE_OFFSET } from "../domain/constants";
+import { typePaletteId } from "../domain/palette";
 import type { Position } from "../domain/types";
 import { useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
@@ -92,6 +93,7 @@ export function Palette({ collapsed = false }: PaletteProps) {
             <button
               type="button"
               className={`sa-palette__item sa-palette__item--${item.key}`}
+              data-palette={typePaletteId(item)}
               draggable
               aria-describedby={hintId}
               aria-label={collapsed ? item.label : undefined}

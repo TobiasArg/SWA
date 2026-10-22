@@ -2,6 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ACCENT_IDS, ACCENTS } from "../domain/constants";
+import { DEFAULT_COMMAND_LABELS } from "../editor/commandLabels";
 import type { Architecture } from "../domain/types";
 import { EditorProvider } from "../editor/context";
 import { createEditorStore } from "../editor/store";
@@ -42,7 +43,7 @@ function renderWithRealStore(architecture: Architecture, componentId: string) {
 }
 
 function picker(): HTMLElement {
-  return screen.getByRole("group", { name: "Accent color" });
+  return screen.getByRole("group", { name: "Color" });
 }
 
 function checkedNames(): string[] {
@@ -57,7 +58,7 @@ function accentOf(store: ReturnType<typeof createEditorStore>, id: string) {
 }
 
 describe("AccentPicker", () => {
-  it("is a group named Accent color with 17 radios in palette order, one checked", () => {
+  it("is a group named Color with 17 radios in palette order, one checked", () => {
     renderInspector(fixture(), { componentIds: ["cmp_tool"] });
 
     const radios = within(picker()).getAllByRole<HTMLInputElement>("radio");
@@ -70,8 +71,32 @@ describe("AccentPicker", () => {
     expect(EXPECTED_NAMES.slice(1)).toEqual(ACCENT_IDS.map((id) => ACCENTS[id].label));
     expect(new Set(radios.map((radio) => radio.name))).toEqual(new Set(["accent-cmp_tool"]));
     expect(checkedNames()).toEqual(["Type default"]);
-    expect(screen.getByText("Accent: Type default")).toBeInTheDocument();
+    expect(screen.getByText("Color: Type default")).toBeInTheDocument();
     expect(screen.getByTitle("Tomato")).toBeInTheDocument();
+  });
+
+  it("AC-C9: each swatch sets data-palette to its value; Type default uses the type entry", () => {
+    for (const [id, typeEntry] of [
+      ["cmp_orch", "type-orchestrator"],
+      ["cmp_val", "type-agent"],
+      ["cmp_tool", "type-tool"],
+      ["cmp_store", "type-memory"],
+      ["cmp_crm", "type-external"],
+      ["cmp_route", "type-decision"],
+    ] as const) {
+      const view = renderInspector(fixture(), { componentIds: [id] });
+      const swatches = within(picker())
+        .getAllByRole<HTMLInputElement>("radio")
+        .map((radio) => [radio.value, radio.parentElement!.querySelector(".sa-accent-picker__swatch")]);
+      expect(swatches).toHaveLength(17);
+      for (const [value, swatch] of swatches) {
+        expect(swatch).toHaveAttribute("data-palette", value === "" ? typeEntry : value);
+        // Colors come only from the shared palette rule, never inline styles.
+        expect(swatch).not.toHaveAttribute("style");
+      }
+      view.unmount();
+    }
+    expect(DEFAULT_COMMAND_LABELS.setComponentAccent).toBe("Change color");
   });
 
   it("sits in an Appearance section after the type fields and before Relationships", () => {
@@ -98,7 +123,7 @@ describe("AccentPicker", () => {
     renderInspector(architecture, { componentIds: ["cmp_tool"] });
 
     expect(checkedNames()).toEqual(["Teal"]);
-    expect(screen.getByText("Accent: Teal")).toBeInTheDocument();
+    expect(screen.getByText("Color: Teal")).toBeInTheDocument();
   });
 
   it("dispatches one command per choice, updates the node accent and the caption", async () => {
@@ -111,14 +136,14 @@ describe("AccentPicker", () => {
     expect(dispatch.mock.calls[0]?.[0]).toEqual({ kind: "setComponentAccent", ids: ["cmp_tool"], accent: "plum" });
     expect(accentOf(store, "cmp_tool")).toBe("plum");
     expect(checkedNames()).toEqual(["Plum"]);
-    expect(screen.getByText("Accent: Plum")).toBeInTheDocument();
+    expect(screen.getByText("Color: Plum")).toBeInTheDocument();
 
     await user.click(within(picker()).getByRole("radio", { name: "Type default" }));
 
     expect(dispatch).toHaveBeenCalledTimes(2);
     expect(dispatch.mock.calls[1]?.[0]).toEqual({ kind: "setComponentAccent", ids: ["cmp_tool"], accent: undefined });
     expect(accentOf(store, "cmp_tool")).toBeUndefined();
-    expect(screen.getByText("Accent: Type default")).toBeInTheDocument();
+    expect(screen.getByText("Color: Type default")).toBeInTheDocument();
   });
 
   it("follows undo and redo through the store", async () => {
@@ -131,7 +156,7 @@ describe("AccentPicker", () => {
 
     act(() => void store.undo());
     expect(checkedNames()).toEqual(["Mint"]);
-    expect(screen.getByText("Accent: Mint")).toBeInTheDocument();
+    expect(screen.getByText("Color: Mint")).toBeInTheDocument();
 
     act(() => void store.undo());
     expect(checkedNames()).toEqual(["Type default"]);
@@ -161,8 +186,12 @@ describe("AccentPicker", () => {
       { componentIds: ["cmp_tool", "cmp_val"] },
     ]) {
       const view = renderInspector(fixture(), selection);
-      expect(screen.queryByRole("group", { name: "Accent color" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Color" })).not.toBeInTheDocument();
       expect(screen.queryByText("Appearance", { selector: "summary" })).not.toBeInTheDocument();
+      if (selection.groupIds) {
+        // AC-C8: groups never take a palette entry.
+        expect(view.container.querySelector("[data-palette], [data-accent]")).toBeNull();
+      }
       view.unmount();
     }
   });

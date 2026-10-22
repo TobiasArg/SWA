@@ -67,11 +67,11 @@ describe("setComponentAccent", () => {
     expect(code(arch, { kind: "setComponentAccent", ids: ["a"], accent: "pink" as never })).toBe("E_INVALID_ACCENT");
   });
 
-  it("creates one undo entry labelled 'Change accent color'", () => {
+  it("creates one undo entry labelled 'Change color'", () => {
     const store = createEditorStore(base());
     store.dispatch({ kind: "setComponentAccent", ids: ["a", "b"], accent: "plum" });
     expect(store.getState().architecture.components.map((c) => c.accent)).toEqual(["plum", "plum"]);
-    expect(DEFAULT_COMMAND_LABELS.setComponentAccent).toBe("Change accent color");
+    expect(DEFAULT_COMMAND_LABELS.setComponentAccent).toBe("Change color");
     store.undo();
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().architecture.components.some((c) => c.accent !== undefined)).toBe(false);

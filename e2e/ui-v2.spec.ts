@@ -15,7 +15,10 @@ import {
   openImported,
   portLocator,
   waitForSaved,
+  type V2Component,
 } from "./helpers";
+import { ACCENT_IDS } from "../src/domain/constants";
+import { PALETTE, type PaletteId } from "../src/domain/palette";
 
 test.use({ viewport: { width: 1600, height: 1000 } });
 
@@ -26,6 +29,48 @@ const B = { id: "cmp_b", type: "tool", name: "Beta Tool", x: 650, y: 150 } as co
 async function bodyPoint(page: import("@playwright/test").Page, id: string) {
   const c = await centerOf(nodeById(page, id));
   return { x: c.x, y: c.y };
+}
+
+/** `#RRGGBB` as the `rgb(r, g, b)` string getComputedStyle returns. */
+function rgb(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Computed colors of the parts a palette entry drives (UI_COLOR_CONFIRMATION_DESIGN §1.4). */
+async function nodeColors(node: import("@playwright/test").Locator) {
+  return node.evaluate((el) => {
+    const style = (selector: string) => {
+      const part = el.querySelector(selector);
+      return part ? getComputedStyle(part) : null;
+    };
+    return {
+      fill: style(".sa-node__body")!.fill,
+      stroke: style(".sa-node__body")!.stroke,
+      glyph: style(".sa-node__icon")!.color,
+      chipFill: style(".sa-node__chip")?.backgroundColor ?? null,
+      label: style(".sa-node__type-label")!.color,
+      band: style('[data-detail="band"]')?.fill ?? null,
+      rim: style('[data-detail="rim"]')?.stroke ?? null,
+      hatch: style('[data-detail="hatch"]')?.stroke ?? null,
+    };
+  });
+}
+
+/** What every ink part and the body fill should compute to for one entry. */
+function expectedColors(id: PaletteId, part: { orchestrator?: boolean; rim?: boolean; hatch?: boolean } = {}) {
+  const { ink, fill } = PALETTE[id];
+  return {
+    fill: rgb(fill),
+    stroke: rgb(ink),
+    // The Orchestrator glyph and label sit on the ink band in white.
+    glyph: part.orchestrator ? rgb("#FFFFFF") : rgb(ink),
+    chipFill: part.orchestrator ? null : rgb("#FFFFFF"),
+    label: part.orchestrator ? rgb("#FFFFFF") : rgb(ink),
+    band: part.orchestrator ? rgb(ink) : null,
+    rim: part.rim ? rgb(ink) : null,
+    hatch: part.hatch ? rgb(ink) : null,
+  };
 }
 
 async function relationshipsOf(page: import("@playwright/test").Page) {
@@ -177,33 +222,46 @@ test.describe("UI v2 — ports and curved edges", () => {
 });
 
 test.describe("UI v2 — accent and schema v2", () => {
-  test("accent survives reload, undo/redo, duplicate and JSON round trip; PNG export succeeds", async ({ page }) => {
+  test("AC-C11: color survives reload, undo/redo, duplicate and JSON round trip; PNG export succeeds", async ({ page }) => {
     await openImported(page, "UI v2 accent", buildV2File("UI v2 accent", [A, B]));
-    const outer = await componentNodeByName(page, A.name);
-    // data-accent lives on the inner .sa-node element.
+    const outer = await componentNodeByName(page, B.name);
+    // data-accent and data-palette live on the inner .sa-node element.
     const node = outer.locator(".sa-node");
     await expect(node).not.toHaveAttribute("data-accent", /.+/);
+    await expect(node).toHaveAttribute("data-palette", "type-tool");
+    expect(await nodeColors(node)).toEqual(expectedColors("type-tool"));
     await outer.click();
+    await expect(page.getByRole("group", { name: "Color" })).toBeVisible();
     await page.locator('label[title="Teal"]').click();
     await expect(node).toHaveAttribute("data-accent", "teal");
+    await expect(node).toHaveAttribute("data-palette", "teal");
+    await expect(page.getByText("Color: Teal")).toBeVisible();
+    // The body fill and the chip glyph both change (not just the outline).
+    expect(await nodeColors(node)).toEqual(expectedColors("teal"));
+    await expect(page.locator(".sa-inspector__kind")).toHaveCSS("color", rgb(PALETTE.teal.ink));
     await waitForSaved(page);
 
     // Undo / redo.
     await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(node).not.toHaveAttribute("data-accent", /.+/);
+    expect(await nodeColors(node)).toEqual(expectedColors("type-tool"));
     await page.getByRole("button", { name: "Redo", exact: true }).click();
     await expect(node).toHaveAttribute("data-accent", "teal");
+    expect(await nodeColors(node)).toEqual(expectedColors("teal"));
     await waitForSaved(page);
 
     // Reload (persisted in IndexedDB).
     await page.reload();
-    await expect(nodeById(page, A.id).locator(".sa-node")).toHaveAttribute("data-accent", "teal");
+    await expect(nodeById(page, B.id).locator(".sa-node")).toHaveAttribute("data-accent", "teal");
+    expect(await nodeColors(nodeById(page, B.id).locator(".sa-node"))).toEqual(expectedColors("teal"));
 
-    // Duplicate copies the accent.
-    await nodeById(page, A.id).click();
+    // Duplicate copies the color.
+    await nodeById(page, B.id).click();
     await page.getByRole("button", { name: "Duplicate", exact: true }).click();
     await expect(page.locator(".react-flow__node-component")).toHaveCount(3);
-    await expect(page.locator('.react-flow__node-component [data-accent="teal"]')).toHaveCount(2);
+    const tealNodes = page.locator('.react-flow__node-component [data-accent="teal"]');
+    await expect(tealNodes).toHaveCount(2);
+    expect(await nodeColors(tealNodes.nth(1))).toEqual(expectedColors("teal"));
     await waitForSaved(page);
 
     // JSON export: schema 2, accent after size (key order) and import round trip.
@@ -225,11 +283,95 @@ test.describe("UI v2 — accent and schema v2", () => {
     await expect(page.getByRole("textbox", { name: "Architecture name" })).toHaveValue("UI v2 accent (imported)");
     await expect(page.locator('.react-flow__node-component [data-accent="teal"]')).toHaveCount(2);
 
-    // PNG export succeeds with an accent present.
+    // PNG export succeeds with a color present.
     const png = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export" }).click();
     await page.getByRole("menuitem", { name: "PNG image" }).click();
     expect((await png).suggestedFilename()).toMatch(/\.png$/);
+  });
+
+  test("every palette option drives body fill and logo on a Tool; Type default restores it", async ({ page }) => {
+    await openImported(page, "UI v2 swatches", buildV2File("UI v2 swatches", [B]));
+    const node = nodeById(page, B.id).locator(".sa-node");
+    await nodeById(page, B.id).click();
+    for (const id of ACCENT_IDS) {
+      await page.locator(`label[title="${PALETTE[id].label}"]`).click();
+      await expect(node).toHaveAttribute("data-palette", id);
+      expect(await nodeColors(node), id).toEqual(expectedColors(id));
+    }
+    await page.locator('label[title="Type default"]').click();
+    await expect(node).toHaveAttribute("data-palette", "type-tool");
+    expect(await nodeColors(node)).toEqual(expectedColors("type-tool"));
+  });
+
+  test("a selected color wins on every type, including Memory and Orchestrator; PNG export keeps it", async ({ page }) => {
+    const types: Array<{
+      id: string;
+      type: V2Component["type"];
+      subtype?: "orchestrator";
+      entry: PaletteId;
+      parts?: { orchestrator?: boolean; rim?: boolean; hatch?: boolean };
+    }> = [
+      { id: "cmp_ag", type: "agent", entry: "type-agent" },
+      { id: "cmp_or", type: "agent", subtype: "orchestrator", entry: "type-orchestrator", parts: { orchestrator: true } },
+      { id: "cmp_tl", type: "tool", entry: "type-tool" },
+      { id: "cmp_me", type: "memory", entry: "type-memory", parts: { rim: true } },
+      { id: "cmp_ex", type: "external_system", entry: "type-external", parts: { hatch: true } },
+      { id: "cmp_de", type: "decision", entry: "type-decision" },
+    ];
+    const components: V2Component[] = types.flatMap(({ id, type, subtype }, i) => [
+      { id, type, subtype, name: `${id} plain`, x: 60 + i * 250, y: 80 },
+      { id: `${id}_teal`, type, subtype, name: `${id} teal`, x: 60 + i * 250, y: 300, accent: "teal" },
+    ]);
+    await openImported(page, "UI v2 all types", buildV2File("UI v2 all types", components));
+
+    for (const t of types) {
+      const parts = t.parts ?? {};
+      const plain = nodeById(page, t.id).locator(".sa-node");
+      const teal = nodeById(page, `${t.id}_teal`).locator(".sa-node");
+      await expect(plain).toHaveAttribute("data-palette", t.entry);
+      await expect(teal).toHaveAttribute("data-palette", "teal");
+      expect(await nodeColors(plain), t.id).toEqual(expectedColors(t.entry, parts));
+      expect(await nodeColors(teal), `${t.id}_teal`).toEqual(expectedColors("teal", parts));
+      // Type identity is structural: same shape, details and label with or without a color.
+      const identity = (n: typeof plain) =>
+        n.evaluate((el) => ({
+          shape: el.getAttribute("data-shape"),
+          details: Array.from(el.querySelectorAll("[data-detail]")).map((d) => d.getAttribute("data-detail")),
+          dash: getComputedStyle(el.querySelector(".sa-node__body")!).strokeDasharray,
+          label: el.querySelector(".sa-node__type-label")!.textContent,
+        }));
+      expect(await identity(teal)).toEqual(await identity(plain));
+    }
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("menuitem", { name: "PNG image" }).click();
+    const png = await downloadBuffer(await download);
+    await maybeSavePng(png, "ui-v2-palette-types.png");
+    const analysis = await analyzePng(page, png);
+    expect(analysis.touchesEdge).toBe(false);
+    // The teal fill reaches the image (computed styles are inlined by the exporter).
+    const tealPixels = await page.evaluate(
+      async ({ data, target }) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${data}`;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const px = ctx.getImageData(0, 0, img.width, img.height).data;
+        let count = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          if (Math.abs(px[i]! - target[0]!) + Math.abs(px[i + 1]! - target[1]!) + Math.abs(px[i + 2]! - target[2]!) <= 6) count += 1;
+        }
+        return count;
+      },
+      { data: png.toString("base64"), target: [0xc9, 0xea, 0xea] },
+    );
+    expect(tealPixels).toBeGreaterThan(1000);
   });
 
   test("a v1 fixture imports without losing fields and re-exports as schemaVersion 2", async ({ page }) => {

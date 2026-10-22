@@ -1,13 +1,13 @@
-import type { CSSProperties } from "react";
 import { ACCENT_IDS, ACCENTS, type AccentId } from "../domain/constants";
+import { typePaletteId } from "../domain/palette";
 import type { Component } from "../domain/types";
 import { useInspectorCommands } from "./inspectorContext";
 
-export const ACCENT_LEGEND = "Accent color";
+export const ACCENT_LEGEND = "Color";
 export const TYPE_DEFAULT_LABEL = "Type default";
 
 export function accentCaption(accent: AccentId | undefined): string {
-  return `Accent: ${accent ? ACCENTS[accent].label : TYPE_DEFAULT_LABEL}`;
+  return `Color: ${accent ? ACCENTS[accent].label : TYPE_DEFAULT_LABEL}`;
 }
 
 /** Decorative 16 px check glyph shown on the checked swatch (UI v2 §6). */
@@ -38,8 +38,10 @@ export interface AccentPickerProps {
 }
 
 /**
- * Accent color picker (UI v2 §6, §11.5): a fieldset of 17 native radios. The
- * accent is decoration only (C8), so nothing is announced beyond the radio.
+ * Color picker (UI v2 §6, §11.5; UI_COLOR_CONFIRMATION_DESIGN §1.8): a fieldset
+ * of 17 native radios. Each swatch sets `data-palette` to the entry the node
+ * would use, so swatch and node share one CSS source. The persisted field stays
+ * `accent`. Color is decoration only (C8), so nothing is announced beyond the radio.
  */
 export function AccentPicker({ component }: AccentPickerProps) {
   const commands = useInspectorCommands();
@@ -65,7 +67,7 @@ export function AccentPicker({ component }: AccentPickerProps) {
         />
         <span
           className="sa-accent-picker__swatch"
-          data-ink={component.subtype ?? component.type}
+          data-palette={typePaletteId(component)}
           aria-hidden="true"
         >
           <CheckGlyph />
@@ -75,10 +77,6 @@ export function AccentPicker({ component }: AccentPickerProps) {
       <div className="sa-accent-picker__grid">
         {ACCENT_IDS.map((accent) => {
           const { label } = ACCENTS[accent];
-          const style = {
-            "--sa-swatch-ink": `var(--sa-accent-${accent}-ink)`,
-            "--sa-swatch-tint": `var(--sa-accent-${accent}-tint)`,
-          } as CSSProperties;
           return (
             <label key={accent} className="sa-accent-picker__option" title={label}>
               <input
@@ -89,7 +87,7 @@ export function AccentPicker({ component }: AccentPickerProps) {
                 checked={current === accent}
                 onChange={() => choose(accent)}
               />
-              <span className="sa-accent-picker__swatch" style={style} aria-hidden="true">
+              <span className="sa-accent-picker__swatch" data-palette={accent} aria-hidden="true">
                 <CheckGlyph />
               </span>
               <span className="sa-visually-hidden">{label}</span>

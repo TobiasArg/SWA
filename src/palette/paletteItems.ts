@@ -12,7 +12,7 @@ export interface PaletteDragPayload {
 }
 
 export interface PaletteItem extends PaletteDragPayload {
-  /** Stable key, also used for the CSS ink modifier. */
+  /** Stable key, also used as the CSS item modifier. */
   key: "orchestrator" | "agent" | "tool" | "memory" | "external" | "decision";
   label: string;
   icon: IconName;
