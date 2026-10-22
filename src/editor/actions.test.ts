@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "./store";
-import { deleteSelection, duplicateSelection, groupSelection, nudgeSelection, ungroupSelection } from "./actions";
+import {
+  deleteSelection,
+  deletionConfirmCopy,
+  deletionTargets,
+  duplicateSelection,
+  groupSelection,
+  nudgeSelection,
+  previewDeletion,
+  ungroupSelection,
+} from "./actions";
 import type { Architecture, Component } from "../domain/types";
 
 function component(id: string, name: string, x = 0): Component {
@@ -121,5 +130,78 @@ describe("UI-agnostic editor actions", () => {
     expect(store.getState().architecture.components[0]?.position).toEqual({ x: 0, y: 0 });
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().canRedo).toBe(true);
+  });
+
+  describe("deletion preview and confirmation copy", () => {
+    const none = { componentIds: [], relationshipIds: [], groupIds: [] };
+
+    it("previews the same counts the dispatched deletion reports, cascaded relationships included", () => {
+      const cases = [
+        { ...none, componentIds: ["cmp_a"] },
+        { ...none, relationshipIds: ["rel_ab"] },
+        { ...none, componentIds: ["cmp_a"], relationshipIds: ["rel_ab"] },
+        { ...none, groupIds: ["grp_team"] },
+        { componentIds: ["cmp_a", "cmp_b"], relationshipIds: ["rel_ba"], groupIds: ["grp_team"] },
+      ];
+      for (const selection of cases) {
+        const before = architecture();
+        const preview = previewDeletion(before, selection);
+        expect(before).toEqual(architecture());
+
+        const store = createEditorStore(architecture(), () => "edit");
+        store.setSelection(selection);
+        const result = deleteSelection(store, { showToast: vi.fn(), announce: vi.fn() });
+        expect(result.ok && result.summary).toEqual(preview?.summary);
+      }
+    });
+
+    it("previews nothing for an empty selection or a rejected command", () => {
+      expect(previewDeletion(architecture(), none)).toBeNull();
+      expect(previewDeletion(architecture(), { ...none, componentIds: ["cmp_missing"] })).toBeNull();
+    });
+
+    it("targets only the selected groups for ungroup", () => {
+      const selection = { componentIds: ["cmp_a"], relationshipIds: ["rel_ab"], groupIds: ["grp_team"] };
+      expect(deletionTargets(selection, "delete")).toEqual(selection);
+      expect(deletionTargets(selection, "ungroup")).toEqual({ ...none, groupIds: ["grp_team"] });
+    });
+
+    it("names what will be deleted and how to undo it", () => {
+      const cascade = previewDeletion(architecture(), { ...none, componentIds: ["cmp_a"] })!;
+      expect(cascade.cascadedRelationships).toBe(2);
+      expect(deletionConfirmCopy(cascade, "delete")).toEqual({
+        title: "Delete 1 component and 2 relationships?",
+        description:
+          "Connected relationships are deleted with their components. You can undo this with Undo or ⌘Z / Ctrl+Z.",
+        confirmLabel: "Delete",
+      });
+
+      const relationship = previewDeletion(architecture(), { ...none, relationshipIds: ["rel_ab"] })!;
+      expect(deletionConfirmCopy(relationship, "delete")).toEqual({
+        title: "Delete 1 relationship?",
+        description: "You can undo this with Undo or ⌘Z / Ctrl+Z.",
+        confirmLabel: "Delete",
+      });
+
+      const group = previewDeletion(architecture(), { ...none, groupIds: ["grp_team"] })!;
+      expect(deletionConfirmCopy(group, "delete")).toEqual({
+        title: "Delete 1 group?",
+        description: "Its components stay on the canvas. You can undo this with Undo or ⌘Z / Ctrl+Z.",
+        confirmLabel: "Delete",
+      });
+      expect(deletionConfirmCopy(group, "ungroup")).toEqual({
+        title: "Ungroup 1 group?",
+        description:
+          "The group is removed. Its components stay on the canvas. You can undo this with ⌘Z / Ctrl+Z.",
+        confirmLabel: "Ungroup",
+      });
+    });
+
+    it("keeps the confirmation copy as plain text even for markup-like names", () => {
+      const arch = architecture();
+      arch.components[0]!.name = "<img src=x onerror=alert(1)>";
+      const preview = previewDeletion(arch, { ...none, componentIds: ["cmp_a"] })!;
+      expect(deletionConfirmCopy(preview, "delete").title).toBe("Delete 1 component and 2 relationships?");
+    });
   });
 });

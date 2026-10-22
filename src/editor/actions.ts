@@ -1,6 +1,7 @@
 import { createId } from "../domain/ids";
 import { createGroup } from "../domain/factories";
-import type { Position } from "../domain/types";
+import { applyCommand } from "../domain/operations";
+import type { Architecture, Position, Selection } from "../domain/types";
 import type { DispatchResult, EditorStore } from "./storeTypes";
 
 export interface ActionFeedback {
@@ -15,16 +16,93 @@ function pluralized(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-function deletionMessage(summary: {
+interface DeletionSummary {
   deletedComponents: number;
   deletedRelationships: number;
   deletedGroups: number;
-}): string {
+}
+
+function deletionList(summary: DeletionSummary): string {
   const parts: string[] = [];
   if (summary.deletedComponents > 0) parts.push(pluralized(summary.deletedComponents, "component"));
   if (summary.deletedRelationships > 0) parts.push(pluralized(summary.deletedRelationships, "relationship"));
   if (summary.deletedGroups > 0) parts.push(pluralized(summary.deletedGroups, "group"));
-  return parts.length === 0 ? "" : `Deleted ${parts.join(" and ")}.`;
+  return parts.join(" and ");
+}
+
+function deletionMessage(summary: DeletionSummary): string {
+  const list = deletionList(summary);
+  return list ? `Deleted ${list}.` : "";
+}
+
+/** "delete" removes the selection; "ungroup" removes only the selected groups (members stay). */
+export type DeletionIntent = "delete" | "ungroup";
+
+export interface DeletionPreview {
+  ids: Selection;
+  summary: DeletionSummary;
+  /** Relationships removed only because one of their components is. */
+  cascadedRelationships: number;
+}
+
+/** The IDs `deleteSelection` / `ungroupSelection` would pass to `deleteElements`. */
+export function deletionTargets(selection: Selection, intent: DeletionIntent): Selection {
+  return intent === "ungroup"
+    ? { componentIds: [], relationshipIds: [], groupIds: [...selection.groupIds] }
+    : {
+        componentIds: [...selection.componentIds],
+        relationshipIds: [...selection.relationshipIds],
+        groupIds: [...selection.groupIds],
+      };
+}
+
+/**
+ * Runs the `deleteElements` command without dispatching it, so the counts shown before a
+ * confirmed delete always equal the real summary (cascaded relationships included). Returns
+ * null when the command would delete nothing or be rejected.
+ */
+export function previewDeletion(architecture: Architecture, ids: Selection): DeletionPreview | null {
+  if (!ids.componentIds.length && !ids.relationshipIds.length && !ids.groupIds.length) return null;
+  let summary: DeletionSummary | undefined;
+  try {
+    summary = applyCommand(architecture, { kind: "deleteElements", ...ids }).summary;
+  } catch {
+    return null;
+  }
+  if (!summary || !deletionList(summary)) return null;
+  return {
+    ids,
+    summary,
+    cascadedRelationships: Math.max(0, summary.deletedRelationships - ids.relationshipIds.length),
+  };
+}
+
+export interface DeletionConfirmCopy {
+  title: string;
+  description: string;
+  confirmLabel: string;
+}
+
+const UNDO_HINT = "You can undo this with Undo or ⌘Z / Ctrl+Z.";
+
+/** Copy for the confirmation that precedes every editor deletion (UI_COLOR_CONFIRMATION_DESIGN §2.3). */
+export function deletionConfirmCopy(preview: DeletionPreview, intent: DeletionIntent): DeletionConfirmCopy {
+  const { summary } = preview;
+  const many = summary.deletedGroups !== 1;
+  if (intent === "ungroup") {
+    return {
+      title: `Ungroup ${pluralized(summary.deletedGroups, "group")}?`,
+      description: `${many ? "The groups are" : "The group is"} removed. ${many ? "Their" : "Its"} components stay on the canvas. You can undo this with ⌘Z / Ctrl+Z.`,
+      confirmLabel: "Ungroup",
+    };
+  }
+  const groupsOnly = summary.deletedComponents === 0 && summary.deletedRelationships === 0;
+  const description = groupsOnly
+    ? `${many ? "Their" : "Its"} components stay on the canvas. ${UNDO_HINT}`
+    : preview.cascadedRelationships > 0
+      ? `Connected relationships are deleted with their components. ${UNDO_HINT}`
+      : UNDO_HINT;
+  return { title: `Delete ${deletionList(summary)}?`, description, confirmLabel: "Delete" };
 }
 
 export function deleteSelection(store: EditorStore, feedback: ActionFeedback): DispatchResult {

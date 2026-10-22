@@ -75,6 +75,11 @@ test("Scenario E — group, move, reassign, restore and delete without losing me
   await group.focus();
   await page.keyboard.press("Enter");
   await page.locator(".sa-toolbar").getByRole("button", { name: "Delete", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete 1 group?" });
+  await expect(confirm).toBeVisible();
+  await expect(group).toHaveCount(1);
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirm).toBeHidden();
   await expect(group).toHaveCount(0);
   await expect(page.locator(".react-flow__node-component")).toHaveCount(3);
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);

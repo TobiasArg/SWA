@@ -45,6 +45,12 @@ button:disabled {
   box-shadow: 0 0 0 2px var(--sa-color-focus-gap);
 }
 
+/* The canvas region takes focus after an editor delete dialog closes; keep its ring inside. */
+[data-sa-canvas]:focus-visible {
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
 .sa-foundation {
   display: grid;
   min-height: 100vh;

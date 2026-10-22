@@ -73,14 +73,49 @@ test("keyboard walkthrough — tab order, focus ring, Connect, Escape and histor
   await page.keyboard.press("Escape");
   await expect(relationship).not.toHaveClass(/selected/);
 
+  // Every delete asks first in the app-styled dialog; Cancel is focused and Escape cancels.
   await source.press("Enter");
   await page.keyboard.press("Delete");
+  const confirm = page.getByRole("dialog", { name: "Delete 1 component and 1 relationship?" });
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(confirm).toBeHidden();
+  await expect(source).toBeVisible();
+  await expect(source).toBeFocused();
+  await expect(source).toHaveClass(/selected/);
+
+  await page.keyboard.press("Backspace");
+  await expect(confirm).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(confirm.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(confirm).toBeHidden();
   await expect(source).toHaveCount(0);
+  const toast = page.locator(".sa-toast");
+  await expect(toast).toContainText("Deleted 1 component and 1 relationship.");
+  expect(await page.evaluate(() => Boolean(document.activeElement?.closest("[data-sa-canvas]")))).toBe(true);
+
+  const toastUndo = toast.getByRole("button", { name: "Undo", exact: true });
+  for (let index = 0; index < 40; index += 1) {
+    if (await toastUndo.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(toastUndo).toBeFocused();
+  await page.keyboard.press("Enter");
+  const restored = await componentNodeByName(page, "Keyboard Source");
+  await expect(restored).toBeVisible();
+  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+
   const modifier = await modifierFor(page);
+  await restored.focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Delete");
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(restored).toHaveCount(0);
   await page.keyboard.down(modifier);
   await page.keyboard.press("z");
   await page.keyboard.up(modifier);
-  const restored = await componentNodeByName(page, "Keyboard Source");
   await expect(restored).toBeVisible();
   await page.keyboard.down(modifier);
   await page.keyboard.press("Shift+z");
