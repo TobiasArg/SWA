@@ -93,6 +93,11 @@ describe("exportPng module", () => {
   it("does not import getViewportForBounds (UI_V2_REFINEMENT §4.2)", () => {
     expect(exportPngSource).not.toMatch(/getViewportForBounds/);
   });
+
+  it("loads html-to-image only at export time", () => {
+    expect(exportPngSource).toMatch(/await import\(["']html-to-image["']\)/);
+    expect(exportPngSource).not.toMatch(/import\s*\{[^}]*\}\s*from\s*["']html-to-image["']/);
+  });
 });
 
 describe("exportPng", () => {

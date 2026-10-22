@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { LibraryScreen } from "../library/LibraryScreen";
+import { downloadArchitectureJson, downloadRawArchitectureJson } from "../io/exportJson";
+import { importArchitectureFile } from "../io/importJson";
 import type { Repository } from "../persistence/types";
+import { openRepository } from "../persistence/repository";
+import { openArchitectureTabSync, subscribeArchitectureChanges } from "../persistence/tabSync";
+import { config as configureZod } from "zod";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/icons";
 import { LiveRegion } from "../ui/LiveRegion";
 import { ToastProvider, useToast } from "../ui/Toast";
-import { defaultModules, defaultServices } from "./defaultServices";
-import { EditorScreen } from "./EditorScreen";
 import { editorHref, LIBRARY_HREF, navigate, useRoute } from "./router";
 import type { AppServices, EditorModules } from "./services";
 import "./app.css";
@@ -14,6 +18,12 @@ export const STORAGE_UNAVAILABLE_TITLE = "Storage is unavailable";
 export const STORAGE_UNAVAILABLE_MESSAGE =
   "Swarm Architecturer can't store data in this browser (storage is blocked or unavailable). Check privacy settings or try another browser.";
 export const OPEN_FAILED_MESSAGE = "That architecture could not be opened.";
+export const EDITOR_LOAD_FAILED_TITLE = "The editor could not be loaded";
+export const EDITOR_LOAD_FAILED_MESSAGE = "Check your connection and reload the page.";
+
+// Zod's default object validator feature-probes new Function, which reports a CSP violation
+// even when the exception is caught. Strict script-src 'self' requires its interpreter path.
+configureZod({ jitless: true });
 
 export interface AppProps {
   services?: AppServices;
@@ -24,6 +34,44 @@ type RepositoryState =
   | { status: "loading" }
   | { status: "ready"; repository: Repository }
   | { status: "unavailable" };
+
+type LibraryServices = Pick<
+  AppServices,
+  | "openRepository"
+  | "openTabSession"
+  | "subscribeToRepositoryChanges"
+  | "importArchitectureFile"
+  | "exportArchitectureJson"
+  | "exportArchitectureMarkdown"
+  | "exportRawJson"
+  | "requestPersistentStorage"
+>;
+
+let persistRequested = false;
+
+function requestPersistentStorage(): void {
+  if (persistRequested) return;
+  persistRequested = true;
+  void navigator.storage?.persist?.().catch(() => undefined);
+}
+
+/** The library's eager dependencies; editor-only services live in defaultModules.ts. */
+const defaultLibraryServices: LibraryServices = {
+  openRepository: () => openRepository(),
+  openTabSession: openArchitectureTabSync,
+  subscribeToRepositoryChanges: (listener) => subscribeArchitectureChanges(() => listener()),
+  importArchitectureFile,
+  exportArchitectureJson: downloadArchitectureJson,
+  exportArchitectureMarkdown: (architecture) => {
+    void import("../io/exportMarkdown")
+      .then(({ downloadArchitectureMarkdown }) => downloadArchitectureMarkdown(architecture))
+      .catch((error: unknown) => console.error(error));
+  },
+  exportRawJson: downloadRawArchitectureJson,
+  requestPersistentStorage,
+};
+
+const LazyEditorRoute = lazy(() => import("./EditorRoute"));
 
 export function StorageUnavailable() {
   return (
@@ -39,14 +87,68 @@ export function StorageUnavailable() {
   );
 }
 
-function AppRoutes({ services, modules }: Required<AppProps>) {
+function EditorLoadFailure({ reload = () => window.location.reload() }: { reload?: () => void }) {
+  return (
+    <main className="sa-storage-unavailable" aria-labelledby="sa-editor-load-failed-title">
+      <div className="sa-storage-unavailable__panel">
+        <Icon name="alert" size={20} className="sa-storage-unavailable__icon" />
+        <h1 id="sa-editor-load-failed-title" className="sa-storage-unavailable__title">
+          {EDITOR_LOAD_FAILED_TITLE}
+        </h1>
+        <p className="sa-storage-unavailable__text">{EDITOR_LOAD_FAILED_MESSAGE}</p>
+        <Button variant="primary" onClick={reload}>
+          Reload
+        </Button>
+      </div>
+    </main>
+  );
+}
+
+interface EditorLoadBoundaryProps {
+  children: ReactNode;
+  reload?: () => void;
+}
+
+interface EditorLoadBoundaryState {
+  failed: boolean;
+}
+
+/** A failed lazy chunk is recoverable by reloading after the connection/deploy is fixed. */
+export class EditorLoadBoundary extends Component<EditorLoadBoundaryProps, EditorLoadBoundaryState> {
+  state: EditorLoadBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): EditorLoadBoundaryState {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) return <EditorLoadFailure reload={this.props.reload} />;
+    return this.props.children;
+  }
+}
+
+function EditorLoading() {
+  return (
+    <main className="sa-storage-unavailable" aria-live="polite">
+      <p role="status">Loading editor…</p>
+    </main>
+  );
+}
+
+interface AppRoutesProps {
+  injectedServices?: AppServices;
+  injectedModules?: EditorModules;
+}
+
+function AppRoutes({ injectedServices, injectedModules }: AppRoutesProps) {
   const route = useRoute();
   const { showToast } = useToast();
   const [state, setState] = useState<RepositoryState>({ status: "loading" });
+  const libraryServices = injectedServices ?? (defaultLibraryServices as AppServices);
 
   useEffect(() => {
     let cancelled = false;
-    services
+    libraryServices
       .openRepository()
       .then((repository) => {
         if (!cancelled) setState({ status: "ready", repository });
@@ -58,7 +160,7 @@ function AppRoutes({ services, modules }: Required<AppProps>) {
     return () => {
       cancelled = true;
     };
-  }, [services]);
+  }, [libraryServices]);
 
   const openArchitecture = useCallback((id: string) => navigate(editorHref(id)), []);
   const openLibrary = useCallback(() => navigate(LIBRARY_HREF), []);
@@ -72,33 +174,37 @@ function AppRoutes({ services, modules }: Required<AppProps>) {
 
   if (route.name === "editor") {
     return (
-      <EditorScreen
-        key={route.id}
-        id={route.id}
-        repository={state.repository}
-        services={services}
-        modules={modules}
-        onOpenFailed={openFailed}
-        onLeave={openLibrary}
-        onOpenArchitecture={openArchitecture}
-      />
+      <EditorLoadBoundary key={route.id}>
+        <Suspense fallback={<EditorLoading />}>
+          <LazyEditorRoute
+            id={route.id}
+            repository={state.repository}
+            libraryServices={defaultLibraryServices}
+            injectedServices={injectedServices}
+            injectedModules={injectedModules}
+            onOpenFailed={openFailed}
+            onLeave={openLibrary}
+            onOpenArchitecture={openArchitecture}
+          />
+        </Suspense>
+      </EditorLoadBoundary>
     );
   }
 
   return (
     <LibraryScreen
       repository={state.repository}
-      services={services}
+      services={libraryServices}
       editorHref={editorHref}
       onOpen={openArchitecture}
     />
   );
 }
 
-export default function App({ services = defaultServices, modules = defaultModules }: AppProps) {
+export default function App({ services, modules }: AppProps) {
   return (
     <ToastProvider>
-      <AppRoutes services={services} modules={modules} />
+      <AppRoutes injectedServices={services} injectedModules={modules} />
       <LiveRegion />
     </ToastProvider>
   );

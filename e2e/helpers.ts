@@ -99,7 +99,10 @@ export async function downloadBuffer(download: Download): Promise<Buffer> {
 }
 
 export async function modifierFor(page: Page): Promise<"Meta" | "Control"> {
-  return page.evaluate(() => (/mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform) ? "Meta" : "Control"));
+  return page.evaluate(() => {
+    const platform = (navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform;
+    return /mac|iphone|ipad/i.test(platform ?? navigator.platform) ? "Meta" : "Control";
+  });
 }
 
 export async function selectTwoComponents(page: Page, firstName: string, secondName: string): Promise<void> {
@@ -281,6 +284,7 @@ export async function edgeSnapshot(page: Page, index = 0): Promise<EdgeSnapshot>
 }
 
 export async function pngDimensions(png: Buffer): Promise<{ width: number; height: number }> {
+  expect(png.length, "PNG should contain an IHDR header").toBeGreaterThanOrEqual(24);
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
