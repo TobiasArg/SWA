@@ -8,10 +8,13 @@ export interface EditorState {
   canRedo: boolean;
   revision: number;
   contentRevision: number;
+  /** Id of the entry `undo` would revert next, or null when there is nothing to undo. */
+  historyHeadId: number | null;
 }
 
 export type DispatchResult =
-  | { ok: true; summary?: CommandResult["summary"] }
+  /** `entryId` is set when the command created a history entry or was merged into the top one. */
+  | { ok: true; summary?: CommandResult["summary"]; entryId?: number }
   | { ok: false; error: DomainError };
 
 export interface EditorStore {
@@ -19,6 +22,8 @@ export interface EditorStore {
   subscribe(listener: () => void): () => void;
   dispatch(command: Command, options?: { coalesceKey?: string; label?: string }): DispatchResult;
   undo(): void;
+  /** Undoes only if `entryId` is the top undo entry. Returns false and changes nothing otherwise. */
+  undoEntry(entryId: number): boolean;
   redo(): void;
   breakCoalescing(): void;
   setSelection(selection: Selection): void;

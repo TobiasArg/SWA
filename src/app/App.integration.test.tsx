@@ -316,4 +316,38 @@ describe("editor delete confirmation", () => {
     key({ key: "z", ctrlKey: true }, document.body);
     expect(content()).toEqual(before);
   });
+
+  async function deleteComponentA(user: ReturnType<typeof userEvent.setup>) {
+    select(componentA);
+    await click(toolbar, "Delete")(user);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(document.querySelector(".sa-toast")).toBeInTheDocument());
+    expect(within(document.querySelector<HTMLElement>(".sa-toast")!).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  }
+
+  it("removes the deletion Undo toast after a later edit, so it cannot undo that edit", async () => {
+    const user = await openEditor();
+    await deleteComponentA(user);
+
+    select({ componentIds: ["cmp_b"] });
+    await shortcut({ key: "ArrowRight" })();
+    expect(store.getState().architecture.components.find((item) => item.id === "cmp_b")?.position.x).toBeGreaterThan(400);
+    expect(document.querySelector(".sa-toast")).not.toBeInTheDocument();
+
+    key({ key: "z", ctrlKey: true }, document.body);
+    expect(store.getState().architecture.components.find((item) => item.id === "cmp_b")?.position.x).toBe(400);
+    expect(ids(store.getState().architecture.components)).toEqual(["cmp_b", "cmp_c"]);
+    key({ key: "z", ctrlKey: true }, document.body);
+    expect(ids(store.getState().architecture.components)).toEqual(["cmp_a", "cmp_b", "cmp_c"]);
+  });
+
+  it("dismisses the deletion Undo toast when leaving the editor", async () => {
+    const user = await openEditor();
+    await deleteComponentA(user);
+
+    await user.click(screen.getByRole("button", { name: "Library" }));
+    expect(await screen.findByRole("link", { name: "Delete Fixture" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(document.querySelector(".sa-toast")).not.toBeInTheDocument();
+  });
 });

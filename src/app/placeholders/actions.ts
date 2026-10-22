@@ -1,4 +1,5 @@
 import type { Selection } from "../../domain/types";
+import { showEntryUndoToast } from "../../editor/actions";
 import type { EditorStore } from "../../editor/storeTypes";
 import type { ActionFeedback, EditorActions } from "../services";
 
@@ -46,7 +47,7 @@ export const placeholderActions: EditorActions = {
         deletedGroups: selection.groupIds.length,
       },
     );
-    feedback.showToast(message, { action: { label: "Undo", onClick: () => store.undo() } });
+    if (result.entryId !== undefined) showEntryUndoToast(store, feedback, result.entryId, message);
     feedback.announce(message);
   },
   duplicateSelection(store, feedback) {

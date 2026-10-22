@@ -23,12 +23,14 @@ export function makeStoreDouble(components: Component[] = []) {
     canRedo: false,
     revision: 0,
     contentRevision: 0,
+    historyHeadId: null,
   };
   const store = {
     getState: vi.fn(() => state),
     subscribe: vi.fn(() => () => {}),
     dispatch: vi.fn<EditorStore["dispatch"]>(() => ({ ok: true })),
     undo: vi.fn(),
+    undoEntry: vi.fn(() => false),
     redo: vi.fn(),
     breakCoalescing: vi.fn(),
     setSelection: vi.fn(),

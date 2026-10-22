@@ -45,6 +45,7 @@ export function createFakeStore(
       return store.dispatch(command, options);
     },
     undo: () => store.undo(),
+    undoEntry: (entryId) => store.undoEntry(entryId),
     redo: () => store.redo(),
     breakCoalescing: () => store.breakCoalescing(),
     setSelection(selection) {

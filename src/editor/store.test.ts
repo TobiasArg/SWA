@@ -155,4 +155,46 @@ describe("createEditorStore", () => {
     store.setSelection({ componentIds: ["cmp_b"], relationshipIds: [], groupIds: [] });
     expect(listener).toHaveBeenCalledTimes(2);
   });
+
+  it("identifies history entries and undoes a specific entry only while it is the top one", () => {
+    const store = createEditorStore(architecture(), () => "edit");
+    expect(store.getState().historyHeadId).toBeNull();
+
+    const first = store.dispatch({ kind: "updateComponent", id: "cmp_a", patch: { name: "A1" } }, { coalesceKey: "cmp_a:name" });
+    const merged = store.dispatch({ kind: "updateComponent", id: "cmp_a", patch: { name: "A2" } }, { coalesceKey: "cmp_a:name" });
+    const firstId = first.ok ? first.entryId : undefined;
+    expect(firstId).toEqual(expect.any(Number));
+    expect(merged.ok && merged.entryId).toBe(firstId);
+    expect(store.getState().historyHeadId).toBe(firstId);
+
+    const unchanged = store.dispatch({ kind: "updateComponent", id: "cmp_a", patch: { name: "A2" } });
+    expect(unchanged.ok && unchanged.entryId).toBeUndefined();
+
+    const second = store.dispatch({ kind: "updateComponent", id: "cmp_b", patch: { name: "B1" } });
+    const secondId = second.ok ? second.entryId : undefined;
+    expect(secondId).not.toBe(firstId);
+    expect(store.getState().historyHeadId).toBe(secondId);
+
+    const revision = store.getState().revision;
+    expect(store.undoEntry(firstId!)).toBe(false);
+    expect(store.getState().revision).toBe(revision);
+    expect(store.getState().architecture.components.map((item) => item.name)).toEqual(["A2", "B1"]);
+
+    store.renameArchitecture("Renamed");
+    store.setViewport({ x: 10, y: 20, zoom: 1 });
+    expect(store.getState().historyHeadId).toBe(secondId);
+
+    expect(store.undoEntry(secondId!)).toBe(true);
+    expect(store.getState().architecture).toMatchObject({ name: "Renamed", canvas: { viewport: { x: 10, y: 20, zoom: 1 } } });
+    expect(store.getState().architecture.components.map((item) => item.name)).toEqual(["A2", "B"]);
+    expect(store.getState().historyHeadId).toBe(firstId);
+    expect(store.undoEntry(secondId!)).toBe(false);
+
+    store.redo();
+    expect(store.getState().historyHeadId).toBe(secondId);
+    store.undo();
+    store.undo();
+    expect(store.getState().historyHeadId).toBeNull();
+    expect(store.undoEntry(firstId!)).toBe(false);
+  });
 });
