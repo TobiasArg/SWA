@@ -128,7 +128,9 @@ describe("LibraryScreen", () => {
 
     await user.click(await screen.findByRole("button", { name: "Delete Old" }));
     const dialog = screen.getByRole("dialog", { name: "Delete 'Old'?" });
-    expect(dialog).toHaveAccessibleDescription("This cannot be undone. Export it to JSON first if you want a backup.");
+    expect(dialog).toHaveAccessibleDescription(
+      "This cannot be undone. Its saved versions are deleted too. Export it to JSON first if you want a backup.",
+    );
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
 
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));

@@ -15,7 +15,8 @@ export type IconName =
   | "grip"
   | "plus"
   | "minus"
-  | "fit";
+  | "fit"
+  | "clock";
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -117,6 +118,13 @@ function IconArtwork({ name }: Pick<IconProps, "name">) {
         <>
           <path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4" />
           <path d="M8 8h8v8H8z" />
+        </>
+      );
+    case "clock":
+      return (
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3.2 2" />
         </>
       );
   }
