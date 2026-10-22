@@ -70,8 +70,10 @@ export function createPlaceholderEditorStore(
   initial: Architecture,
   now: () => string = () => new Date().toISOString(),
 ): EditorStore {
-  const past: { before: Architecture; after: Architecture; coalesceKey?: string }[] = [];
-  const future: { before: Architecture; after: Architecture }[] = [];
+  type Entry = { id: number; before: Architecture; after: Architecture; coalesceKey?: string };
+  const past: Entry[] = [];
+  const future: Entry[] = [];
+  let nextEntryId = 1;
   let openCoalesceKey: string | undefined;
   let state: EditorState = {
     architecture: initial,
@@ -80,6 +82,7 @@ export function createPlaceholderEditorStore(
     canRedo: false,
     revision: 0,
     contentRevision: 0,
+    historyHeadId: null,
   };
   const listeners = new Set<() => void>();
 
@@ -94,8 +97,17 @@ export function createPlaceholderEditorStore(
       canRedo: future.length > 0,
       revision: state.revision + 1,
       contentRevision: state.contentRevision + 1,
+      historyHeadId: past[past.length - 1]?.id ?? null,
     };
     emit();
+  };
+
+  const undo = () => {
+    const entry = past.pop();
+    if (!entry) return;
+    future.push(entry);
+    openCoalesceKey = undefined;
+    commitContent(entry.before);
   };
 
   return {
@@ -117,20 +129,24 @@ export function createPlaceholderEditorStore(
       if (top && options.coalesceKey !== undefined && options.coalesceKey === openCoalesceKey) {
         top.after = result.architecture;
       } else {
-        past.push({ before: state.architecture, after: result.architecture, coalesceKey: options.coalesceKey });
+        past.push({
+          id: nextEntryId++,
+          before: state.architecture,
+          after: result.architecture,
+          coalesceKey: options.coalesceKey,
+        });
         if (past.length > 200) past.shift();
       }
       openCoalesceKey = options.coalesceKey;
       future.length = 0;
       commitContent(result.architecture);
-      return { ok: true, summary: result.summary };
+      return { ok: true, summary: result.summary, entryId: past[past.length - 1]?.id };
     },
-    undo() {
-      const entry = past.pop();
-      if (!entry) return;
-      future.push(entry);
-      openCoalesceKey = undefined;
-      commitContent(entry.before);
+    undo,
+    undoEntry(entryId) {
+      if (past[past.length - 1]?.id !== entryId) return false;
+      undo();
+      return true;
     },
     redo() {
       const entry = future.pop();

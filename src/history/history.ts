@@ -1,6 +1,8 @@
 import type { Architecture } from "../domain/types";
 
 export interface HistoryEntry {
+  /** Unique within one editor session, assigned by the store. A coalesced merge keeps the existing id. */
+  id: number;
   before: Architecture;
   after: Architecture;
   coalesceKey?: string;
@@ -17,6 +19,11 @@ export const HISTORY_LIMIT = 200;
 
 export function createHistory(): History {
   return { past: [], future: [] };
+}
+
+/** The entry `undo` would revert next. */
+export function head(history: History): HistoryEntry | undefined {
+  return history.past[history.past.length - 1];
 }
 
 export function push(history: History, entry: HistoryEntry): History {

@@ -99,6 +99,7 @@ export function createTestStore(architecture: Architecture, selection?: Partial<
     canRedo: false,
     revision: 0,
     contentRevision: 0,
+    historyHeadId: null,
   };
   const listeners = new Set<() => void>();
   const set = (next: Partial<EditorState>) => {
@@ -128,6 +129,7 @@ export function createTestStore(architecture: Architecture, selection?: Partial<
       }
     },
     undo: vi.fn(),
+    undoEntry: vi.fn(() => false),
     redo: vi.fn(),
     breakCoalescing() {
       store.breakCount += 1;

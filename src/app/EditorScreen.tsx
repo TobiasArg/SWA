@@ -175,7 +175,7 @@ function EditorWorkspace({
 }: EditorWorkspaceProps) {
   const { store, controller } = session;
   const { CanvasView, Palette, Inspector, ConnectDialog } = modules;
-  const { showToast } = useToast();
+  const { showToast, dismissToast } = useToast();
   const isMac = useMemo(() => detectMac(), []);
   const paletteId = useId();
   const inspectorId = useId();
@@ -199,7 +199,37 @@ function EditorWorkspace({
     canvasApiRef.current = canvasApi;
   }, [canvasApi]);
 
-  const feedback = useMemo<ActionFeedback>(() => ({ showToast, announce }), [showToast]);
+  // Toasts with an action (the deletion Undo) belong to this editor session: they are dismissed
+  // when it ends, so their action can never run against a disposed store.
+  const actionToastsRef = useRef(new Set<number>());
+  const feedback = useMemo<ActionFeedback>(
+    () => ({
+      showToast(message, options) {
+        if (!options?.action) return showToast(message, options);
+        const actionToasts = actionToastsRef.current;
+        const id = showToast(message, {
+          ...options,
+          onClose: () => {
+            actionToasts.delete(id);
+            options.onClose?.();
+          },
+        });
+        actionToasts.add(id);
+        return id;
+      },
+      dismissToast,
+      announce,
+    }),
+    [dismissToast, showToast],
+  );
+
+  useEffect(() => {
+    const actionToasts = actionToastsRef.current;
+    return () => {
+      for (const id of [...actionToasts]) dismissToast(id);
+      actionToasts.clear();
+    };
+  }, [dismissToast, store]);
 
   const undo = useCallback(() => {
     if (!store.getState().canUndo) return;

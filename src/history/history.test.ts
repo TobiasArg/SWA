@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HISTORY_LIMIT, breakCoalescing, createHistory, push, redo, undo } from "./history";
+import { HISTORY_LIMIT, breakCoalescing, createHistory, head, push, redo, undo } from "./history";
 import type { Architecture } from "../domain/types";
 
 function architecture(name: string): Architecture {
@@ -14,8 +14,12 @@ function architecture(name: string): Architecture {
   };
 }
 
+let nextId = 0;
+
 function entry(before: string, after: string, coalesceKey?: string) {
+  nextId += 1;
   return {
+    id: nextId,
     before: architecture(before),
     after: architecture(after),
     ...(coalesceKey === undefined ? {} : { coalesceKey }),
@@ -85,5 +89,26 @@ describe("snapshot history", () => {
     expect(history.past).toHaveLength(HISTORY_LIMIT);
     expect(history.past[0]?.before.name).toBe("before-5");
     expect(history.past.at(-1)?.after.name).toBe(`after-${HISTORY_LIMIT + 4}`);
+  });
+
+  it("keeps entry ids through undo, redo and coalescing, and exposes the top entry", () => {
+    expect(head(createHistory())).toBeUndefined();
+
+    const first = entry("A", "B", "field");
+    const merged = push(push(createHistory(), first), entry("B", "C", "field"));
+    expect(merged.past).toHaveLength(1);
+    expect(head(merged)?.id).toBe(first.id);
+
+    const second = entry("C", "D");
+    const history = push(merged, second);
+    expect(head(history)?.id).toBe(second.id);
+
+    const undone = undo(history)!;
+    expect(head(undone.history)?.id).toBe(first.id);
+    expect(undone.history.future[0]?.id).toBe(second.id);
+
+    const redone = redo(undone.history)!;
+    expect(redone.history.past.map((item) => item.id)).toEqual([first.id, second.id]);
+    expect(head(redone.history)?.id).toBe(second.id);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "./store";
 import {
+  ENTRY_UNDO_TOAST_MS,
+  STALE_UNDO_MESSAGE,
   deleteSelection,
   deletionConfirmCopy,
   deletionTargets,
@@ -11,6 +13,22 @@ import {
   ungroupSelection,
 } from "./actions";
 import type { Architecture, Component } from "../domain/types";
+import type { ActionFeedback } from "./actions";
+
+function createFeedback() {
+  let nextToastId = 0;
+  return {
+    showToast: vi.fn<ActionFeedback["showToast"]>(() => ++nextToastId),
+    dismissToast: vi.fn<ActionFeedback["dismissToast"]>(),
+    announce: vi.fn<ActionFeedback["announce"]>(),
+  };
+}
+
+type ToastOptions = NonNullable<Parameters<ActionFeedback["showToast"]>[1]>;
+
+function toastOptions(feedback: ReturnType<typeof createFeedback>, call = 0): ToastOptions {
+  return feedback.showToast.mock.calls[call]?.[1] as ToastOptions;
+}
 
 function component(id: string, name: string, x = 0): Component {
   return { id, type: "agent", name, position: { x, y: 0 } };
@@ -36,10 +54,10 @@ describe("UI-agnostic editor actions", () => {
   it("deletes selected components with their relationships and group membership, then provides undo feedback", () => {
     const store = createEditorStore(architecture(), () => "edit");
     store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
-    const showToast = vi.fn();
-    const announce = vi.fn();
+    const feedback = createFeedback();
+    const { showToast, announce } = feedback;
 
-    const result = deleteSelection(store, { showToast, announce });
+    const result = deleteSelection(store, feedback);
     const message = "Deleted 1 component and 2 relationships.";
     expect(result.ok).toBe(true);
     expect(store.getState().architecture.components.map((item) => item.id)).toEqual(["cmp_b"]);
@@ -48,11 +66,13 @@ describe("UI-agnostic editor actions", () => {
     expect(showToast).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(message, {
       action: { label: "Undo", onClick: expect.any(Function) },
+      durationMs: ENTRY_UNDO_TOAST_MS,
+      onClose: expect.any(Function),
     });
     expect(announce).toHaveBeenCalledWith(message);
 
-    const toastOptions = showToast.mock.calls[0]?.[1] as { action: { onClick: () => void } };
-    toastOptions.action.onClick();
+    toastOptions(feedback).action!.onClick();
+    expect(announce).toHaveBeenLastCalledWith("Undid the deletion.");
     expect(store.getState().architecture.components.map((item) => item.id)).toEqual(["cmp_a", "cmp_b"]);
     expect(store.getState().architecture.relationships).toHaveLength(2);
     expect(store.getState().architecture.groups[0]?.memberComponentIds).toEqual(["cmp_a"]);
@@ -60,11 +80,76 @@ describe("UI-agnostic editor actions", () => {
 
   it("does not show deletion feedback when the selection is empty", () => {
     const store = createEditorStore(architecture(), () => "edit");
-    const showToast = vi.fn();
-    const announce = vi.fn();
-    deleteSelection(store, { showToast, announce });
-    expect(showToast).not.toHaveBeenCalled();
-    expect(announce).not.toHaveBeenCalled();
+    const feedback = createFeedback();
+    deleteSelection(store, feedback);
+    expect(feedback.showToast).not.toHaveBeenCalled();
+    expect(feedback.announce).not.toHaveBeenCalled();
+  });
+
+  describe("deletion Undo toast bound to its history entry", () => {
+    it("dismisses the toast on a later edit, and a stale Undo changes nothing", () => {
+      const store = createEditorStore(architecture(), () => "edit");
+      store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+      const feedback = createFeedback();
+      deleteSelection(store, feedback);
+      const toastId = feedback.showToast.mock.results[0]?.value as number;
+
+      store.setSelection({ componentIds: ["cmp_b"], relationshipIds: [], groupIds: [] });
+      store.renameArchitecture("Renamed");
+      store.setViewport({ x: 5, y: 5, zoom: 1 });
+      expect(feedback.dismissToast).not.toHaveBeenCalled();
+
+      store.dispatch({ kind: "moveElements", componentPositions: { cmp_b: { x: 300, y: 40 } }, groupDeltas: {} });
+      nudgeSelection(store, 8, 0);
+      expect(feedback.dismissToast).toHaveBeenCalledTimes(1);
+      expect(feedback.dismissToast).toHaveBeenCalledWith(toastId);
+
+      const before = store.getState();
+      toastOptions(feedback).action!.onClick();
+      expect(store.getState()).toBe(before);
+      expect(store.getState().architecture.components.map((item) => item.id)).toEqual(["cmp_b"]);
+      expect(feedback.announce).toHaveBeenLastCalledWith(STALE_UNDO_MESSAGE);
+    });
+
+    it("dismisses the toast when Undo elsewhere already reverted the deletion", () => {
+      const store = createEditorStore(architecture(), () => "edit");
+      store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+      const feedback = createFeedback();
+      deleteSelection(store, feedback);
+
+      store.undo();
+      expect(feedback.dismissToast).toHaveBeenCalledTimes(1);
+      store.redo();
+      expect(feedback.dismissToast).toHaveBeenCalledTimes(1);
+    });
+
+    it("binds each deletion toast to its own entry", () => {
+      const store = createEditorStore(architecture(), () => "edit");
+      const feedback = createFeedback();
+      store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+      deleteSelection(store, feedback);
+      store.setSelection({ componentIds: ["cmp_b"], relationshipIds: [], groupIds: [] });
+      deleteSelection(store, feedback);
+      expect(feedback.dismissToast).toHaveBeenCalledExactlyOnceWith(1);
+
+      toastOptions(feedback, 0).action!.onClick();
+      expect(store.getState().architecture.components).toEqual([]);
+      expect(feedback.announce).toHaveBeenLastCalledWith(STALE_UNDO_MESSAGE);
+      toastOptions(feedback, 1).action!.onClick();
+      expect(store.getState().architecture.components.map((item) => item.id)).toEqual(["cmp_b"]);
+      expect(feedback.announce).toHaveBeenLastCalledWith("Undid the deletion.");
+    });
+
+    it("stops watching the store once the toast closes", () => {
+      const store = createEditorStore(architecture(), () => "edit");
+      store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+      const feedback = createFeedback();
+      deleteSelection(store, feedback);
+
+      toastOptions(feedback).onClose!();
+      store.dispatch({ kind: "moveElements", componentPositions: { cmp_b: { x: 300, y: 40 } }, groupDeltas: {} });
+      expect(feedback.dismissToast).not.toHaveBeenCalled();
+    });
   });
 
   it("duplicates only selected components, applies the domain offset, and selects the copies", () => {
@@ -150,7 +235,7 @@ describe("UI-agnostic editor actions", () => {
 
         const store = createEditorStore(architecture(), () => "edit");
         store.setSelection(selection);
-        const result = deleteSelection(store, { showToast: vi.fn(), announce: vi.fn() });
+        const result = deleteSelection(store, createFeedback());
         expect(result.ok && result.summary).toEqual(preview?.summary);
       }
     });

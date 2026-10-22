@@ -7,9 +7,53 @@ import type { DispatchResult, EditorStore } from "./storeTypes";
 export interface ActionFeedback {
   showToast(
     message: string,
-    options?: { action?: { label: string; onClick: () => void }; durationMs?: number },
-  ): unknown;
+    options?: { action?: { label: string; onClick: () => void }; durationMs?: number; onClose?: () => void },
+  ): number;
+  dismissToast(id: number): void;
   announce(message: string): void;
+}
+
+export const ENTRY_UNDO_TOAST_MS = 10_000;
+export const STALE_UNDO_MESSAGE =
+  "Nothing was undone because the diagram changed after the deletion. Use Undo in the toolbar.";
+
+/**
+ * Shows a toast whose Undo reverts exactly the history entry `entryId`, or nothing. The toast
+ * closes as soon as that entry stops being the top undo entry (a later edit, Undo or Redo), so
+ * it can never offer to undo an unrelated change.
+ */
+export function showEntryUndoToast(
+  store: EditorStore,
+  feedback: ActionFeedback,
+  entryId: number,
+  message: string,
+  undoneMessage = "Undid the deletion.",
+): void {
+  let unsubscribe: (() => void) | undefined;
+  const stopWatching = () => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+  };
+  const toastId = feedback.showToast(message, {
+    action: {
+      label: "Undo",
+      onClick: () => {
+        stopWatching();
+        feedback.announce(store.undoEntry(entryId) ? undoneMessage : STALE_UNDO_MESSAGE);
+      },
+    },
+    durationMs: ENTRY_UNDO_TOAST_MS,
+    onClose: stopWatching,
+  });
+  if (store.getState().historyHeadId !== entryId) {
+    feedback.dismissToast(toastId);
+    return;
+  }
+  unsubscribe = store.subscribe(() => {
+    if (store.getState().historyHeadId === entryId) return;
+    stopWatching();
+    feedback.dismissToast(toastId);
+  });
 }
 
 function pluralized(count: number, singular: string): string {
@@ -116,8 +160,8 @@ export function deleteSelection(store: EditorStore, feedback: ActionFeedback): D
   if (!result.ok || !result.summary) return result;
 
   const message = deletionMessage(result.summary);
-  if (!message) return result;
-  feedback.showToast(message, { action: { label: "Undo", onClick: () => store.undo() } });
+  if (!message || result.entryId === undefined) return result;
+  showEntryUndoToast(store, feedback, result.entryId, message);
   feedback.announce(message);
   return result;
 }

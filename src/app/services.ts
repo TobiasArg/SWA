@@ -18,6 +18,7 @@ import type { ToastController } from "../ui/Toast";
 /** Feedback channels the editor actions use (toast with Undo, live announcement). */
 export interface ActionFeedback {
   showToast: ToastController["showToast"];
+  dismissToast: ToastController["dismissToast"];
   announce(message: string): void;
 }
 
