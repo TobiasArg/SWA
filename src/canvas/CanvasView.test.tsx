@@ -1,11 +1,52 @@
 import { act, createEvent, fireEvent, render, screen } from "@testing-library/react";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { useReactFlow } from "@xyflow/react";
+import { componentRect } from "../domain/geometry";
 import { EditorProvider } from "../editor/context";
 import { useCanvasApi } from "./canvasApi";
 import { CanvasView, EMPTY_CANVAS_HINT } from "./CanvasView";
 import { createFakeStore, type FakeEditorStore } from "./testing/fakeStore";
 import { PALETTE_DRAG_MIME } from "../palette/paletteItems";
 import { buildFixtureArchitecture, emptyArchitecture } from "./testing/fixtures";
+
+// Records React Flow's setCenter calls while still running the real one (QF4).
+const setCenterSpy = vi.hoisted(() => vi.fn());
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>();
+  const wrapped = new WeakMap<object, ReturnType<typeof actual.useReactFlow>>();
+  return {
+    ...actual,
+    useReactFlow: () => {
+      const flow = actual.useReactFlow();
+      let spied = wrapped.get(flow);
+      if (!spied) {
+        spied = {
+          ...flow,
+          setCenter: (...args: Parameters<typeof flow.setCenter>) => {
+            setCenterSpy(...args);
+            return flow.setCenter(...args);
+          },
+        };
+        wrapped.set(flow, spied);
+      }
+      return spied;
+    },
+  };
+});
+
+function stubReducedMotion(reduce: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: reduce && query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+}
+
+afterEach(() => {
+  setCenterSpy.mockClear();
+  vi.unstubAllGlobals();
+});
 
 beforeAll(() => {
   // jsdom lacks the layout APIs React Flow touches.
@@ -28,6 +69,11 @@ function renderCanvas(store: FakeEditorStore, children?: React.ReactNode) {
       </div>
     </EditorProvider>,
   );
+}
+
+function FlowProbe({ onFlow }: { onFlow: (flow: ReturnType<typeof useReactFlow>) => void }) {
+  onFlow(useReactFlow());
+  return null;
 }
 
 function ApiProbe({ onApi }: { onApi: (api: ReturnType<typeof useCanvasApi>) => void }) {
@@ -123,5 +169,83 @@ describe("CanvasView", () => {
     const [component] = store.getState().architecture.components;
     expect(component).toMatchObject({ type: "decision", name: "Decision", position: { x: 100, y: 70 } });
     expect(store.getState().selection.componentIds).toEqual([component!.id]);
+  });
+
+  describe("revealComponent (Quick Find, QF4)", () => {
+    function renderWithApi(zoom: number) {
+      const store = createFakeStore(buildFixtureArchitecture({ canvas: { viewport: { x: 30, y: 40, zoom } } }));
+      let api: ReturnType<typeof useCanvasApi> | null = null;
+      let flow: ReturnType<typeof useReactFlow> | null = null;
+      renderCanvas(
+        store,
+        <>
+          <ApiProbe onApi={(value) => (api = value)} />
+          <FlowProbe onFlow={(value) => (flow = value)} />
+        </>,
+      );
+      return { store, api: () => api!, flowViewport: () => flow!.getViewport() };
+    }
+    const crm = componentRect(buildFixtureArchitecture().components.find((c) => c.id === "cmp_crm")!);
+    const center = { x: crm.x + crm.width / 2, y: crm.y + crm.height / 2 };
+
+    it("centers the component at zoom 1 without animation under reduced motion, then stores the viewport", async () => {
+      stubReducedMotion(true);
+      const { store, api, flowViewport } = renderWithApi(0.5);
+      let revealed: boolean | undefined;
+      await act(async () => {
+        revealed = await api().revealComponent("cmp_crm");
+      });
+      expect(revealed).toBe(true);
+      expect(setCenterSpy).toHaveBeenCalledTimes(1);
+      expect(setCenterSpy).toHaveBeenCalledWith(center.x, center.y, { zoom: 1, duration: 0 });
+      // The settled React Flow viewport is stored explicitly, whatever onMoveEnd does.
+      const settled = flowViewport();
+      expect(settled.zoom).toBe(1);
+      expect(store.viewports.at(-1)).toEqual(settled);
+      expect(store.getState().architecture.canvas?.viewport).toEqual(settled);
+      // Revealing is not a content change and does not select.
+      expect(store.commands).toHaveLength(0);
+      expect(store.selections).toHaveLength(0);
+    });
+
+    it("never zooms out and animates for 200 ms without reduced motion", async () => {
+      stubReducedMotion(false);
+      const { store, api } = renderWithApi(1.5);
+      await act(async () => {
+        await api().revealComponent("cmp_crm");
+      });
+      expect(setCenterSpy).toHaveBeenCalledWith(center.x, center.y, { zoom: 1.5, duration: 200 });
+      expect(store.viewports.at(-1)?.zoom).toBe(1.5);
+    });
+
+    it("keeps the maximum zoom when already fully zoomed in", async () => {
+      stubReducedMotion(true);
+      const { store, api } = renderWithApi(2);
+      await act(async () => {
+        await api().revealComponent("cmp_crm");
+      });
+      expect(setCenterSpy).toHaveBeenCalledWith(center.x, center.y, { zoom: 2, duration: 0 });
+      expect(store.viewports.at(-1)?.zoom).toBe(2);
+    });
+
+    it("resolves false for an unknown node and leaves the viewport alone", async () => {
+      stubReducedMotion(true);
+      const { store, api } = renderWithApi(0.5);
+      const before = store.viewports.length;
+      let revealed: boolean | undefined;
+      await act(async () => {
+        revealed = await api().revealComponent("cmp_missing");
+      });
+      expect(revealed).toBe(false);
+      expect(setCenterSpy).not.toHaveBeenCalled();
+      expect(store.viewports).toHaveLength(before);
+    });
+
+    it("rejects group ids: only components can be revealed", async () => {
+      stubReducedMotion(true);
+      const { api } = renderWithApi(0.5);
+      await expect(api().revealComponent("grp_research")).resolves.toBe(false);
+      expect(setCenterSpy).not.toHaveBeenCalled();
+    });
   });
 });

@@ -56,6 +56,7 @@ export function makeCanvasApiDouble(rect: { left: number; top: number; width: nu
     getViewportElement: vi.fn<() => HTMLElement | null>(() => viewport),
     getNodesBounds: vi.fn(() => ({ x: 0, y: 0, width: 0, height: 0 })),
     getDiagramBounds: vi.fn(() => ({ x: 0, y: 0, width: 0, height: 0 })),
+    revealComponent: vi.fn(async (_id: string) => true),
   } satisfies CanvasApi;
   return {
     api,

@@ -27,6 +27,7 @@ function PlaceholderCanvasProvider({ children }: PropsWithChildren) {
       fitView: () => undefined,
       screenToFlowPosition: (position) => position,
       getViewportElement: () => host.current,
+      revealComponent: async (id) => store.getState().architecture.components.some((c) => c.id === id),
       getDiagramBounds() {
         return this.getNodesBounds();
       },
