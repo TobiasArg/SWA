@@ -3,6 +3,8 @@ import type { CanvasApi } from "../canvas/canvasApi";
 import type { Architecture } from "../domain/types";
 import type { EditorStore } from "../editor/storeTypes";
 import type { ImportResult } from "../io/types";
+import type { DatabaseStatus } from "../persistence/db";
+import type { SnapshotStore } from "../persistence/snapshots";
 import type { Repository, SaveController } from "../persistence/types";
 import type { ToastController } from "../ui/Toast";
 
@@ -36,9 +38,15 @@ export interface TabSession {
   close(): void;
 }
 
+/** Connection lifecycle of the IndexedDB repository (ROADMAP_V2_DESIGN §6.2). */
+export interface RepositoryOpenOptions {
+  /** `blocked` while an old tab holds the previous version; `blocking` when a newer tab upgrades. */
+  onStatus?(status: DatabaseStatus): void;
+}
+
 export interface AppServices {
   /** Throws when IndexedDB is unavailable (TD 8.3 `StorageUnavailableError`). */
-  openRepository(): Promise<Repository>;
+  openRepository(options?: RepositoryOpenOptions): Promise<Repository>;
   createEditorStore(initial: Architecture): EditorStore;
   startAutosave(store: EditorStore, repository: Repository): SaveController;
   /** Installs the `beforeunload` guard (TD 8.5); returns an uninstall function. */
@@ -56,6 +64,11 @@ export interface AppServices {
   exportPng(api: CanvasApi, name: string): Promise<void>;
   /** `navigator.storage.persist()` on the first create/import (TD 8.5). */
   requestPersistentStorage(): void;
+  /**
+   * Opens the browser-local versions store (ROADMAP_V2_DESIGN §6.3). Editor-only. Test doubles may
+   * omit it; the editor then has no Versions and captures no snapshots.
+   */
+  openSnapshotStore?(): Promise<SnapshotStore>;
   actions: EditorActions;
 }
 

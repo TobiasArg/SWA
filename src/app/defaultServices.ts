@@ -45,7 +45,7 @@ const defaultLibraryServices: Pick<
   | "exportRawJson"
   | "requestPersistentStorage"
 > = {
-  openRepository: () => openRepository(),
+  openRepository: (options) => openRepository(undefined, options),
   openTabSession: openArchitectureTabSync,
   subscribeToRepositoryChanges: (listener) => subscribeArchitectureChanges(() => listener()),
   importArchitectureFile,

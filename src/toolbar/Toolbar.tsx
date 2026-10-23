@@ -1,11 +1,13 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { CanvasApi } from "../canvas/canvasApi";
+import { countArrangeUnits, getTidyScope, type AlignMode, type ArrangeAxis } from "../domain/arrange";
 import type { Architecture, Selection } from "../domain/types";
 import { useEditorState, useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
 import type { SaveController } from "../persistence/types";
 import { Button, type ButtonProps } from "../ui/Button";
 import { Icon } from "../ui/icons";
+import { ArrangeMenu } from "./ArrangeMenu";
 import { Glyph } from "./glyphs";
 import { SaveStatusIndicator } from "./SaveStatusIndicator";
 import "./toolbar.css";
@@ -23,6 +25,13 @@ export interface ToolbarProps {
   onUngroup(): void;
   onConnect(): void;
   onDelete(): void;
+  /** Opens Quick Find (ROADMAP_V2_DESIGN §3). */
+  onFind(): void;
+  onAlign(mode: AlignMode): void;
+  onDistribute(axis: ArrangeAxis): void;
+  onTidy(): void;
+  /** Opens the Versions dialog (§6.7); the button is disabled when omitted (no versions store). */
+  onOpenVersions?(): void;
   onExportJson(): void;
   /** Downloads the architecture as a Markdown document; always available. */
   onExportMarkdown(): void;
@@ -34,6 +43,27 @@ const selectArchitecture = (state: EditorState) => state.architecture;
 const selectSelection = (state: EditorState) => state.selection;
 const selectCanUndo = (state: EditorState) => state.canUndo;
 const selectCanRedo = (state: EditorState) => state.canRedo;
+
+/** Magnifier in the Glyph style (24px grid, 1.7 stroke). */
+function SearchGlyph() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      focusable="false"
+    >
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l5 5" />
+    </svg>
+  );
+}
 
 export function canUngroup(architecture: Architecture, selection: Selection): boolean {
   if (selection.groupIds.length) return true;
@@ -253,6 +283,11 @@ export function Toolbar({
   onUngroup,
   onConnect,
   onDelete,
+  onFind,
+  onAlign,
+  onDistribute,
+  onTidy,
+  onOpenVersions,
   onExportJson,
   onExportMarkdown,
   onExportPng,
@@ -267,6 +302,14 @@ export function Toolbar({
   const hasSelection =
     selection.componentIds.length + selection.relationshipIds.length + selection.groupIds.length > 0;
   const canExportPng = architecture.components.length + architecture.groups.length > 0;
+  const selectionUnits = useMemo(
+    () => countArrangeUnits(architecture.components, architecture.groups, selection),
+    [architecture, selection],
+  );
+  const tidyScope = useMemo(
+    () => getTidyScope(architecture.components, architecture.groups, selection),
+    [architecture, selection],
+  );
 
   return (
     <header className="sa-toolbar">
@@ -287,6 +330,7 @@ export function Toolbar({
         <ToolButton label="Zoom out" shortcut={formatShortcut("Mod+-")} icon={<Icon name="minus" />} disabled={!canvasApi} onClick={() => canvasApi?.zoomOut()} />
         <ToolButton label="Zoom in" shortcut={formatShortcut("Mod+=")} icon={<Icon name="plus" />} disabled={!canvasApi} onClick={() => canvasApi?.zoomIn()} />
         <ToolButton label="Fit to content" shortcut={formatShortcut("Shift+1")} icon={<Icon name="fit" />} disabled={!canvasApi} onClick={() => canvasApi?.fitView()} />
+        <ToolButton label="Find component" shortcut={formatShortcut("Mod+K")} icon={<SearchGlyph />} onClick={onFind} />
       </div>
 
       <div className="sa-toolbar__group sa-toolbar__group--end">
@@ -296,7 +340,15 @@ export function Toolbar({
           <ToolButton label="Connect…" showLabel shortcut="C" icon={<Glyph name="connect" />} disabled={!canConnect(selection)} onClick={onConnect} />
           <ToolButton label="Delete" shortcut="Delete" icon={<Glyph name="trash" />} disabled={!hasSelection} onClick={onDelete} />
         </div>
+        <ArrangeMenu
+          selectionUnits={selectionUnits}
+          tidyScope={tidyScope}
+          onAlign={onAlign}
+          onDistribute={onDistribute}
+          onTidy={onTidy}
+        />
         <span className="sa-toolbar__divider" aria-hidden />
+        <ToolButton label="Versions" icon={<Icon name="clock" />} disabled={!onOpenVersions} onClick={onOpenVersions} />
         <ExportMenu
           canExportPng={canExportPng}
           onExportJson={onExportJson}

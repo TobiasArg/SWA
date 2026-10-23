@@ -7,6 +7,7 @@ import { Inspector } from "../inspector/Inspector";
 import { exportPng } from "../io/exportPng";
 import { downloadArchitectureMarkdown } from "../io/exportMarkdown";
 import { startAutosave } from "../persistence/autosave";
+import { openSnapshotStore } from "../persistence/snapshots";
 import { installUnloadGuard } from "../persistence/unloadGuard";
 import { Palette } from "../palette";
 import type { ActionFeedback, AppServices, EditorModules } from "./services";
@@ -23,6 +24,7 @@ export const defaultEditorServices: Pick<
   | "installUnloadGuard"
   | "exportPng"
   | "exportArchitectureMarkdown"
+  | "openSnapshotStore"
   | "actions"
 > = {
   createEditorStore: (initial) => createEditorStore(initial),
@@ -30,6 +32,7 @@ export const defaultEditorServices: Pick<
   installUnloadGuard: (controller) => installUnloadGuard(controller),
   exportPng,
   exportArchitectureMarkdown: downloadArchitectureMarkdown,
+  openSnapshotStore: () => openSnapshotStore(),
   actions: {
     deleteSelection: (store, feedback) => reportRejected(editorActions.deleteSelection(store, feedback), feedback),
     duplicateSelection: (store, feedback) => reportRejected(editorActions.duplicateSelection(store), feedback),

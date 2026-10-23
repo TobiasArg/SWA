@@ -19,6 +19,12 @@ export const STORAGE_UNAVAILABLE_MESSAGE =
 export const OPEN_FAILED_MESSAGE = "That architecture could not be opened.";
 export const EDITOR_LOAD_FAILED_TITLE = "The editor could not be loaded";
 export const EDITOR_LOAD_FAILED_MESSAGE = "Check your connection and reload the page.";
+/** An old tab still holds the previous database version (ROADMAP_V2_DESIGN §6.2). */
+export const UPGRADE_BLOCKED_MESSAGE =
+  "Finishing an update. Close or reload other Swarm Architecturer tabs to continue.";
+/** A newer version in another tab took over the database; this tab no longer saves. */
+export const UPGRADE_BLOCKING_MESSAGE =
+  "Swarm Architecturer was updated in another tab. Reload this tab to keep saving.";
 
 export interface AppProps {
   services?: AppServices;
@@ -52,7 +58,7 @@ function requestPersistentStorage(): void {
 
 /** The library's eager dependencies; editor-only services live in defaultModules.ts. */
 const defaultLibraryServices: LibraryServices = {
-  openRepository: () => openRepository(),
+  openRepository: (options) => openRepository(undefined, options),
   openTabSession: openArchitectureTabSync,
   subscribeToRepositoryChanges: (listener) => subscribeArchitectureChanges(() => listener()),
   importArchitectureFile,
@@ -122,6 +128,19 @@ export class EditorLoadBoundary extends Component<EditorLoadBoundaryProps, Edito
   }
 }
 
+function UpgradeBlocked() {
+  return (
+    <main className="sa-storage-unavailable">
+      <div className="sa-storage-unavailable__panel">
+        <Icon name="info" size={20} />
+        <p className="sa-storage-unavailable__text" role="status">
+          {UPGRADE_BLOCKED_MESSAGE}
+        </p>
+      </div>
+    </main>
+  );
+}
+
 function EditorLoading() {
   return (
     <main className="sa-storage-unavailable" aria-live="polite">
@@ -139,12 +158,21 @@ function AppRoutes({ injectedServices, injectedModules }: AppRoutesProps) {
   const route = useRoute();
   const { showToast } = useToast();
   const [state, setState] = useState<RepositoryState>({ status: "loading" });
+  const [upgrade, setUpgrade] = useState<"blocked" | "blocking" | null>(null);
   const libraryServices = injectedServices ?? (defaultLibraryServices as AppServices);
 
   useEffect(() => {
     let cancelled = false;
     libraryServices
-      .openRepository()
+      .openRepository({
+        // A blocked open resumes by itself once the old tab closes; it is never "storage unavailable".
+        onStatus(status) {
+          if (cancelled) return;
+          if (status === "blocked") setUpgrade("blocked");
+          else if (status === "open") setUpgrade((current) => (current === "blocked" ? null : current));
+          else if (status === "blocking") setUpgrade("blocking");
+        },
+      })
       .then((repository) => {
         if (!cancelled) setState({ status: "ready", repository });
       })
@@ -165,10 +193,10 @@ function AppRoutes({ injectedServices, injectedModules }: AppRoutesProps) {
   }, [showToast]);
 
   if (state.status === "unavailable") return <StorageUnavailable />;
-  if (state.status === "loading") return null;
+  if (state.status === "loading") return upgrade === "blocked" ? <UpgradeBlocked /> : null;
 
-  if (route.name === "editor") {
-    return (
+  const content =
+    route.name === "editor" ? (
       <EditorLoadBoundary key={route.id}>
         <Suspense fallback={<EditorLoading />}>
           <LazyEditorRoute
@@ -183,16 +211,29 @@ function AppRoutes({ injectedServices, injectedModules }: AppRoutesProps) {
           />
         </Suspense>
       </EditorLoadBoundary>
+    ) : (
+      <LibraryScreen
+        repository={state.repository}
+        services={libraryServices}
+        editorHref={editorHref}
+        onOpen={openArchitecture}
+      />
     );
-  }
 
+  // One element structure with or without the banner, so the route never remounts when it appears.
   return (
-    <LibraryScreen
-      repository={state.repository}
-      services={libraryServices}
-      editorHref={editorHref}
-      onOpen={openArchitecture}
-    />
+    <div className={upgrade === "blocking" ? "sa-app-shell sa-app-shell--banner" : "sa-app-shell"}>
+      {upgrade === "blocking" ? (
+        <div className="sa-app-banner" role="alert">
+          <Icon name="warning" />
+          <span>{UPGRADE_BLOCKING_MESSAGE}</span>
+          <Button size="compact" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </div>
+      ) : null}
+      {content}
+    </div>
   );
 }
 

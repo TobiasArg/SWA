@@ -192,6 +192,104 @@
   color: var(--sa-color-text-muted);
 }
 
+/*
+ * Editor toolbar density (ROADMAP_V2_DESIGN §8.4): Find, Arrange and Versions add about 190px, so
+ * labels collapse one breakpoint earlier than toolbar.css alone. Tooltipped tools go icon-only
+ * first; the menu triggers keep their accessible names through aria-label.
+ */
+/* The architecture name absorbs a narrow toolbar; the tool groups never shrink into each other. */
+.sa-editor .sa-toolbar > .sa-toolbar__group:not(.sa-toolbar__group--identity) {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1439px) {
+  .sa-editor .sa-toolbar .sa-tool__button--labelled {
+    width: var(--sa-control-h);
+    padding: 0;
+  }
+
+  .sa-editor .sa-toolbar .sa-tool__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1279px) {
+  .sa-editor .sa-toolbar .sa-toolbar__collapsible-label {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sa-editor .sa-toolbar__name {
+    min-width: 32px;
+  }
+
+  .sa-editor .sa-toolbar__divider {
+    margin: 0 var(--sa-space-1);
+  }
+}
+
+/* Narrow tablets: the menu triggers drop their chevrons (aria-haspopup still names them as menus). */
+@media (max-width: 899px) {
+  .sa-editor .sa-toolbar .sa-menu > [aria-haspopup="menu"] > svg:last-child {
+    display: none;
+  }
+
+  .sa-editor .sa-toolbar .sa-menu > [aria-haspopup="menu"] {
+    width: var(--sa-control-h);
+    padding: 0;
+  }
+
+  .sa-editor .sa-toolbar .sa-save-status {
+    min-width: 0;
+  }
+}
+
+/* App shell: transparent to layout unless the upgrade banner is shown (ROADMAP_V2_DESIGN §6.2) */
+.sa-app-shell {
+  display: contents;
+}
+
+.sa-app-shell--banner {
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+}
+
+.sa-app-shell--banner > :not(.sa-app-banner) {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.sa-app-shell--banner > .sa-editor {
+  height: auto;
+  overflow: hidden;
+}
+
+.sa-app-banner {
+  display: flex;
+  min-height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sa-space-3);
+  padding: var(--sa-space-2) var(--sa-space-4);
+  border-bottom: var(--sa-stroke-thin) solid var(--sa-color-border);
+  background: var(--sa-color-warning-soft);
+  color: var(--sa-color-warning-text);
+  font: var(--sa-text-xs);
+  font-weight: var(--sa-weight-semibold);
+}
+
+.sa-app-banner > svg {
+  flex: 0 0 auto;
+}
+
 /* Placeholder modules until WS-C/WS-D are integrated */
 .sa-placeholder-canvas {
   position: relative;
