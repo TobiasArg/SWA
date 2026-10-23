@@ -16,6 +16,8 @@ export interface ShortcutContext {
   ungroupSelection(): void;
   nudgeSelection(dx: number, dy: number): void;
   openConnectDialog(): void;
+  /** Opens Quick Find (ROADMAP_V2_DESIGN §3.1). */
+  openQuickFind(): void;
   /** Closes the topmost shell overlay (menu, drawer); returns true if one was closed. */
   closeOverlay(): boolean;
 }
@@ -65,6 +67,12 @@ export function createShortcutHandler(context: ShortcutContext): (event: Keyboar
       else context.undo();
       return;
     }
+    // Mod+K works in text fields too, so a field never traps the user away from navigation.
+    if (mod && !otherMod && !event.altKey && !event.shiftKey && key === "k") {
+      event.preventDefault();
+      context.openQuickFind();
+      return;
+    }
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && key === "y") {
       event.preventDefault();
       context.redo();
@@ -84,6 +92,13 @@ export function createShortcutHandler(context: ShortcutContext): (event: Keyboar
     }
 
     if (editable || event.altKey || otherMod) return;
+
+    // `key`, not `code`: "/" needs Shift on some layouts.
+    if (!mod && key === "/") {
+      event.preventDefault();
+      context.openQuickFind();
+      return;
+    }
 
     if (mod) {
       if (key === "d" && !event.shiftKey) {

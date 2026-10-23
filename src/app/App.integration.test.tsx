@@ -1,15 +1,21 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useContext, useMemo, type PropsWithChildren } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { CanvasApiContext } from "../canvas/canvasApi";
 import type { Selection } from "../domain/types";
 import { createEditorStore } from "../editor/store";
 import type { EditorStore } from "../editor/storeTypes";
+import { startAutosave } from "../persistence/autosave";
+import type { DatabaseStatus } from "../persistence/db";
+import { openSnapshotStore, type SnapshotStore } from "../persistence/snapshots";
 import { announce } from "../ui/LiveRegion";
-import App from "./App";
+import { RESTORE_FLUSH_FAILED, RESTORE_RECOVERY_FAILED } from "../versions/VersionsDialog";
+import App, { STORAGE_UNAVAILABLE_TITLE, UPGRADE_BLOCKED_MESSAGE, UPGRADE_BLOCKING_MESSAGE } from "./App";
 import { defaultModules, defaultServices } from "./defaultServices";
 import { createMemoryRepository, type MemoryRepository } from "./placeholders/persistence";
 import { editorHref } from "./router";
-import type { AppServices } from "./services";
+import type { AppServices, EditorModules } from "./services";
 import { installDialogPolyfill, makeFile } from "./testUtils";
 
 beforeAll(() => {
@@ -199,7 +205,6 @@ describe("editor delete confirmation", () => {
     const before = { ...store.getState(), content: content() };
     // Let the initial viewport save settle so the save status is a stable baseline.
     await waitFor(() => expect(toolbar()).toHaveTextContent("Saved"));
-    const status = toolbar().textContent;
 
     const opener = await click(inspector, "Delete")(user);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -210,7 +215,8 @@ describe("editor delete confirmation", () => {
     expect(store.getState().selection).toEqual(before.selection);
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().contentRevision).toBe(before.contentRevision);
-    expect(toolbar().textContent).toBe(status);
+    // Cancelling saves nothing; a late viewport-only save under load may still be settling.
+    await waitFor(() => expect(within(toolbar()).getByRole("status")).toHaveTextContent("Saved"));
     expect(document.querySelector(".sa-toast")).toBeNull();
     expect(document.querySelector(".sa-live-region")).toHaveTextContent(/^$/);
     expect(opener).toHaveFocus();
@@ -349,5 +355,510 @@ describe("editor delete confirmation", () => {
     expect(await screen.findByRole("link", { name: "Delete Fixture" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
     expect(document.querySelector(".sa-toast")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Quick Find, Arrange and Versions wired into the editor shell (ROADMAP_V2_DESIGN §8.4 S10), with
+ * the real editor, canvas and inspector modules, an in-memory repository and a fake-indexeddb
+ * versions store per test.
+ */
+describe("integrated Quick Find, Arrange and Versions", () => {
+  const none: Selection = { componentIds: [], relationshipIds: [], groupIds: [] };
+  const fixture = () =>
+    makeFile({
+      id: "arch_s10",
+      name: "Integration Fixture",
+      components: [
+        { id: "cmp_a", type: "agent", name: "Alpha", position: { x: 0, y: 0 } },
+        { id: "cmp_b", type: "tool", name: "Bravo", position: { x: 400, y: 120 } },
+        { id: "cmp_c", type: "memory", name: "Crème Store", position: { x: 40, y: 500 } },
+      ],
+      relationships: [
+        { id: "rel_ab", type: "uses", sourceId: "cmp_a", targetId: "cmp_b", direction: "directed" },
+        { id: "rel_bc", type: "reads_from", sourceId: "cmp_b", targetId: "cmp_c", direction: "directed" },
+      ],
+      groups: [],
+    });
+
+  let repository: MemoryRepository;
+  let store: EditorStore;
+  let databaseName: string;
+  let databaseCount = 0;
+  let failFlush: boolean;
+  let fitViewCalls: number;
+
+  /** Counts `fitView` calls on the real canvas API the editor reads. */
+  function FitViewSpy({ children }: PropsWithChildren) {
+    const api = useContext(CanvasApiContext);
+    const spied = useMemo(
+      () =>
+        api && {
+          ...api,
+          fitView: () => {
+            fitViewCalls += 1;
+            api.fitView();
+          },
+        },
+      [api],
+    );
+    return <CanvasApiContext.Provider value={spied}>{children}</CanvasApiContext.Provider>;
+  }
+  const modules: EditorModules = {
+    ...defaultModules,
+    CanvasProvider: ({ children }) => (
+      <defaultModules.CanvasProvider>
+        <FitViewSpy>{children}</FitViewSpy>
+      </defaultModules.CanvasProvider>
+    ),
+  };
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    announce("");
+    repository = createMemoryRepository();
+    repository.seed({ status: "ok", file: fixture() });
+    databaseName = `s10-versions-${(databaseCount += 1)}`;
+    failFlush = false;
+    fitViewCalls = 0;
+  });
+
+  async function openEditor(overrides: Partial<AppServices> = {}) {
+    const services: AppServices = {
+      ...defaultServices,
+      openRepository: async () => repository,
+      createEditorStore: (initial) => (store = createEditorStore(initial)),
+      startAutosave: (target, repo) => {
+        const controller = startAutosave(target, repo);
+        return { ...controller, flush: () => (failFlush ? Promise.resolve(false) : controller.flush()) };
+      },
+      openTabSession: () => ({ close: () => undefined }),
+      subscribeToRepositoryChanges: () => () => undefined,
+      exportArchitectureJson: vi.fn(),
+      exportArchitectureMarkdown: vi.fn(),
+      exportPng: vi.fn(async () => undefined),
+      requestPersistentStorage: vi.fn(),
+      openSnapshotStore: () => openSnapshotStore(databaseName),
+      ...overrides,
+    };
+    window.history.replaceState(null, "", editorHref("arch_s10"));
+    render(<App services={services} modules={modules} />);
+    await screen.findByRole("textbox", { name: "Architecture name" });
+    return userEvent.setup();
+  }
+
+  function key(init: KeyboardEventInit, target: Element = document.activeElement ?? document.body) {
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
+    });
+  }
+
+  const toolbar = () => document.querySelector<HTMLElement>(".sa-toolbar")!;
+  const canvas = () => document.querySelector<HTMLElement>("[data-sa-canvas]")!;
+  const liveRegion = () => document.querySelector<HTMLElement>(".sa-live-region")!;
+  const toast = () => document.querySelector<HTMLElement>(".sa-toast");
+  const content = () => {
+    const { components, relationships, groups } = store.getState().architecture;
+    return { components, relationships, groups };
+  };
+  const componentIds = () => store.getState().architecture.components.map((component) => component.id);
+
+  async function openVersions(user: ReturnType<typeof userEvent.setup>) {
+    const button = within(toolbar()).getByRole("button", { name: "Versions" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    const dialog = await screen.findByRole("dialog", { name: "Versions of 'Integration Fixture'" });
+    await waitFor(() => expect(within(dialog).queryByText("Loading versions…")).not.toBeInTheDocument());
+    return dialog;
+  }
+
+  async function deleteAlpha(user: ReturnType<typeof userEvent.setup>) {
+    act(() => store.setSelection({ ...none, componentIds: ["cmp_a"] }));
+    await user.click(within(toolbar()).getByRole("button", { name: "Delete" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    expect(componentIds()).toEqual(["cmp_b", "cmp_c"]);
+    await waitFor(() => expect(toolbar()).toHaveTextContent("Saved"));
+  }
+
+  /** Seeds a saved version of the fixture with only Bravo, so restore has a different target. */
+  async function seedBravoOnlyVersion(): Promise<void> {
+    const snapshots = await openSnapshotStore(databaseName);
+    const file = fixture();
+    file.architecture.components = file.architecture.components.filter((component) => component.id === "cmp_b");
+    file.architecture.relationships = [];
+    await snapshots.capture(file, "manual");
+    snapshots.close();
+  }
+
+  it("Mod+K from the canvas and from a text field opens Quick Find; Enter selects, focuses and announces", async () => {
+    const user = await openEditor();
+    canvas().focus();
+    key({ key: "k", ctrlKey: true });
+    const dialog = screen.getByRole("dialog", { name: "Find component" });
+    const input = within(dialog).getByRole("combobox", { name: "Component name" });
+    expect(input).toHaveFocus();
+
+    await user.type(input, "creme");
+    await user.keyboard("{Enter}");
+    // jsdom never settles React Flow's animated reveal, so the shell's reveal timeout applies.
+    await waitFor(() => expect(liveRegion()).toHaveTextContent("Selected Crème Store."), { timeout: 3_000 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(store.getState().selection).toEqual({ ...none, componentIds: ["cmp_c"] });
+    expect(document.activeElement?.getAttribute("data-id") ?? document.activeElement).toSatisfy(
+      (focused: unknown) => focused === "cmp_c" || focused === canvas(),
+    );
+    expect(store.getState().canUndo).toBe(false);
+
+    // Mod+K also works from the name field, so a text field never traps navigation.
+    const name = screen.getByRole("textbox", { name: "Architecture name" });
+    name.focus();
+    key({ key: "k", ctrlKey: true }, name);
+    expect(screen.getByRole("dialog", { name: "Find component" })).toBeInTheDocument();
+  });
+
+  it("/ opens Quick Find outside text fields; Escape closes it without changes and returns focus", async () => {
+    const user = await openEditor();
+    const find = within(toolbar()).getByRole("button", { name: "Find component" });
+    await user.click(find);
+    expect(screen.getByRole("dialog", { name: "Find component" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(find).toHaveFocus();
+
+    const name = screen.getByRole("textbox", { name: "Architecture name" });
+    key({ key: "/" }, name);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    canvas().focus();
+    key({ key: "/" });
+    expect(screen.getByRole("dialog", { name: "Find component" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(canvas()).toHaveFocus();
+    expect(store.getState().selection).toEqual(none);
+  });
+
+  it("Align top moves positions only, in one undo step, and announces it", async () => {
+    const user = await openEditor();
+    act(() => store.setSelection({ ...none, componentIds: ["cmp_a", "cmp_b", "cmp_c"] }));
+    const before = content();
+
+    await user.click(within(toolbar()).getByRole("button", { name: "Arrange" }));
+    await user.click(screen.getByRole("menuitem", { name: /Align top/ }));
+    const ys = store.getState().architecture.components.map((component) => component.position.y);
+    expect(new Set(ys).size).toBe(1);
+    expect(JSON.stringify(content().relationships)).toBe(JSON.stringify(before.relationships));
+    expect(liveRegion()).toHaveTextContent("Aligned 3 items to the top.");
+    expect(toast()).toBeNull();
+
+    key({ key: "z", ctrlKey: true }, document.body);
+    expect(content()).toEqual(before);
+  });
+
+  it("Tidy layout with nothing selected offers an entry-bound Undo toast that restores every position", async () => {
+    const user = await openEditor();
+    const before = content();
+
+    await user.click(within(toolbar()).getByRole("button", { name: "Arrange" }));
+    await user.click(screen.getByRole("menuitem", { name: /Tidy layout/ }));
+    expect(content().components).not.toEqual(before.components);
+    expect(JSON.stringify(content().relationships)).toBe(JSON.stringify(before.relationships));
+    await waitFor(() => expect(toast()).toHaveTextContent("Tidied 3 items."));
+
+    await user.click(within(toast()!).getByRole("button", { name: "Undo" }));
+    expect(content()).toEqual(before);
+    expect(liveRegion()).toHaveTextContent("Undid the tidy layout.");
+    expect(toast()).toBeNull();
+  });
+
+  it("a later edit removes the Tidy Undo toast, so it cannot undo that edit", async () => {
+    const user = await openEditor();
+    await user.click(within(toolbar()).getByRole("button", { name: "Arrange" }));
+    await user.click(screen.getByRole("menuitem", { name: /Tidy layout/ }));
+    await waitFor(() => expect(toast()).toBeInTheDocument());
+
+    act(() => store.setSelection({ ...none, componentIds: ["cmp_b"] }));
+    canvas().focus();
+    key({ key: "ArrowRight" });
+    expect(toast()).toBeNull();
+  });
+
+  it("restores a version: recovery point first, diagram replaced, Undo toast returns to the pre-restore diagram", async () => {
+    await seedBravoOnlyVersion();
+    const user = await openEditor();
+    // An edit after the open version, so the recovery point is a new "Before restore" version.
+    await deleteAlpha(user);
+    const preRestore = content();
+
+    let dialog = await openVersions(user);
+    // Newest first: the open version, then the seeded one.
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from .*\?$/ });
+    expect(confirm).toHaveAccessibleDescription(/1 component · 0 relationships · 0 groups/);
+    expect(within(confirm).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(componentIds()).toEqual(["cmp_b"]);
+    expect(store.getState().architecture.name).toBe("Integration Fixture");
+    expect(store.getState().selection).toEqual(none);
+    expect(canvas()).toHaveFocus();
+    expect(toast()).toHaveTextContent(/^Restored the version from /);
+    expect(liveRegion()).toHaveTextContent(/^Restored the version from /);
+
+    // The recovery version outlives the session and has the pre-restore counts.
+    dialog = await openVersions(user);
+    const recoveryRow = within(dialog).getByText("Before restore").closest("li")!;
+    expect(recoveryRow).toHaveTextContent("2 components · 1 relationship · 0 groups");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(within(toolbar()).getByRole("button", { name: "Versions" })).toHaveFocus();
+
+    await user.click(within(toast()!).getByRole("button", { name: "Undo" }));
+    expect(content()).toEqual(preRestore);
+    expect(liveRegion()).toHaveTextContent("Undid the restore.");
+  });
+
+  /** The repository, with saves of the restored Bravo-only diagram routed through `save`. */
+  function repositoryWithRestoredSave(save: (put: () => Promise<void>) => Promise<void>): MemoryRepository {
+    return {
+      ...repository,
+      put: (file) =>
+        file.architecture.components.length === 1 && file.architecture.components[0]!.id === "cmp_b"
+          ? save(() => repository.put(file))
+          : repository.put(file),
+    };
+  }
+
+  const storedComponentIds = async () => {
+    const record = await repository.get("arch_s10");
+    return record?.status === "ok" ? record.file.architecture.components.map((component) => component.id) : undefined;
+  };
+
+  it("reports a restore only after the restored diagram is saved", async () => {
+    await seedBravoOnlyVersion();
+    let releaseSave!: () => void;
+    const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+    const gated = repositoryWithRestoredSave(async (put) => {
+      await saveHeld;
+      await put();
+    });
+    const user = await openEditor({ openRepository: async () => gated });
+    await deleteAlpha(user);
+
+    const dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    // The diagram is replaced, but nothing claims success while its save is pending.
+    await waitFor(() => expect(componentIds()).toEqual(["cmp_b"]));
+    expect(confirm).toBeInTheDocument();
+    expect(toast()).toBeNull();
+    expect(liveRegion()).not.toHaveTextContent(/Restored the version/);
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
+
+    act(() => releaseSave());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(toast()).toHaveTextContent(/^Restored the version from /);
+    expect(liveRegion()).toHaveTextContent(/^Restored the version from /);
+    expect(await storedComponentIds()).toEqual(["cmp_b"]);
+  });
+
+  it("does not report success when the restored diagram cannot be saved, and keeps the recovery version", async () => {
+    await seedBravoOnlyVersion();
+    const failing = repositoryWithRestoredSave(() => Promise.reject(new Error("Quota exceeded")));
+    const user = await openEditor({ openRepository: async () => failing });
+    await deleteAlpha(user);
+    const preRestore = content();
+
+    let dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(componentIds()).toEqual(["cmp_b"]);
+    expect(toast()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toast()).toHaveTextContent('Your previous diagram is kept as the "Before restore" version.');
+    expect(toast()).not.toHaveTextContent(/Restored the version/);
+    expect(liveRegion()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toolbar()).not.toHaveTextContent("Saved");
+
+    // The saved diagram is still the pre-restore one, and so is the recovery version.
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
+    dialog = await openVersions(user);
+    const recoveryRow = within(dialog).getByText("Before restore").closest("li")!;
+    expect(recoveryRow).toHaveTextContent("2 components · 1 relationship · 0 groups");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    // Undo still returns to the pre-restore diagram.
+    await user.click(within(toast()!).getByRole("button", { name: "Undo" }));
+    expect(content()).toEqual(preRestore);
+    expect(liveRegion()).toHaveTextContent("Undid the restore.");
+  });
+
+  /**
+   * Restores with Bravo selected and the restored diagram's save held, recording the selection
+   * and `fitView` calls the moment that save starts (§6.6: selection cleared and view fitted
+   * before the final flush).
+   */
+  async function restoreWithHeldSave(outcome: "saved" | "failed") {
+    await seedBravoOnlyVersion();
+    let releaseSave!: () => void;
+    const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+    let atSave: { selection: Selection; fitViewCalls: number } | undefined;
+    const gated = repositoryWithRestoredSave(async (put) => {
+      atSave ??= { selection: store.getState().selection, fitViewCalls };
+      await saveHeld;
+      if (outcome === "failed") throw new Error("Quota exceeded");
+      await put();
+    });
+    const user = await openEditor({ openRepository: async () => gated });
+    await deleteAlpha(user);
+    act(() => store.setSelection({ ...none, componentIds: ["cmp_b"] }));
+
+    const dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    fitViewCalls = 0;
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(atSave).toBeDefined());
+    expect(atSave).toEqual({ selection: none, fitViewCalls: 1 });
+    // The confirmation stays open and busy, and nothing claims an outcome, until the save settles.
+    expect(confirm).toBeInTheDocument();
+    expect(within(confirm).getByRole("button", { name: "Restoring…" })).toBeDisabled();
+    expect(toast()).toBeNull();
+    expect(liveRegion()).not.toHaveTextContent(/Restored the version|could not be saved/);
+
+    act(() => releaseSave());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(fitViewCalls).toBe(1);
+    expect(store.getState().selection).toEqual(none);
+    expect(componentIds()).toEqual(["cmp_b"]);
+  }
+
+  it("clears the selection and fits the view before the final restore save, then reports success", async () => {
+    await restoreWithHeldSave("saved");
+    expect(toast()).toHaveTextContent(/^Restored the version from /);
+    expect(liveRegion()).toHaveTextContent(/^Restored the version from /);
+    expect(await storedComponentIds()).toEqual(["cmp_b"]);
+  });
+
+  it("clears the selection and fits the view before a failing final restore save, then reports it unsaved", async () => {
+    await restoreWithHeldSave("failed");
+    expect(toast()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toast()).toHaveTextContent('Your previous diagram is kept as the "Before restore" version.');
+    expect(toast()).not.toHaveTextContent(/Restored the version/);
+    expect(liveRegion()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toolbar()).not.toHaveTextContent("Saved");
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
+  });
+
+  it("Save version now reports a saved version, then no changes", async () => {
+    const user = await openEditor();
+    await deleteAlpha(user);
+    const dialog = await openVersions(user);
+    await user.click(within(dialog).getByRole("button", { name: "Save version now" }));
+    expect(await within(dialog).findByText("Version saved.")).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save version now" })).toBeEnabled());
+    await user.click(within(dialog).getByRole("button", { name: "Save version now" }));
+    expect(await within(dialog).findByText("No changes since the last version.")).toBeInTheDocument();
+  });
+
+  it("restore stops with an inline error and changes nothing when the latest changes cannot be saved", async () => {
+    await seedBravoOnlyVersion();
+    const user = await openEditor();
+    const dialog = await openVersions(user);
+    // The open version matches the current diagram, so it is marked Current and can't be restored.
+    const current = within(dialog).getByText("Current").closest("li")!;
+    expect(within(current).getByRole("button", { name: /^Restore the version from/ })).toBeDisabled();
+    const before = content();
+    failFlush = true;
+
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+    expect(await within(confirm).findByText(RESTORE_FLUSH_FAILED)).toBeInTheDocument();
+    expect(content()).toEqual(before);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it("restore stops with an inline error and changes nothing when the recovery version cannot be saved", async () => {
+    await seedBravoOnlyVersion();
+    const user = await openEditor({
+      openSnapshotStore: async () => {
+        const real: SnapshotStore = await openSnapshotStore(databaseName);
+        return {
+          ...real,
+          capture: (file, trigger) =>
+            trigger === "pre-restore" ? Promise.reject(new Error("Quota exceeded")) : real.capture(file, trigger),
+        };
+      },
+    });
+    const dialog = await openVersions(user);
+    const before = content();
+
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+    expect(await within(confirm).findByText(RESTORE_RECOVERY_FAILED)).toBeInTheDocument();
+    expect(content()).toEqual(before);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it("captures a leave version after the flush when leaving the editor", async () => {
+    const user = await openEditor();
+    await deleteAlpha(user);
+    await user.click(screen.getByRole("button", { name: "Library" }));
+    expect(await screen.findByRole("link", { name: "Integration Fixture" })).toBeInTheDocument();
+
+    const snapshots = await openSnapshotStore(databaseName);
+    await waitFor(async () => {
+      const items = await snapshots.list("arch_s10");
+      expect(items.map((item) => (item.status === "ok" ? item.counts.components : -1))).toEqual([2, 3]);
+    });
+    snapshots.close();
+  });
+
+  it("shows the blocked-upgrade message instead of a blank or unavailable screen, then resumes", async () => {
+    let resume!: () => void;
+    const services: AppServices = {
+      ...defaultServices,
+      openRepository: (options) =>
+        new Promise((resolve) => {
+          options?.onStatus?.("blocked");
+          resume = () => {
+            options?.onStatus?.("open");
+            resolve(repository);
+          };
+        }),
+      subscribeToRepositoryChanges: () => () => undefined,
+    };
+    window.history.replaceState(null, "", "#/");
+    render(<App services={services} modules={defaultModules} />);
+    expect(await screen.findByText(UPGRADE_BLOCKED_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(STORAGE_UNAVAILABLE_TITLE)).not.toBeInTheDocument();
+
+    act(() => resume());
+    expect(await screen.findByRole("link", { name: "Integration Fixture" })).toBeInTheDocument();
+    expect(screen.queryByText(UPGRADE_BLOCKED_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it("shows the reload banner when a newer version in another tab takes over, without remounting the editor", async () => {
+    let report!: (status: DatabaseStatus) => void;
+    await openEditor({
+      openRepository: async (options) => {
+        report = (status) => options?.onStatus?.(status);
+        return repository;
+      },
+    });
+    const editorStore = store;
+    const nameField = screen.getByRole("textbox", { name: "Architecture name" });
+
+    act(() => report("blocking"));
+    expect(screen.getByRole("alert")).toHaveTextContent(UPGRADE_BLOCKING_MESSAGE);
+    expect(within(screen.getByRole("alert")).getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Architecture name" })).toBe(nameField);
+    expect(store).toBe(editorStore);
   });
 });

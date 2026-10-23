@@ -1,16 +1,22 @@
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CanvasApiContext, type CanvasApi } from "../canvas/canvasApi";
+import type { AlignMode, ArrangeAxis } from "../domain/arrange";
 import {
   deletionConfirmCopy,
   deletionTargets,
   previewDeletion,
+  showEntryUndoToast,
   type DeletionConfirmCopy,
   type DeletionIntent,
 } from "../editor/actions";
-import { EditorProvider } from "../editor/context";
-import type { EditorStore } from "../editor/storeTypes";
+import { alignSelection, distributeSelection, tidyLayout, type ArrangeActionResult } from "../editor/arrange";
+import { EditorProvider, useEditorState } from "../editor/context";
+import type { EditorState, EditorStore } from "../editor/storeTypes";
+import { QuickFindDialog } from "../find/QuickFindDialog";
 import { ImportErrorDialog } from "../library/dialogs";
+import { startSnapshotScheduler } from "../persistence/snapshotScheduler";
+import type { SnapshotCaptureResult, SnapshotStore } from "../persistence/snapshots";
 import type { Repository, SaveController } from "../persistence/types";
 import { Glyph } from "../toolbar/glyphs";
 import { Toolbar } from "../toolbar/Toolbar";
@@ -18,6 +24,12 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Icon } from "../ui/icons";
 import { announce } from "../ui/LiveRegion";
 import { useToast } from "../ui/Toast";
+import {
+  formatVersionDate,
+  RESTORE_FLUSH_FAILED,
+  RESTORE_RECOVERY_FAILED,
+  VersionsDialog,
+} from "../versions/VersionsDialog";
 import type { Selection } from "../domain/types";
 import type { ValidationIssue } from "../domain/validation/issues";
 import {
@@ -36,11 +48,29 @@ export const TAB_CONFLICT_MESSAGE =
 export const PNG_EXPORT_FAILED_MESSAGE = "Image export failed. Try zooming out or reducing the diagram size.";
 export const LEAVE_SAVE_FAILED_MESSAGE =
   "Your latest changes could not be saved. Retry the save or export to JSON before leaving.";
+export const RESTORE_DAMAGED_MESSAGE = "This version is damaged and can't be restored.";
+export const COMPONENT_GONE_MESSAGE = "That component no longer exists.";
+/** Restore feedback when the restored diagram could not be saved; the recovery version is kept. */
+export const restoreSaveFailedMessage = (date: string) =>
+  `The version from ${date} is shown but could not be saved. Your previous diagram is kept as the "Before restore" version.`;
+
+type SnapshotScheduler = ReturnType<typeof startSnapshotScheduler>;
+
+/** The browser-local versions of this session (ROADMAP_V2_DESIGN §6); absent until the store opens. */
+interface VersionsSession {
+  snapshots: SnapshotStore;
+  scheduler: SnapshotScheduler;
+}
 
 interface EditorSession {
   store: EditorStore;
   controller: SaveController;
+  versions?: VersionsSession;
 }
+
+const NO_SELECTION: Selection = { componentIds: [], relationshipIds: [], groupIds: [] };
+/** Upper bound for the reveal animation: an interrupted d3 transition never settles its promise. */
+const REVEAL_TIMEOUT_MS = 1_000;
 
 /** A delete or ungroup waiting for the user's answer in the confirmation dialog. */
 interface PendingDelete {
@@ -61,6 +91,15 @@ function sameIds(a: Selection, b: Selection): boolean {
 /** The canvas focus target after a delete dialog closes (UI_COLOR_CONFIRMATION_DESIGN ED7). */
 function focusCanvas(): void {
   document.querySelector<HTMLElement>("[data-sa-canvas]")?.focus({ preventScroll: true });
+}
+
+/** Focuses a component's node wrapper, so Delete, arrows and C act on it (ROADMAP_V2_DESIGN §3.2). */
+function focusComponentNode(componentId: string): void {
+  const node = [...document.querySelectorAll<HTMLElement>(".react-flow__node[data-id]")].find(
+    (element) => element.dataset.id === componentId,
+  );
+  if (node) node.focus({ preventScroll: true });
+  else focusCanvas();
 }
 
 interface PendingConnectFocusReturn {
@@ -109,15 +148,33 @@ export function EditorScreen(props: EditorScreenProps) {
         const controller = services.startAutosave(store, repository);
         const removeGuard = services.installUnloadGuard(controller);
         const tab = services.openTabSession(id, () => setTabConflict(true));
+        let versions: VersionsSession | undefined;
+        // Snapshots start next to autosave; their failures never affect editing or saving (§6.4).
+        services
+          .openSnapshotStore?.()
+          .then((snapshots) => {
+            if (cancelled) {
+              snapshots.close();
+              return;
+            }
+            versions = { snapshots, scheduler: startSnapshotScheduler(store, controller, repository, snapshots, id) };
+            const ready = versions;
+            setSession((current) => (current?.store === store ? { ...current, versions: ready } : current));
+          })
+          .catch((error: unknown) => console.error(error));
         teardown = () => {
           tab.close();
-          void controller
-            .flush()
-            .catch(() => false)
-            .finally(() => {
-              removeGuard();
-              controller.dispose();
-            });
+          const ending = versions;
+          // `leave` captures after a successful flush; captureNow flushes first (§6.4).
+          const settled = ending
+            ? ending.scheduler.captureNow("leave").catch(() => undefined)
+            : controller.flush().catch(() => false);
+          void settled.finally(() => {
+            ending?.scheduler.dispose();
+            ending?.snapshots.close();
+            removeGuard();
+            controller.dispose();
+          });
         };
         setSession({ store, controller });
       })
@@ -173,7 +230,7 @@ function EditorWorkspace({
   onOpenArchitecture,
   now = () => new Date().toISOString(),
 }: EditorWorkspaceProps) {
-  const { store, controller } = session;
+  const { store, controller, versions } = session;
   const { CanvasView, Palette, Inspector, ConnectDialog } = modules;
   const { showToast, dismissToast } = useToast();
   const isMac = useMemo(() => detectMac(), []);
@@ -188,6 +245,9 @@ function EditorWorkspace({
   const [connectSource, setConnectSource] = useState<string | null>(null);
   const [importIssues, setImportIssues] = useState<ValidationIssue[] | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [quickFindOpen, setQuickFindOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const versionsOpenerRef = useRef<HTMLElement | null>(null);
   const pendingDeleteRef = useRef<PendingDelete | null>(null);
   const [paletteExpanded, setPaletteExpanded] = useState(() => initialPanelExpanded("palette", PALETTE_WIDE_QUERY));
   const [inspectorExpanded, setInspectorExpanded] = useState(() =>
@@ -372,6 +432,107 @@ function EditorWorkspace({
     [feedback, openConnectFor, requestDelete, services],
   );
 
+  const openQuickFind = useCallback(() => setQuickFindOpen(true), []);
+
+  /** §3.2 Choose: close, select, reveal, focus the node, announce. */
+  const chooseQuickFind = useCallback(
+    async (componentId: string) => {
+      const component = store.getState().architecture.components.find((candidate) => candidate.id === componentId);
+      if (!component) {
+        announce(COMPONENT_GONE_MESSAGE);
+        return;
+      }
+      flushSync(() => setQuickFindOpen(false));
+      store.setSelection({ componentIds: [componentId], relationshipIds: [], groupIds: [] });
+      const reveal = canvasApiRef.current?.revealComponent(componentId).catch(() => false);
+      let timer = 0;
+      await Promise.race([reveal, new Promise((resolve) => (timer = window.setTimeout(resolve, REVEAL_TIMEOUT_MS)))]);
+      window.clearTimeout(timer);
+      focusComponentNode(componentId);
+      announce(`Selected ${component.name}.`);
+    },
+    [store],
+  );
+
+  const reportArrange = useCallback(
+    (result: ArrangeActionResult) => {
+      if (!result.ok) showToast(result.message);
+      announce(result.message);
+    },
+    [showToast],
+  );
+
+  const align = useCallback((mode: AlignMode) => reportArrange(alignSelection(store, mode)), [reportArrange, store]);
+  const distribute = useCallback(
+    (axis: ArrangeAxis) => reportArrange(distributeSelection(store, axis)),
+    [reportArrange, store],
+  );
+  // Tidy can move the whole diagram, so it also offers the entry-bound Undo toast (§5.4).
+  const tidy = useCallback(() => {
+    const result = tidyLayout(store);
+    if (result.ok && result.changed && result.entryId !== undefined) {
+      showEntryUndoToast(store, feedback, result.entryId, result.message, "Undid the tidy layout.");
+    }
+    reportArrange(result);
+  }, [feedback, reportArrange, store]);
+
+  const openVersions = useCallback(() => {
+    const active = document.activeElement;
+    versionsOpenerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    setVersionsOpen(true);
+  }, []);
+
+  const closeVersions = useCallback(() => {
+    flushSync(() => setVersionsOpen(false));
+    const opener = versionsOpenerRef.current;
+    versionsOpenerRef.current = null;
+    if (opener?.isConnected && !opener.matches(":disabled")) opener.focus({ preventScroll: true });
+    else focusCanvas();
+  }, []);
+
+  const saveVersionNow = useCallback(async (): Promise<SnapshotCaptureResult> => {
+    if (!versions) throw new Error("Versions are not available.");
+    return versions.scheduler.captureNow("manual");
+  }, [versions]);
+
+  /**
+   * Restore (§6.6 steps 1–4). Each failing step throws before the diagram changes; the
+   * confirmation shows the message inline. A recovery version always exists before the change,
+   * and success is reported only once the restored diagram is saved; otherwise the feedback says
+   * it is unsaved and points to the recovery version.
+   */
+  const restoreVersion = useCallback(
+    async (snapshotId: string) => {
+      if (!versions) throw new Error("Versions are not available.");
+      if (!(await controller.flush().catch(() => false))) throw new Error(RESTORE_FLUSH_FAILED);
+      const recovery = await versions.scheduler.captureNow("pre-restore").catch(() => undefined);
+      if (!recovery || recovery.status === "skipped") throw new Error(RESTORE_RECOVERY_FAILED);
+
+      const loaded = await versions.snapshots.get(snapshotId);
+      if (loaded?.status !== "ok") throw new Error(RESTORE_DAMAGED_MESSAGE);
+      const { components, relationships, groups } = loaded.record.file.architecture;
+      const result = store.dispatch({ kind: "restoreDiagram", components, relationships, groups });
+      if (!result.ok) throw new Error(result.error.message);
+      store.setSelection(NO_SELECTION);
+      canvasApiRef.current?.fitView();
+      // The confirmation stays busy until the restored diagram is saved.
+      const saved = await controller.flush().catch(() => false);
+
+      versionsOpenerRef.current = null;
+      flushSync(() => setVersionsOpen(false));
+      const date = formatVersionDate(loaded.record.createdAt, new Date()).sentence;
+      const message = saved ? `Restored the version from ${date}.` : restoreSaveFailedMessage(date);
+      if (result.entryId !== undefined) {
+        showEntryUndoToast(store, feedback, result.entryId, message, "Undid the restore.");
+      } else {
+        showToast(message);
+      }
+      announce(message);
+      focusCanvas();
+    },
+    [controller, feedback, showToast, store, versions],
+  );
+
   const togglePalette = () => {
     writePanelCollapsed("palette", paletteExpanded);
     setPaletteExpanded(!paletteExpanded);
@@ -400,6 +561,7 @@ function EditorWorkspace({
       ungroupSelection: () => ungroupSelection(store),
       nudgeSelection: (dx, dy) => services.actions.nudgeSelection(store, dx, dy),
       openConnectDialog,
+      openQuickFind,
       closeOverlay: () => {
         const { inspectorDocked: docked, inspectorExpanded: expanded } = shortcutState.current;
         if (docked || !expanded) return false;
@@ -409,7 +571,7 @@ function EditorWorkspace({
     });
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [feedback, isMac, openConnectDialog, redo, requestDelete, services, store, undo, ungroupSelection]);
+  }, [feedback, isMac, openConnectDialog, openQuickFind, redo, requestDelete, services, store, undo, ungroupSelection]);
 
   // Save failures are announced once per transition into the error state (TD 12).
   useEffect(() => {
@@ -479,6 +641,11 @@ function EditorWorkspace({
           onUngroup={() => ungroupSelection(store)}
           onConnect={openConnectDialog}
           onDelete={() => requestDelete(store, "delete")}
+          onFind={openQuickFind}
+          onAlign={align}
+          onDistribute={distribute}
+          onTidy={tidy}
+          onOpenVersions={versions ? openVersions : undefined}
           onExportJson={() => services.exportArchitectureJson(store.getState().architecture)}
           onExportMarkdown={() => services.exportArchitectureMarkdown(store.getState().architecture)}
           onExportPng={exportPng}
@@ -543,6 +710,19 @@ function EditorWorkspace({
 
         <ConnectDialog open={connectSource !== null} sourceId={connectSource} onClose={closeConnectDialog} />
         <ImportErrorDialog issues={importIssues} onClose={() => setImportIssues(null)} />
+        <QuickFindDialog
+          open={quickFindOpen}
+          onClose={() => setQuickFindOpen(false)}
+          onChoose={(componentId) => void chooseQuickFind(componentId)}
+        />
+        {versions && versionsOpen ? (
+          <EditorVersionsDialog
+            snapshots={versions.snapshots}
+            onSaveNow={saveVersionNow}
+            onRestore={restoreVersion}
+            onClose={closeVersions}
+          />
+        ) : null}
         <ConfirmDialog
           open={pendingDelete !== null}
           title={pendingDelete?.copy.title ?? "Delete?"}
@@ -554,4 +734,19 @@ function EditorWorkspace({
       </div>
     </>
   );
+}
+
+const selectArchitecture = (state: EditorState) => state.architecture;
+
+interface EditorVersionsDialogProps {
+  snapshots: SnapshotStore;
+  onSaveNow(): Promise<SnapshotCaptureResult>;
+  onRestore(id: string): Promise<void>;
+  onClose(): void;
+}
+
+/** The Versions dialog over the live architecture: its name titles the dialog, its diagram marks Current. */
+function EditorVersionsDialog(props: EditorVersionsDialogProps) {
+  const architecture = useEditorState(selectArchitecture);
+  return <VersionsDialog open architecture={architecture} {...props} />;
 }

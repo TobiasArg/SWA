@@ -10,6 +10,7 @@ import {
   moveComponentBy,
   openLibrary,
   pngDimensions,
+  selectTwoComponents,
   waitForSaved,
 } from "./helpers";
 import { expectNoA11yViolations } from "./axe";
@@ -150,4 +151,71 @@ test("BroadcastChannel refreshes an already-open library in another tab @smoke",
   await dialog.getByRole("button", { name: "Rename", exact: true }).click();
   await expect(otherTab.getByRole("link", { name: "Wave one broadcast after" })).toBeVisible();
   await otherTab.close();
+});
+
+test("Quick Find, Arrange with its Undo toast, and Save version on the default route without CSP violations @smoke", { tag: "@smoke" }, async ({ page }) => {
+  await page.addInitScript(() => {
+    const browserWindow = window as Window & { __saCspViolations?: string[] };
+    browserWindow.__saCspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) => {
+      browserWindow.__saCspViolations?.push(`${event.violatedDirective}: ${event.blockedURI || "inline"}`);
+    });
+  });
+
+  await openLibrary(page);
+  await createArchitecture(page, "Wave three smoke");
+  await addComponent(page, "Agent", "Smoke finder");
+  await addComponent(page, "Tool", "Smoke aligned");
+  await moveComponentBy(page, "Smoke aligned", 260, 140);
+  const modifier = await modifierFor(page);
+
+  // Quick Find (Mod+K) selects and focuses the node.
+  await page.locator("[data-sa-canvas]").focus();
+  await page.keyboard.press(`${modifier}+k`);
+  const find = page.getByRole("dialog", { name: "Find component" });
+  await expect(find).toBeVisible();
+  await find.getByRole("combobox").fill("finder");
+  await page.keyboard.press("Enter");
+  await expect(find).toBeHidden();
+  const finder = await componentNodeByName(page, "Smoke finder");
+  await expect(finder).toBeFocused();
+  await expect(page.locator(".sa-inspector__title")).toHaveText("Smoke finder");
+
+  // Arrange → Align top on both components.
+  await selectTwoComponents(page, "Smoke finder", "Smoke aligned");
+  const arrange = page.locator(".sa-toolbar").getByRole("button", { name: "Arrange", exact: true });
+  await arrange.click();
+  await page.getByRole("menuitem", { name: /^Align top/ }).click();
+  const aligned = await componentNodeByName(page, "Smoke aligned");
+  await expect.poll(async () => Math.abs((await finder.boundingBox())!.y - (await aligned.boundingBox())!.y)).toBeLessThanOrEqual(1);
+
+  // Tidy shows its Undo toast; the editor session stays mounted across toast updates (S11).
+  await page.locator("[data-sa-canvas]").evaluate((element) => ((element as HTMLElement & { __saMarker?: boolean }).__saMarker = true));
+  await page.locator("[data-sa-canvas]").focus();
+  await page.keyboard.press("Escape");
+  const beforeTidy = await aligned.evaluate((element) => (element as HTMLElement).style.transform);
+  await arrange.click();
+  await page.getByRole("menuitem", { name: /^Tidy layout/ }).click();
+  const toast = page.locator(".sa-toast");
+  await expect(toast).toContainText("Tidied 2 items.");
+  await toast.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect.poll(() => aligned.evaluate((element) => (element as HTMLElement).style.transform)).toBe(beforeTidy);
+  expect(
+    await page.locator("[data-sa-canvas]").evaluate((element) => (element as HTMLElement & { __saMarker?: boolean }).__saMarker),
+  ).toBe(true);
+
+  // Versions → Save version now.
+  await page.locator(".sa-toolbar").getByRole("button", { name: "Versions", exact: true }).click();
+  const versions = page.getByRole("dialog", { name: "Versions of 'Wave three smoke'" });
+  await expect(versions).toBeVisible();
+  await versions.getByRole("button", { name: "Save version now" }).click();
+  await expect(versions.getByText("Version saved.")).toBeVisible();
+  await expect(versions.locator("li.sa-versions__row").first()).toContainText("Saved");
+  await versions.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(versions).toBeHidden();
+
+  const cspViolations = await page.evaluate(
+    () => (window as Window & { __saCspViolations?: string[] }).__saCspViolations ?? [],
+  );
+  expect(cspViolations, "the editor route and its lazy chunks should not violate the CSP").toEqual([]);
 });

@@ -42,6 +42,11 @@ function renderToolbar(store: EditorStore, overrides: Partial<ToolbarProps> = {}
     onUngroup: vi.fn(),
     onConnect: vi.fn(),
     onDelete: vi.fn(),
+    onFind: vi.fn(),
+    onAlign: vi.fn(),
+    onDistribute: vi.fn(),
+    onTidy: vi.fn(),
+    onOpenVersions: vi.fn(),
     onExportJson: vi.fn(),
     onExportMarkdown: vi.fn(),
     onExportPng: vi.fn(async () => undefined),
@@ -209,5 +214,40 @@ describe("Toolbar", () => {
     const file = new File(["{}"], "a.json", { type: "application/json" });
     await user.upload(document.querySelector<HTMLInputElement>("input[type='file']")!, file);
     expect(props.onImport).toHaveBeenCalledWith(file);
+  });
+
+  it("opens Quick Find and Versions, and describes Find with Mod+K", async () => {
+    const user = userEvent.setup();
+    const { props } = renderToolbar(twoComponents());
+    const find = screen.getByRole("button", { name: "Find component" });
+    expect(find).toHaveAccessibleDescription("Mod+K");
+    expect(find.closest("[role='group']")).toHaveAccessibleName("History and view");
+    await user.click(find);
+    expect(props.onFind).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Versions" }));
+    expect(props.onOpenVersions).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Versions when no versions store is available", () => {
+    renderToolbar(twoComponents(), { onOpenVersions: undefined });
+    expect(screen.getByRole("button", { name: "Versions" })).toBeDisabled();
+  });
+
+  it("feeds the Arrange menu the selection's units and forwards its actions", async () => {
+    const user = userEvent.setup();
+    const store = twoComponents();
+    const { props } = renderToolbar(store);
+    await user.click(screen.getByRole("button", { name: "Arrange" }));
+    expect(screen.getByRole("menuitem", { name: /Align left/ })).toBeDisabled();
+    // Nothing selected: Tidy covers the whole diagram (2 top-level units).
+    await user.click(screen.getByRole("menuitem", { name: /Tidy layout/ }));
+    expect(props.onTidy).toHaveBeenCalledTimes(1);
+
+    act(() => store.setSelection({ componentIds: ["a", "b"], relationshipIds: [], groupIds: [] }));
+    await user.click(screen.getByRole("button", { name: "Arrange" }));
+    await user.click(screen.getByRole("menuitem", { name: /Align top/ }));
+    expect(props.onAlign).toHaveBeenCalledWith("top");
+    await user.click(screen.getByRole("button", { name: "Arrange" }));
+    expect(screen.getByRole("menuitem", { name: /Distribute horizontally/ })).toBeDisabled();
   });
 });

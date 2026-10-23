@@ -28,6 +28,7 @@ function setup(selection: Partial<Selection> = {}, isMac = false) {
     ungroupSelection: vi.fn(),
     nudgeSelection: vi.fn(),
     openConnectDialog: vi.fn(),
+    openQuickFind: vi.fn(),
     closeOverlay: vi.fn(() => false),
   } satisfies ShortcutContext;
   const handler = createShortcutHandler(context);
@@ -147,5 +148,46 @@ describe("editor shortcuts (TD 6.7)", () => {
     press({ key: "Delete" });
     expect(context.undo).not.toHaveBeenCalled();
     expect(context.deleteSelection).not.toHaveBeenCalled();
+  });
+
+  it("opens Quick Find with Mod+K from the canvas and from a text field (QF2)", () => {
+    const { context, press } = setup();
+    expect(press({ key: "k", ctrlKey: true }, canvas.firstChild as Element).defaultPrevented).toBe(true);
+    expect(press({ key: "K", ctrlKey: true }, input).defaultPrevented).toBe(true);
+    expect(context.openQuickFind).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens Quick Find with / only outside editable focus", () => {
+    const { context, press } = setup();
+    expect(press({ key: "/" }).defaultPrevented).toBe(true);
+    // Layouts where "/" needs Shift still match by key.
+    press({ key: "/", shiftKey: true, code: "Digit7" }, canvas);
+    expect(press({ key: "/" }, input).defaultPrevented).toBe(false);
+    expect(context.openQuickFind).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not open Quick Find with Alt, Shift, the other modifier, while composing or with a dialog open", () => {
+    const { context, press } = setup();
+    press({ key: "k", ctrlKey: true, altKey: true });
+    press({ key: "K", ctrlKey: true, shiftKey: true });
+    press({ key: "/", altKey: true });
+    press({ key: "/", ctrlKey: true });
+    press({ key: "k", ctrlKey: true, isComposing: true }, input);
+    press({ key: "/", isComposing: true });
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("open", "");
+    document.body.append(dialog);
+    press({ key: "k", ctrlKey: true });
+    press({ key: "/" });
+    expect(context.openQuickFind).not.toHaveBeenCalled();
+  });
+
+  it("uses Cmd+K on macOS and ignores Ctrl+K there", () => {
+    const { context, press } = setup({}, true);
+    expect(press({ key: "k", ctrlKey: true }).defaultPrevented).toBe(false);
+    press({ key: "k", ctrlKey: true, metaKey: true });
+    expect(context.openQuickFind).not.toHaveBeenCalled();
+    press({ key: "k", metaKey: true }, input);
+    expect(context.openQuickFind).toHaveBeenCalledTimes(1);
   });
 });
