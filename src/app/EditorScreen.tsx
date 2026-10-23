@@ -513,13 +513,13 @@ function EditorWorkspace({
       const { components, relationships, groups } = loaded.record.file.architecture;
       const result = store.dispatch({ kind: "restoreDiagram", components, relationships, groups });
       if (!result.ok) throw new Error(result.error.message);
+      store.setSelection(NO_SELECTION);
+      canvasApiRef.current?.fitView();
       // The confirmation stays busy until the restored diagram is saved.
       const saved = await controller.flush().catch(() => false);
 
       versionsOpenerRef.current = null;
       flushSync(() => setVersionsOpen(false));
-      store.setSelection(NO_SELECTION);
-      canvasApiRef.current?.fitView();
       const date = formatVersionDate(loaded.record.createdAt, new Date()).sentence;
       const message = saved ? `Restored the version from ${date}.` : restoreSaveFailedMessage(date);
       if (result.entryId !== undefined) {

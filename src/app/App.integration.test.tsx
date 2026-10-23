@@ -1,6 +1,8 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useContext, useMemo, type PropsWithChildren } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { CanvasApiContext } from "../canvas/canvasApi";
 import type { Selection } from "../domain/types";
 import { createEditorStore } from "../editor/store";
 import type { EditorStore } from "../editor/storeTypes";
@@ -13,7 +15,7 @@ import App, { STORAGE_UNAVAILABLE_TITLE, UPGRADE_BLOCKED_MESSAGE, UPGRADE_BLOCKI
 import { defaultModules, defaultServices } from "./defaultServices";
 import { createMemoryRepository, type MemoryRepository } from "./placeholders/persistence";
 import { editorHref } from "./router";
-import type { AppServices } from "./services";
+import type { AppServices, EditorModules } from "./services";
 import { installDialogPolyfill, makeFile } from "./testUtils";
 
 beforeAll(() => {
@@ -384,6 +386,32 @@ describe("integrated Quick Find, Arrange and Versions", () => {
   let databaseName: string;
   let databaseCount = 0;
   let failFlush: boolean;
+  let fitViewCalls: number;
+
+  /** Counts `fitView` calls on the real canvas API the editor reads. */
+  function FitViewSpy({ children }: PropsWithChildren) {
+    const api = useContext(CanvasApiContext);
+    const spied = useMemo(
+      () =>
+        api && {
+          ...api,
+          fitView: () => {
+            fitViewCalls += 1;
+            api.fitView();
+          },
+        },
+      [api],
+    );
+    return <CanvasApiContext.Provider value={spied}>{children}</CanvasApiContext.Provider>;
+  }
+  const modules: EditorModules = {
+    ...defaultModules,
+    CanvasProvider: ({ children }) => (
+      <defaultModules.CanvasProvider>
+        <FitViewSpy>{children}</FitViewSpy>
+      </defaultModules.CanvasProvider>
+    ),
+  };
 
   beforeEach(() => {
     window.localStorage.clear();
@@ -392,6 +420,7 @@ describe("integrated Quick Find, Arrange and Versions", () => {
     repository.seed({ status: "ok", file: fixture() });
     databaseName = `s10-versions-${(databaseCount += 1)}`;
     failFlush = false;
+    fitViewCalls = 0;
   });
 
   async function openEditor(overrides: Partial<AppServices> = {}) {
@@ -413,7 +442,7 @@ describe("integrated Quick Find, Arrange and Versions", () => {
       ...overrides,
     };
     window.history.replaceState(null, "", editorHref("arch_s10"));
-    render(<App services={services} modules={defaultModules} />);
+    render(<App services={services} modules={modules} />);
     await screen.findByRole("textbox", { name: "Architecture name" });
     return userEvent.setup();
   }
@@ -665,6 +694,64 @@ describe("integrated Quick Find, Arrange and Versions", () => {
     await user.click(within(toast()!).getByRole("button", { name: "Undo" }));
     expect(content()).toEqual(preRestore);
     expect(liveRegion()).toHaveTextContent("Undid the restore.");
+  });
+
+  /**
+   * Restores with Bravo selected and the restored diagram's save held, recording the selection
+   * and `fitView` calls the moment that save starts (§6.6: selection cleared and view fitted
+   * before the final flush).
+   */
+  async function restoreWithHeldSave(outcome: "saved" | "failed") {
+    await seedBravoOnlyVersion();
+    let releaseSave!: () => void;
+    const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+    let atSave: { selection: Selection; fitViewCalls: number } | undefined;
+    const gated = repositoryWithRestoredSave(async (put) => {
+      atSave ??= { selection: store.getState().selection, fitViewCalls };
+      await saveHeld;
+      if (outcome === "failed") throw new Error("Quota exceeded");
+      await put();
+    });
+    const user = await openEditor({ openRepository: async () => gated });
+    await deleteAlpha(user);
+    act(() => store.setSelection({ ...none, componentIds: ["cmp_b"] }));
+
+    const dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    fitViewCalls = 0;
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(atSave).toBeDefined());
+    expect(atSave).toEqual({ selection: none, fitViewCalls: 1 });
+    // The confirmation stays open and busy, and nothing claims an outcome, until the save settles.
+    expect(confirm).toBeInTheDocument();
+    expect(within(confirm).getByRole("button", { name: "Restoring…" })).toBeDisabled();
+    expect(toast()).toBeNull();
+    expect(liveRegion()).not.toHaveTextContent(/Restored the version|could not be saved/);
+
+    act(() => releaseSave());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(fitViewCalls).toBe(1);
+    expect(store.getState().selection).toEqual(none);
+    expect(componentIds()).toEqual(["cmp_b"]);
+  }
+
+  it("clears the selection and fits the view before the final restore save, then reports success", async () => {
+    await restoreWithHeldSave("saved");
+    expect(toast()).toHaveTextContent(/^Restored the version from /);
+    expect(liveRegion()).toHaveTextContent(/^Restored the version from /);
+    expect(await storedComponentIds()).toEqual(["cmp_b"]);
+  });
+
+  it("clears the selection and fits the view before a failing final restore save, then reports it unsaved", async () => {
+    await restoreWithHeldSave("failed");
+    expect(toast()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toast()).toHaveTextContent('Your previous diagram is kept as the "Before restore" version.');
+    expect(toast()).not.toHaveTextContent(/Restored the version/);
+    expect(liveRegion()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toolbar()).not.toHaveTextContent("Saved");
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
   });
 
   it("Save version now reports a saved version, then no changes", async () => {
