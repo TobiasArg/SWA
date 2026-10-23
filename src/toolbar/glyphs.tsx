@@ -16,7 +16,17 @@ export type GlyphName =
   | "import"
   | "chevron-down"
   | "chevron-left"
-  | "chevron-right";
+  | "chevron-right"
+  | "arrange"
+  | "align-left"
+  | "align-centers"
+  | "align-right"
+  | "align-top"
+  | "align-middles"
+  | "align-bottom"
+  | "distribute-horizontal"
+  | "distribute-vertical"
+  | "tidy";
 
 const PATHS: Record<GlyphName, string[]> = {
   back: ["M15 5l-7 7 7 7"],
@@ -31,6 +41,16 @@ const PATHS: Record<GlyphName, string[]> = {
   "chevron-down": ["M6 9l6 6 6-6"],
   "chevron-left": ["M15 6l-6 6 6 6"],
   "chevron-right": ["M9 6l6 6-6 6"],
+  arrange: ["M4 4h7v7H4z", "M13 4h7v4h-7z", "M13 11h7v9h-7z", "M4 14h7v6H4z"],
+  "align-left": ["M4 4v16", "M8 6h10v4H8z", "M8 14h6v4H8z"],
+  "align-centers": ["M12 4v16", "M7 6h10v4H7z", "M9 14h6v4H9z"],
+  "align-right": ["M20 4v16", "M6 6h10v4H6z", "M10 14h6v4h-6z"],
+  "align-top": ["M4 4h16", "M6 8h4v10H6z", "M14 8h4v6h-4z"],
+  "align-middles": ["M4 12h16", "M6 7h4v10H6z", "M14 9h4v6h-4z"],
+  "align-bottom": ["M4 20h16", "M6 6h4v10H6z", "M14 10h4v6h-4z"],
+  "distribute-horizontal": ["M4 4v16", "M20 4v16", "M10 8h4v8h-4z"],
+  "distribute-vertical": ["M4 4h16", "M4 20h16", "M8 10h8v4H8z"],
+  tidy: ["M4 4h6v6H4z", "M14 4h6v6h-6z", "M4 14h6v6H4z", "M14 14h6v6h-6z"],
 };
 
 export interface GlyphProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
