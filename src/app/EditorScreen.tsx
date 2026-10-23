@@ -50,6 +50,9 @@ export const LEAVE_SAVE_FAILED_MESSAGE =
   "Your latest changes could not be saved. Retry the save or export to JSON before leaving.";
 export const RESTORE_DAMAGED_MESSAGE = "This version is damaged and can't be restored.";
 export const COMPONENT_GONE_MESSAGE = "That component no longer exists.";
+/** Restore feedback when the restored diagram could not be saved; the recovery version is kept. */
+export const restoreSaveFailedMessage = (date: string) =>
+  `The version from ${date} is shown but could not be saved. Your previous diagram is kept as the "Before restore" version.`;
 
 type SnapshotScheduler = ReturnType<typeof startSnapshotScheduler>;
 
@@ -494,7 +497,9 @@ function EditorWorkspace({
 
   /**
    * Restore (§6.6 steps 1–4). Each failing step throws before the diagram changes; the
-   * confirmation shows the message inline. A recovery version always exists before the change.
+   * confirmation shows the message inline. A recovery version always exists before the change,
+   * and success is reported only once the restored diagram is saved; otherwise the feedback says
+   * it is unsaved and points to the recovery version.
    */
   const restoreVersion = useCallback(
     async (snapshotId: string) => {
@@ -508,13 +513,15 @@ function EditorWorkspace({
       const { components, relationships, groups } = loaded.record.file.architecture;
       const result = store.dispatch({ kind: "restoreDiagram", components, relationships, groups });
       if (!result.ok) throw new Error(result.error.message);
+      // The confirmation stays busy until the restored diagram is saved.
+      const saved = await controller.flush().catch(() => false);
 
       versionsOpenerRef.current = null;
       flushSync(() => setVersionsOpen(false));
       store.setSelection(NO_SELECTION);
       canvasApiRef.current?.fitView();
-      void controller.flush().catch(() => false);
-      const message = `Restored the version from ${formatVersionDate(loaded.record.createdAt, new Date()).sentence}.`;
+      const date = formatVersionDate(loaded.record.createdAt, new Date()).sentence;
+      const message = saved ? `Restored the version from ${date}.` : restoreSaveFailedMessage(date);
       if (result.entryId !== undefined) {
         showEntryUndoToast(store, feedback, result.entryId, message, "Undid the restore.");
       } else {

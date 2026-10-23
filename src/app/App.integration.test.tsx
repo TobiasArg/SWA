@@ -588,6 +588,85 @@ describe("integrated Quick Find, Arrange and Versions", () => {
     expect(liveRegion()).toHaveTextContent("Undid the restore.");
   });
 
+  /** The repository, with saves of the restored Bravo-only diagram routed through `save`. */
+  function repositoryWithRestoredSave(save: (put: () => Promise<void>) => Promise<void>): MemoryRepository {
+    return {
+      ...repository,
+      put: (file) =>
+        file.architecture.components.length === 1 && file.architecture.components[0]!.id === "cmp_b"
+          ? save(() => repository.put(file))
+          : repository.put(file),
+    };
+  }
+
+  const storedComponentIds = async () => {
+    const record = await repository.get("arch_s10");
+    return record?.status === "ok" ? record.file.architecture.components.map((component) => component.id) : undefined;
+  };
+
+  it("reports a restore only after the restored diagram is saved", async () => {
+    await seedBravoOnlyVersion();
+    let releaseSave!: () => void;
+    const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+    const gated = repositoryWithRestoredSave(async (put) => {
+      await saveHeld;
+      await put();
+    });
+    const user = await openEditor({ openRepository: async () => gated });
+    await deleteAlpha(user);
+
+    const dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    // The diagram is replaced, but nothing claims success while its save is pending.
+    await waitFor(() => expect(componentIds()).toEqual(["cmp_b"]));
+    expect(confirm).toBeInTheDocument();
+    expect(toast()).toBeNull();
+    expect(liveRegion()).not.toHaveTextContent(/Restored the version/);
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
+
+    act(() => releaseSave());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(toast()).toHaveTextContent(/^Restored the version from /);
+    expect(liveRegion()).toHaveTextContent(/^Restored the version from /);
+    expect(await storedComponentIds()).toEqual(["cmp_b"]);
+  });
+
+  it("does not report success when the restored diagram cannot be saved, and keeps the recovery version", async () => {
+    await seedBravoOnlyVersion();
+    const failing = repositoryWithRestoredSave(() => Promise.reject(new Error("Quota exceeded")));
+    const user = await openEditor({ openRepository: async () => failing });
+    await deleteAlpha(user);
+    const preRestore = content();
+
+    let dialog = await openVersions(user);
+    await user.click(within(dialog).getAllByRole("button", { name: /^Restore the version from/ })[1]!);
+    const confirm = screen.getByRole("dialog", { name: /^Restore the version from/ });
+    await user.click(within(confirm).getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(componentIds()).toEqual(["cmp_b"]);
+    expect(toast()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toast()).toHaveTextContent('Your previous diagram is kept as the "Before restore" version.');
+    expect(toast()).not.toHaveTextContent(/Restored the version/);
+    expect(liveRegion()).toHaveTextContent(/^The version from .* is shown but could not be saved\./);
+    expect(toolbar()).not.toHaveTextContent("Saved");
+
+    // The saved diagram is still the pre-restore one, and so is the recovery version.
+    expect(await storedComponentIds()).toEqual(["cmp_b", "cmp_c"]);
+    dialog = await openVersions(user);
+    const recoveryRow = within(dialog).getByText("Before restore").closest("li")!;
+    expect(recoveryRow).toHaveTextContent("2 components · 1 relationship · 0 groups");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    // Undo still returns to the pre-restore diagram.
+    await user.click(within(toast()!).getByRole("button", { name: "Undo" }));
+    expect(content()).toEqual(preRestore);
+    expect(liveRegion()).toHaveTextContent("Undid the restore.");
+  });
+
   it("Save version now reports a saved version, then no changes", async () => {
     const user = await openEditor();
     await deleteAlpha(user);
