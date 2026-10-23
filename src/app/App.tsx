@@ -5,7 +5,6 @@ import { importArchitectureFile } from "../io/importJson";
 import type { Repository } from "../persistence/types";
 import { openRepository } from "../persistence/repository";
 import { openArchitectureTabSync, subscribeArchitectureChanges } from "../persistence/tabSync";
-import { config as configureZod } from "zod";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/icons";
 import { LiveRegion } from "../ui/LiveRegion";
@@ -20,10 +19,6 @@ export const STORAGE_UNAVAILABLE_MESSAGE =
 export const OPEN_FAILED_MESSAGE = "That architecture could not be opened.";
 export const EDITOR_LOAD_FAILED_TITLE = "The editor could not be loaded";
 export const EDITOR_LOAD_FAILED_MESSAGE = "Check your connection and reload the page.";
-
-// Zod's default object validator feature-probes new Function, which reports a CSP violation
-// even when the exception is caught. Strict script-src 'self' requires its interpreter path.
-configureZod({ jitless: true });
 
 export interface AppProps {
   services?: AppServices;
