@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { expect, type Download, type Locator, type Page } from "@playwright/test";
 
 export async function openLibrary(page: Page): Promise<void> {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await expect(page.getByRole("heading", { name: "Architectures", exact: true })).toBeVisible();
 }
 

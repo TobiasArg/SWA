@@ -11,7 +11,7 @@ import {
 } from "./helpers";
 
 test("Scenario E — group, move, reassign, restore and delete without losing members or relationships", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario E — Groups");
   const first = await addComponent(page, "Agent", "Discovery Agent");
   await addComponent(page, "Agent", "Validation Agent");

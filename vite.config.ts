@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 
 const productionContentSecurityPolicy =
@@ -82,10 +83,15 @@ function manifestModuleIdsPlugin(): Plugin {
 }
 
 export default defineConfig({
+  appType: "mpa",
   plugins: [react(), productionCspPlugin(), manifestModuleIdsPlugin()],
   build: {
     manifest: true,
     rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        app: fileURLToPath(new URL("./app/index.html", import.meta.url)),
+      },
       output: {
         codeSplitting: {
           groups: [

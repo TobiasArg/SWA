@@ -380,7 +380,7 @@ test.describe("UI v2 — accent and schema v2", () => {
     const v1 = JSON.parse(v1Raw);
     expect(v1.schemaVersion).toBe(1);
 
-    await page.goto("/#/");
+    await page.goto("/app/#/");
     await page.getByRole("button", { name: "Import JSON" }).click();
     await page.locator('input[type="file"][accept*="application/json"]').setInputFiles({
       name: "lhe.json",
