@@ -1,10 +1,32 @@
 import { expect, test } from "@playwright/test";
+import { expectNoA11yViolations } from "./axe";
 import { openLibrary } from "./helpers";
 
 test("landing page at / links to the editor @smoke", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Swarm Architecturer" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Start" }).first()).toHaveAttribute("href", "/app/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Document AI-agent architectures, visually." }),
+  ).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("link", { name: "Swarm Architecturer home" })).toBeVisible();
+  const startLinks = page.getByRole("link", { name: "Start", exact: true });
+  await expect(startLinks.first()).toHaveAttribute("href", "/app/");
+  for (const href of await startLinks.evaluateAll((links) => links.map((link) => link.getAttribute("href")))) {
+    expect(href).toBe("/app/");
+  }
+});
+
+test("landing page has no WCAG A/AA violations", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expectNoA11yViolations(page);
+});
+
+test("landing page fits a 320 px viewport without horizontal scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await expect(page.getByRole("link", { name: "Start", exact: true }).first()).toBeVisible();
 });
 
 test("legacy root hash routes redirect into the editor @smoke", async ({ page }) => {
