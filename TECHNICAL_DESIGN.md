@@ -820,6 +820,8 @@ IndexedDB wins on capacity, async writes and transactions. `localStorage` is use
 ### 8.3 Repository API (`repository.ts`)
 
 ```ts
+import type { OpenDatabaseOptions } from "./db";
+
 export type StoredRecord =
   | { status: "ok"; file: ArchitectureFile }
   | { status: "damaged"; id: string; name: string; issues: ValidationIssue[]; raw: unknown };
@@ -834,8 +836,23 @@ export interface Repository {
   remove(id: string): Promise<void>;
   exists(id: string): Promise<boolean>;
 }
-export function openRepository(): Promise<Repository>;    // throws StorageUnavailableError
+export function openRepository(
+  databaseName?: string,
+  options?: OpenDatabaseOptions,
+): Promise<Repository & { close(): void; putIfAbsent(file: ArchitectureFile): Promise<boolean> }>;
+// Rejects with StorageUnavailableError if the database cannot be opened.
 ```
+
+`databaseName` defaults to `DATABASE_NAME` (`"swarm-architecturer"`); `options` defaults to `{}`. The App service adapter calls `openRepository(undefined, options)` to use the default database. The returned `close()` closes the connection; `putIfAbsent` validates and inserts only when the architecture ID is absent, returning `false` on an existing ID without overwriting it.
+
+`OpenDatabaseOptions` is defined in `db.ts` as `{ onStatus?: (status: DatabaseStatus) => void }`, where `DatabaseStatus` is `"blocked" | "open" | "blocking" | "terminated"`. This optional lifecycle observer supplies the App's upgrade UI described in §8.2:
+
+- `blocked`: the open is waiting for another connection; the promise remains pending and the App shows the upgrade-wait screen.
+- `open`: emitted when the connection opens (including after a blocked wait), before the repository promise resolves; the App clears a prior `blocked` state.
+- `blocking`: the connection is blocking a future upgrade and is closed by the database layer; the repository marks writes unavailable and the App shows its reload banner without remounting the current route.
+- `terminated`: an unexpected connection termination; the repository marks writes unavailable, but the App currently has no dedicated banner or state transition for this status.
+
+Observer exceptions are ignored by the database layer so they cannot interrupt the connection lifecycle. `blocked` is not a `StorageUnavailableError`; after `blocking` or `terminated`, repository writes reject with `SaveError` and a reload message rather than silently reopening the connection.
 
 `put` re-validates (`validateArchitecture`) before writing (spec 12.2: validation runs before saving). A failing record is never written.
 
