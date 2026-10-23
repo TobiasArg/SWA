@@ -8,6 +8,7 @@
       content="Swarm Architecturer is a local-first visual editor for documenting AI-agent architectures. No account, no backend, no API key. Open source (MIT)."
     />
     <title>Swarm Architecturer — Document AI-agent architectures, visually</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/landing/landing.css" />
   </head>
   <body class="lp">
@@ -24,6 +25,11 @@
       <symbol id="lp-i-not" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></g></symbol>
       <symbol id="lp-i-warning" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 17H3L12 3Z" /><path d="M12 9v5m0 3h.01" /></g></symbol>
       <symbol id="lp-i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3" /></g></symbol>
+      <symbol id="lp-i-fit" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4" /><path d="M8 8h8v8H8z" /></g></symbol>
+      <symbol id="lp-i-doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h7l4 4v13h-11z" /><path d="M13.5 3.5v4h4M9.5 12.5h5m-5 4h5" /></g></symbol>
+      <symbol id="lp-i-export" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5" /><path d="M5 15.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5" /></g></symbol>
+      <!-- Product mark "Flock S": nine coordinated units resolving into an S on one edge thread; the largest is the orchestrator. -->
+      <symbol id="lp-logo" viewBox="0 0 32 32"><path d="M22.2,7.14 A6.6,6.6 0 1 0 16,16 A6.6,6.6 0 1 1 9.8,24.86" fill="none" stroke-width="1.6" stroke-linecap="round" style="stroke: var(--lp-logo-o)" /><circle cx="22.2" cy="7.14" r="1.7" style="fill: var(--lp-logo-x)" /><circle cx="16.86" cy="2.86" r="2.05" style="fill: var(--lp-logo-a)" /><circle cx="10.59" cy="5.61" r="2.4" style="fill: var(--lp-logo-a)" /><circle cx="10.15" cy="12.45" r="2.55" style="fill: var(--lp-logo-a)" /><circle cx="16" cy="16" r="3.5" style="fill: var(--lp-logo-o)" /><circle cx="21.85" cy="19.55" r="2.55" style="fill: var(--lp-logo-m)" /><circle cx="21.41" cy="26.39" r="2.4" style="fill: var(--lp-logo-m)" /><circle cx="15.14" cy="29.14" r="2.05" style="fill: var(--lp-logo-t)" /><circle cx="9.8" cy="24.86" r="1.7" style="fill: var(--lp-logo-d)" /></symbol>
       <symbol id="lp-i-arrow" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-5-5 5 5-5 5" /></g></symbol>
     </svg>
 
@@ -32,9 +38,7 @@
     <header class="lp-topbar">
       <div class="lp-topbar__inner">
         <a class="lp-brand" href="/" aria-label="Swarm Architecturer home">
-          <span class="lp-brand__mark" aria-hidden="true">
-            <svg width="16" height="16" focusable="false"><use href="#lp-i-orchestrator" /></svg>
-          </span>
+          <svg class="lp-brand__mark" width="28" height="28" aria-hidden="true" focusable="false"><use href="#lp-logo" /></svg>
           <span class="lp-brand__name">Swarm Architecturer</span>
         </a>
         <nav class="lp-nav" aria-label="Sections">
@@ -81,16 +85,16 @@
         >
           <svg class="lp-diagram__svg lp-diagram__svg--wide" viewBox="0 0 1020 356" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
           <g class="lp-group"><rect class="lp-group__fill" x="240" y="192" width="480" height="152" rx="8"/><path class="lp-group__header" d="M240,224 V200 A8,8 0 0 1 248,192 H712 A8,8 0 0 1 720,200 V224 Z"/><line class="lp-group__divider" x1="240" y1="224" x2="720" y2="224"/><rect class="lp-group__outline" x="240" y="192" width="480" height="152" rx="8"/><use class="lp-group__grip" href="#lp-i-grip" x="252" y="201" width="14" height="14"/><text class="lp-group__name" x="274" y="212.5">Research &amp; review</text><text class="lp-group__count" x="708" y="212">2 MEMBERS</text></g>
-          <g class="lp-edge"><path class="lp-edge__path" d="M480,108 C480,178.82 362,159.18 362,230"/><path class="lp-edge__arrow" d="M362,240 L366.5,230 L357.5,230 Z"/><circle class="lp-edge__terminal" cx="480" cy="108" r="3.5"/></g>
-          <g class="lp-edge"><path class="lp-edge__path" d="M480,108 C480,178.56 597,159.44 597,230"/><path class="lp-edge__arrow" d="M597,240 L601.5,230 L592.5,230 Z"/><circle class="lp-edge__terminal" cx="480" cy="108" r="3.5"/></g>
-          <g class="lp-edge"><path class="lp-edge__path" d="M660,240 C660,161.12 810,200.88 810,122"/><path class="lp-edge__arrow" d="M810,112 L805.5,122 L814.5,122 Z"/><circle class="lp-edge__terminal" cx="660" cy="240" r="3.5"/></g>
+          <g class="lp-edge"><path class="lp-edge__path" d="M436,108 C436,172 362,166 362,230"/><path class="lp-edge__arrow" d="M362,240 L366.5,230 L357.5,230 Z"/><circle class="lp-edge__terminal" cx="436" cy="108" r="3.5"/></g>
+          <g class="lp-edge"><path class="lp-edge__path" d="M524,108 C524,172 597,166 597,230"/><path class="lp-edge__arrow" d="M597,240 L601.5,230 L592.5,230 Z"/><circle class="lp-edge__terminal" cx="524" cy="108" r="3.5"/></g>
+          <g class="lp-edge"><path class="lp-edge__path" d="M705,256 C772,256 810,204 810,122"/><path class="lp-edge__arrow" d="M810,112 L805.5,122 L814.5,122 Z"/><circle class="lp-edge__terminal" cx="705" cy="256" r="3.5"/></g>
           <g class="lp-edge"><path class="lp-edge__path" d="M255,286 C223,286 222,286 190,286"/><path class="lp-edge__arrow" d="M180,286 L190,290.5 L190,281.5 Z"/><circle class="lp-edge__terminal" cx="255" cy="286" r="3.5"/></g>
           <g class="lp-edge"><path class="lp-edge__path" d="M705,286 C751,286 764,286 810,286"/><path class="lp-edge__arrow" d="M820,286 L810,281.5 L810,290.5 Z"/><circle class="lp-edge__terminal" cx="705" cy="286" r="3.5"/></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="392.24" y="153.77" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="435.04" y="166.77">delegates to</text></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="481.78" y="153.73" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="524.58" y="166.73">delegates to</text></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="719.5" y="167.18" width="66.7" height="18" rx="2"/><text class="lp-edge__label" x="752.85" y="180.18">writes to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="356.2" y="160" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="399" y="173">delegates to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="517.7" y="160" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="560.5" y="173">delegates to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="749.25" y="210.75" width="66.7" height="18" rx="2"/><text class="lp-edge__label" x="782.6" y="223.75">writes to</text></g>
           <g class="lp-edge-label"><rect class="lp-edge__plate" x="204.9" y="277" width="35.2" height="18" rx="2"/><text class="lp-edge__label" x="222.5" y="290">uses</text></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="714.7" y="277" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="757.5" y="290">hands off to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="719.7" y="277" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="762.5" y="290">hands off to</text></g>
           <g class="lp-node lp-node--orchestrator"><path class="lp-node__body" d="M362,12 H598 A12,12 0 0 1 610,24 V96 A12,12 0 0 1 598,108 H362 A12,12 0 0 1 350,96 V24 A12,12 0 0 1 362,12 Z"/><path class="lp-node__band" d="M350,36 V24 A12,12 0 0 1 362,12 H598 A12,12 0 0 1 610,24 V36 Z"/><use class="lp-node__icon lp-node__icon--band" href="#lp-i-orchestrator" x="362" y="16" width="16" height="16"/><text class="lp-node__type lp-node__type--band" x="386" y="28">ORCHESTRATOR</text><text class="lp-node__name" x="362" y="55">Research Lead</text><text class="lp-node__desc" x="362" y="74">Plans the inquiry, routes work and</text><text class="lp-node__desc" x="362" y="90">owns the final synthesis</text></g>
           <g class="lp-node lp-node--memory"><path class="lp-node__body" d="M700,16 A110,8 0 0 1 920,16 V104 A110,8 0 0 1 700,104 Z"/><path class="lp-node__rim" d="M700,16 A110,8 0 0 0 920,16"/><rect class="lp-node__chip" x="712.5" y="28.5" width="23" height="23" rx="6"/><use class="lp-node__icon" href="#lp-i-memory" x="716" y="32" width="16" height="16"/><text class="lp-node__type" x="744" y="44">DATA STORE</text><text class="lp-node__name" x="712" y="69">Evidence Log</text><text class="lp-node__desc" x="712" y="88">Shared notes, citations</text><text class="lp-node__desc" x="712" y="104">and findings</text></g>
           <g class="lp-node lp-node--agent"><path class="lp-node__body" d="M267,240 H458 A12,12 0 0 1 470,252 V320 A12,12 0 0 1 458,332 H267 A12,12 0 0 1 255,320 V252 A12,12 0 0 1 267,240 Z"/><rect class="lp-node__chip" x="267.5" y="250.5" width="23" height="23" rx="6"/><use class="lp-node__icon" href="#lp-i-agent" x="271" y="254" width="16" height="16"/><text class="lp-node__type" x="299" y="266">AGENT</text><text class="lp-node__name" x="267" y="291">Source Scout</text><text class="lp-node__desc" x="267" y="310">Finds relevant, credible</text><text class="lp-node__desc" x="267" y="326">material</text></g>
@@ -99,14 +103,14 @@
           <g class="lp-node lp-node--decision"><path class="lp-node__body" d="M840,240 H1000 L1020,286 L1000,332 H840 L820,286 Z"/><rect class="lp-node__chip" x="848.5" y="250.5" width="23" height="23" rx="6"/><use class="lp-node__icon" href="#lp-i-decision" x="852" y="254" width="16" height="16"/><text class="lp-node__type" x="880" y="266">DECISION</text><text class="lp-node__name" x="848" y="291">Enough evidence?</text><text class="lp-node__desc" x="848" y="310">Synthesize or request</text><text class="lp-node__desc" x="848" y="326">another pass</text></g>
           </svg>
           <svg class="lp-diagram__svg lp-diagram__svg--narrow" viewBox="0 0 360 476" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-          <g class="lp-group"><rect class="lp-group__fill" x="8" y="172" width="344" height="148" rx="8"/><path class="lp-group__header" d="M8,204 V180 A8,8 0 0 1 16,172 H344 A8,8 0 0 1 352,180 V204 Z"/><line class="lp-group__divider" x1="8" y1="204" x2="352" y2="204"/><rect class="lp-group__outline" x="8" y="172" width="344" height="148" rx="8"/><use class="lp-group__grip" href="#lp-i-grip" x="20" y="181" width="14" height="14"/><text class="lp-group__name" x="42" y="192.5">Research &amp; review</text><text class="lp-group__count" x="340" y="192">2 MEMBERS</text></g>
-          <g class="lp-edge"><path class="lp-edge__path" d="M106,104 C106,148.98 96,161.02 96,206"/><path class="lp-edge__arrow" d="M96,216 L100.5,206 L91.5,206 Z"/><circle class="lp-edge__terminal" cx="106" cy="104" r="3.5"/></g>
-          <g class="lp-edge"><path class="lp-edge__path" d="M106,104 C106,176.97 250,133.03 250,206"/><path class="lp-edge__arrow" d="M250,216 L254.5,206 L245.5,206 Z"/><circle class="lp-edge__terminal" cx="106" cy="104" r="3.5"/></g>
+          <g class="lp-group"><rect class="lp-group__fill" x="8" y="172" width="344" height="148" rx="8"/><path class="lp-group__header" d="M8,204 V180 A8,8 0 0 1 16,172 H344 A8,8 0 0 1 352,180 V204 Z"/><line class="lp-group__divider" x1="8" y1="204" x2="352" y2="204"/><rect class="lp-group__outline" x="8" y="172" width="344" height="148" rx="8"/><use class="lp-group__grip" href="#lp-i-grip" x="20" y="181" width="14" height="14"/><text class="lp-group__name" x="42" y="192.5">Research &amp; review</text></g>
+          <g class="lp-edge"><path class="lp-edge__path" d="M72,104 C72,150 96,160 96,206"/><path class="lp-edge__arrow" d="M96,216 L100.5,206 L91.5,206 Z"/><circle class="lp-edge__terminal" cx="72" cy="104" r="3.5"/></g>
+          <g class="lp-edge"><path class="lp-edge__path" d="M150,104 C150,156 250,154 250,206"/><path class="lp-edge__arrow" d="M250,216 L254.5,206 L245.5,206 Z"/><circle class="lp-edge__terminal" cx="150" cy="104" r="3.5"/></g>
           <g class="lp-edge"><path class="lp-edge__path" d="M300,216 C300,172.33 284,161.67 284,118"/><path class="lp-edge__arrow" d="M284,108 L279.5,118 L288.5,118 Z"/><circle class="lp-edge__terminal" cx="300" cy="216" r="3.5"/></g>
           <g class="lp-edge"><path class="lp-edge__path" d="M96,308 C96,340 83,342 83,374"/><path class="lp-edge__arrow" d="M83,384 L87.5,374 L78.5,374 Z"/><circle class="lp-edge__terminal" cx="96" cy="308" r="3.5"/></g>
           <g class="lp-edge"><path class="lp-edge__path" d="M263,308 C263,340 260,338 260,370"/><path class="lp-edge__arrow" d="M260,380 L264.5,370 L255.5,370 Z"/><circle class="lp-edge__terminal" cx="263" cy="308" r="3.5"/></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="51.68" y="137.38" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="94.48" y="150.38">delegates to</text></g>
-          <g class="lp-edge-label"><rect class="lp-edge__plate" x="133.89" y="141.41" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="176.69" y="154.41">delegates to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="41.2" y="146" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="84" y="159">delegates to</text></g>
+          <g class="lp-edge-label"><rect class="lp-edge__plate" x="157.2" y="146" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="200" y="159">delegates to</text></g>
           <g class="lp-edge-label"><rect class="lp-edge__plate" x="266.28" y="149.78" width="66.7" height="18" rx="2"/><text class="lp-edge__label" x="299.63" y="162.78">writes to</text></g>
           <g class="lp-edge-label"><rect class="lp-edge__plate" x="71.9" y="332" width="35.2" height="18" rx="2"/><text class="lp-edge__label" x="89.5" y="345">uses</text></g>
           <g class="lp-edge-label"><rect class="lp-edge__plate" x="218.7" y="330" width="85.6" height="18" rx="2"/><text class="lp-edge__label" x="261.5" y="343">hands off to</text></g>
@@ -136,8 +140,8 @@
         </ul>
 
         <div class="lp-features">
-          <section class="lp-panel" aria-labelledby="f-model">
-            <h3 id="f-model" class="lp-panel__title">Model</h3>
+          <section class="lp-panel" data-type="orchestrator" aria-labelledby="f-model">
+            <h3 id="f-model" class="lp-panel__title"><span class="lp-panel__chip" aria-hidden="true"><svg width="16" height="16" focusable="false"><use href="#lp-i-orchestrator" /></svg></span>Model</h3>
             <dl class="lp-panel__list">
               <div><dt>Six component types</dt><dd>Agent-specific building blocks, each with fields that fit its role.</dd></div>
               <div>
@@ -147,8 +151,8 @@
               <div><dt>Groups</dt><dd>Named, non-executable containers. Moving a group moves its members.</dd></div>
             </dl>
           </section>
-          <section class="lp-panel" aria-labelledby="f-canvas">
-            <h3 id="f-canvas" class="lp-panel__title">Canvas</h3>
+          <section class="lp-panel" data-type="agent" aria-labelledby="f-canvas">
+            <h3 id="f-canvas" class="lp-panel__title"><span class="lp-panel__chip" aria-hidden="true"><svg width="16" height="16" focusable="false"><use href="#lp-i-fit" /></svg></span>Canvas</h3>
             <dl class="lp-panel__list">
               <div><dt>Quick Find</dt><dd><kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd> or <kbd>/</kbd> searches by name, type or group.</dd></div>
               <div><dt>Arrange</dt><dd>Align, distribute and tidy. Geometry only; relationships stay intact.</dd></div>
@@ -156,8 +160,8 @@
               <div><dt>Undo, redo, duplicate</dt><dd>And safe delete, with a confirmation that explains what goes.</dd></div>
             </dl>
           </section>
-          <section class="lp-panel" aria-labelledby="f-document">
-            <h3 id="f-document" class="lp-panel__title">Document</h3>
+          <section class="lp-panel" data-type="memory" aria-labelledby="f-document">
+            <h3 id="f-document" class="lp-panel__title"><span class="lp-panel__chip" aria-hidden="true"><svg width="16" height="16" focusable="false"><use href="#lp-i-doc" /></svg></span>Document</h3>
             <dl class="lp-panel__list">
               <div><dt>Type-aware inspector</dt><dd>Purpose, responsibilities, boundaries, delegation and failure handling.</dd></div>
               <div><dt>Markdown notes</dt><dd>Edit/Preview toggle. Raw HTML and remote images are never rendered.</dd></div>
@@ -165,8 +169,8 @@
               <div><dt>Local versions</dt><dd>Automatic, manual and pre-restore snapshots you can restore.</dd></div>
             </dl>
           </section>
-          <section class="lp-panel" aria-labelledby="f-export">
-            <h3 id="f-export" class="lp-panel__title">Export</h3>
+          <section class="lp-panel" data-type="tool" aria-labelledby="f-export">
+            <h3 id="f-export" class="lp-panel__title"><span class="lp-panel__chip" aria-hidden="true"><svg width="16" height="16" focusable="false"><use href="#lp-i-export" /></svg></span>Export</h3>
             <dl class="lp-panel__list">
               <div><dt>JSON</dt><dd>Canonical files for backup, review and re-import.</dd></div>
               <div><dt>Markdown</dt><dd>A deterministic, human-readable review document.</dd></div>
@@ -260,21 +264,31 @@
       </section>
 
       <section class="lp-final" aria-labelledby="final-title">
-        <h2 id="final-title" class="lp-final__title">Start mapping your agent system.</h2>
-        <p class="lp-final__text">It runs in your browser. Nothing to install, nothing to sign up for.</p>
-        <a class="sa-button sa-button--primary lp-button--lg" href="/app/">Start</a>
+        <div class="lp-final__card">
+          <svg class="lp-final__mark" width="56" height="56" aria-hidden="true" focusable="false"><use href="#lp-logo" /></svg>
+          <h2 id="final-title" class="lp-final__title">Start mapping your agent system.</h2>
+          <p class="lp-final__text">It runs in your browser. Nothing to install, nothing to sign up for.</p>
+          <div class="lp-final__ctas">
+            <a class="sa-button sa-button--primary lp-button--lg" href="/app/">Start</a>
+            <a class="sa-button sa-button--secondary lp-button--lg" href="https://github.com/TobiasArg/SWA#documentation">Read the docs</a>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer class="lp-footer">
       <div class="lp-footer__inner">
+        <p class="lp-footer__brand">
+          <svg class="lp-brand__mark" width="20" height="20" aria-hidden="true" focusable="false"><use href="#lp-logo" /></svg>
+          <span>Swarm Architecturer</span>
+        </p>
         <ul class="lp-footer__links">
           <li><a href="https://github.com/TobiasArg/SWA/blob/main/LICENSE">MIT License</a></li>
           <li><a href="https://github.com/TobiasArg/SWA">GitHub</a></li>
           <li><a href="https://github.com/TobiasArg/SWA#documentation">Documentation</a></li>
           <li><a href="https://github.com/TobiasArg/SWA/issues">Issues</a></li>
         </ul>
-        <p class="lp-footer__copy">© 2026 TobiasArg</p>
+        <p class="lp-footer__copy">Open source, MIT. © 2026 TobiasArg</p>
       </div>
     </footer>
     <script type="module" src="/src/landing/legacyRedirect.ts"></script>

@@ -15,6 +15,18 @@ test("landing page at / links to the editor @smoke", async ({ page }) => {
   }
 });
 
+test("landing page links an SVG favicon that is served", async ({ page, request }) => {
+  await page.goto("/");
+  const icon = page.locator('head link[rel="icon"]');
+  await expect(icon).toHaveCount(1);
+  await expect(icon).toHaveAttribute("type", "image/svg+xml");
+  const href = await icon.getAttribute("href");
+  expect(href).toBe("/favicon.svg");
+  const response = await request.get(href!);
+  expect(response.ok()).toBe(true);
+  expect(await response.text()).toContain("<svg");
+});
+
 test("landing page has no WCAG A/AA violations", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

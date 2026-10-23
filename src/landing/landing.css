@@ -8,7 +8,22 @@
 :root {
   --lp-max: 1120px;
   --lp-gutter: 16px;
-  --lp-topbar-h: var(--sa-toolbar-h);
+  --lp-topbar-h: 56px;
+  /* Landing-only derived values: a larger card radius, soft node and card elevation,
+     and the translucent top bar. Everything else comes from the editor tokens. */
+  --lp-radius-xl: 12px;
+  --lp-radius-2xl: 16px;
+  --lp-shadow-rest: 0 1px 2px rgba(31, 29, 26, 0.05);
+  --lp-shadow-raised: 0 1px 2px rgba(31, 29, 26, 0.05), 0 8px 24px rgba(31, 29, 26, 0.08);
+  --lp-topbar-bg: rgba(255, 255, 255, 0.78);
+  --lp-hairline: color-mix(in srgb, var(--sa-color-border) 72%, transparent);
+  /* Product mark inks (the "Flock S" symbol reads these through <use>). */
+  --lp-logo-o: var(--sa-type-orchestrator-ink);
+  --lp-logo-a: var(--sa-type-agent-ink);
+  --lp-logo-t: var(--sa-type-tool-ink);
+  --lp-logo-m: var(--sa-type-memory-ink);
+  --lp-logo-d: var(--sa-type-decision-ink);
+  --lp-logo-x: var(--sa-color-accent);
 }
 
 @media (min-width: 640px) {
@@ -31,6 +46,10 @@ body.lp {
   font-size: 15px;
   line-height: 24px;
   overflow-x: hidden;
+}
+
+.lp :where(p, dd, li) {
+  text-wrap: pretty;
 }
 
 .lp a {
@@ -67,7 +86,7 @@ body.lp {
   box-shadow: var(--sa-shadow-popover);
   font: var(--sa-text-sm);
   font-weight: var(--sa-weight-semibold);
-  transform: translateY(calc(-100% - 16px));
+  transform: translateY(calc(-100% - 40px));
 }
 
 .lp-skip:focus-visible,
@@ -82,8 +101,16 @@ main:focus {
 /* ---- Top bar (mirrors the editor toolbar) --------------------------------- */
 
 .lp-topbar {
-  border-bottom: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-bottom: var(--sa-stroke-thin) solid var(--lp-hairline);
   background: var(--sa-color-surface);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lp-topbar {
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    backdrop-filter: saturate(1.6) blur(14px);
+    background: var(--lp-topbar-bg);
+  }
 }
 
 @media (min-width: 640px) {
@@ -100,7 +127,7 @@ main:focus {
   min-height: var(--lp-topbar-h);
   flex-wrap: wrap;
   align-items: center;
-  column-gap: var(--sa-space-4);
+  column-gap: var(--sa-space-5);
   margin: 0 auto;
   padding: 0 var(--lp-gutter);
 }
@@ -109,10 +136,12 @@ main:focus {
   display: inline-flex;
   min-height: var(--sa-control-h);
   align-items: center;
-  gap: var(--sa-space-3);
+  gap: 10px;
   border-radius: var(--sa-radius-sm);
   color: var(--sa-color-text);
   font: var(--sa-text-md);
+  font-size: 15px;
+  letter-spacing: -0.01em;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -121,39 +150,59 @@ main:focus {
   color: var(--sa-color-text);
 }
 
-/* The orchestrator band: the product's darkest type ink with the white glyph. */
+/* The product mark: a flock of typed units resolving into an S on one edge. */
 .lp-brand__mark {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
+  display: block;
   flex: none;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--sa-radius-md);
-  background: var(--sa-type-orchestrator-ink);
-  color: var(--sa-color-on-accent);
+  overflow: visible;
 }
 
 .lp-nav {
   order: 3;
   width: 100%;
-  padding-bottom: var(--sa-space-3);
+  min-width: 0;
+  padding-bottom: var(--sa-space-2);
 }
 
 .lp-nav ul {
   display: flex;
   flex-wrap: wrap;
-  margin-left: calc(-1 * var(--sa-space-3));
+  margin-left: -10px;
+}
+
+/* Below the desktop layout the section links sit on one row that scrolls sideways if needed. */
+@media (max-width: 959px) {
+  .lp-nav ul {
+    flex-wrap: nowrap;
+    margin-right: calc(-1 * var(--lp-gutter));
+    margin-left: -14px;
+    padding: 4px var(--lp-gutter) 4px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .lp-nav ul::-webkit-scrollbar {
+    display: none;
+  }
+
+  .lp-nav li {
+    flex: none;
+  }
+
+  .lp-nav a {
+    padding: 0 10px;
+  }
 }
 
 .lp-nav a {
   display: inline-flex;
-  min-height: var(--sa-control-h-sm);
+  min-height: var(--sa-control-h);
   align-items: center;
-  padding: 0 var(--sa-space-3);
-  border-radius: var(--sa-radius-sm);
+  padding: 0 var(--sa-space-4);
+  border-radius: 999px;
   color: var(--sa-color-text-muted);
   font: var(--sa-text-sm);
+  font-weight: 500;
   text-decoration: none;
   transition:
     background-color var(--sa-duration-fast) var(--sa-ease),
@@ -161,7 +210,16 @@ main:focus {
 }
 
 .lp-nav a:hover {
-  background: var(--sa-color-surface-hover);
+  background: color-mix(in srgb, var(--sa-color-surface-sunken) 80%, transparent);
+  color: var(--sa-color-text);
+}
+
+/* Current section after following a nav link (CSS only, via :target). */
+.lp:has(#features:target) .lp-nav a[href="#features"],
+.lp:has(#how-it-works:target) .lp-nav a[href="#how-it-works"],
+.lp:has(#who:target) .lp-nav a[href="#who"],
+.lp:has(#your-data:target) .lp-nav a[href="#your-data"] {
+  background: var(--sa-color-surface-sunken);
   color: var(--sa-color-text);
 }
 
@@ -175,6 +233,7 @@ main:focus {
 
 .lp .lp-topbar__actions .sa-button--ghost {
   color: var(--sa-color-text);
+  font-weight: 500;
 }
 
 .lp .sa-button--primary {
@@ -209,7 +268,7 @@ main:focus {
 
   .lp-nav ul {
     justify-content: center;
-    gap: var(--sa-space-2);
+    gap: var(--sa-space-1);
     margin-left: 0;
   }
 
@@ -222,62 +281,120 @@ main:focus {
 
 /* Mono uppercase label, the same voice as a node's type label. */
 .lp-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sa-space-3);
   color: var(--sa-color-text-muted);
   font: var(--sa-text-2xs);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
+/* A port ring, the start terminal of a relationship. */
+.lp-eyebrow::before {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border: var(--sa-stroke) solid var(--sa-color-accent);
+  border-radius: 50%;
+  content: "";
+}
+
 .lp-button--lg {
-  min-height: 40px;
-  padding: 0 var(--sa-space-5);
-  font-size: 14px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--sa-radius-lg);
+  font-size: 15px;
+}
+
+.lp .sa-button--primary.lp-button--lg {
+  box-shadow: 0 1px 2px rgba(31, 29, 26, 0.12), 0 4px 12px rgba(38, 80, 200, 0.22);
+}
+
+.lp .sa-button--secondary.lp-button--lg {
+  background: var(--sa-color-surface);
+  box-shadow: var(--lp-shadow-rest);
 }
 
 /* ---- Hero ------------------------------------------------------------------ */
 
 .lp-hero {
-  padding: var(--sa-space-8) var(--lp-gutter) var(--sa-space-8);
-  border-bottom: var(--sa-stroke-thin) solid var(--sa-color-border);
-  background-color: var(--sa-color-canvas);
-  /* The editor canvas: 1.5 px dots on a 20 px grid. */
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 48px var(--lp-gutter) 40px;
+  /* Canvas color that settles into the page surface below the diagram. */
+  background: linear-gradient(to bottom, var(--sa-color-canvas) 0, var(--sa-color-canvas) 72%, var(--sa-color-surface) 100%);
+}
+
+/* The editor canvas: 1.5 px dots on a 20 px grid, vignetted toward the edges. */
+.lp-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
   background-image: radial-gradient(circle, var(--sa-color-canvas-grid) 0.75px, transparent 1.25px);
   background-position: center top;
   background-size: 20px 20px;
+  content: "";
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 42%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 42%, #000 35%, transparent 100%);
+}
+
+/* A soft light behind the headline gives the copy some depth over the grid. */
+.lp-hero::after {
+  position: absolute;
+  z-index: -1;
+  top: -10%;
+  left: 50%;
+  width: min(980px, 140%);
+  height: 560px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.9) 0, rgba(255, 255, 255, 0) 65%);
+  content: "";
+  transform: translateX(-50%);
 }
 
 @media (min-width: 640px) {
   .lp-hero {
     padding-top: 80px;
-    padding-bottom: 72px;
+    padding-bottom: 96px;
   }
 
   .lp-hero__lede {
-    font-size: 17px;
-    line-height: 27px;
+    font-size: 18px;
+    line-height: 29px;
   }
 }
 
 .lp-hero__copy {
   display: grid;
-  max-width: 720px;
+  max-width: 760px;
   justify-items: center;
-  gap: var(--sa-space-5);
+  gap: var(--sa-space-6);
   margin: 0 auto;
   text-align: center;
 }
 
+/* Hero eyebrow as a quiet pill. */
+.lp-hero .lp-eyebrow {
+  padding: 5px 12px 5px 10px;
+  border: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-radius: 999px;
+  background: var(--sa-color-surface);
+  box-shadow: var(--lp-shadow-rest);
+  color: var(--sa-color-text);
+}
+
 .lp-hero__title {
   font-family: var(--sa-font-sans);
-  font-size: clamp(32px, 6vw, 52px);
-  font-weight: var(--sa-weight-semibold);
-  letter-spacing: -0.025em;
-  line-height: 1.08;
+  font-size: clamp(36px, 7vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
   text-wrap: balance;
 }
 
 .lp-hero__lede {
-  max-width: 600px;
+  max-width: 620px;
   color: var(--sa-color-text-muted);
   font-size: 16px;
   line-height: 26px;
@@ -288,8 +405,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--sa-space-3);
-  margin-top: var(--sa-space-2);
+  gap: var(--sa-space-4);
 }
 
 .lp-trust {
@@ -321,12 +437,42 @@ main:focus {
 
 .lp-diagram {
   max-width: 1020px;
-  margin: var(--sa-space-8) auto 0;
+  margin: 56px auto 0;
 }
 
 @media (min-width: 640px) {
   .lp-diagram {
     margin-top: 72px;
+  }
+}
+
+/* Elevation like a resting node in the editor. */
+.lp-node {
+  filter: drop-shadow(0 1px 1px rgba(31, 29, 26, 0.06)) drop-shadow(0 6px 12px rgba(31, 29, 26, 0.07));
+}
+
+/* Gentle entrance: nodes rise, relationships follow. Off for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .lp-diagram__svg {
+    animation: lp-rise 700ms var(--sa-ease) both;
+  }
+
+  .lp-edge,
+  .lp-edge-label {
+    animation: lp-fade 500ms var(--sa-ease) 350ms both;
+  }
+}
+
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes lp-fade {
+  from {
+    opacity: 0;
   }
 }
 
@@ -501,23 +647,24 @@ main:focus {
 
 @media (min-width: 640px) {
   .lp-section {
-    padding-top: 96px;
+    padding-top: 120px;
   }
 }
 
 .lp-section__head {
   display: grid;
-  max-width: 640px;
-  gap: var(--sa-space-3);
-  margin-bottom: var(--sa-space-7);
+  max-width: 680px;
+  justify-items: start;
+  gap: var(--sa-space-4);
+  margin-bottom: 40px;
 }
 
 .lp-section__title {
   font-family: var(--sa-font-sans);
-  font-size: clamp(24px, 3.4vw, 30px);
-  font-weight: var(--sa-weight-semibold);
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  font-size: clamp(26px, 3.8vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
   text-wrap: balance;
 }
 
@@ -527,7 +674,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sa-space-3);
-  margin-bottom: var(--sa-space-6);
+  margin-bottom: var(--sa-space-7);
 }
 
 .lp-type {
@@ -535,9 +682,9 @@ main:focus {
   min-height: var(--sa-control-h);
   align-items: center;
   gap: var(--sa-space-3);
-  padding: 0 var(--sa-space-4) 0 var(--sa-space-3);
-  border: var(--sa-stroke) solid var(--lp-ink);
-  border-radius: var(--sa-radius-md);
+  padding: 0 var(--sa-space-4) 0 10px;
+  border: var(--sa-stroke) solid color-mix(in srgb, var(--lp-ink) 55%, transparent);
+  border-radius: 999px;
   background: var(--lp-fill);
   color: var(--lp-ink);
   font: var(--sa-text-2xs);
@@ -562,6 +709,11 @@ main:focus {
   gap: var(--sa-space-5);
 }
 
+.lp-panel[data-type="orchestrator"] { --lp-ink: var(--sa-type-orchestrator-ink); --lp-fill: var(--sa-type-orchestrator-fill); }
+.lp-panel[data-type="agent"] { --lp-ink: var(--sa-type-agent-ink); --lp-fill: var(--sa-type-agent-fill); }
+.lp-panel[data-type="memory"] { --lp-ink: var(--sa-type-memory-ink); --lp-fill: var(--sa-type-memory-fill); }
+.lp-panel[data-type="tool"] { --lp-ink: var(--sa-type-tool-ink); --lp-fill: var(--sa-type-tool-fill); }
+
 @media (min-width: 640px) {
   .lp-features {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -574,25 +726,61 @@ main:focus {
   }
 }
 
-/* A panel reads like an inspector section: sunken header bar, white body. */
+/* A panel reads like an inspector section, keyed by a type chip. */
 .lp-panel {
+  position: relative;
   overflow: hidden;
   border: var(--sa-stroke-thin) solid var(--sa-color-border);
-  border-radius: var(--sa-radius-lg);
+  border-radius: var(--lp-radius-xl);
   background: var(--sa-color-surface);
+  box-shadow: var(--lp-shadow-rest);
+  transition:
+    border-color var(--sa-duration-fast) var(--sa-ease),
+    box-shadow 200ms var(--sa-ease);
+}
+
+/* A hairline of the panel's ink across the top, like a node's type band. */
+.lp-panel::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--lp-ink);
+  content: "";
+}
+
+.lp-panel:hover {
+  border-color: color-mix(in srgb, var(--lp-ink) 40%, var(--sa-color-border));
+  box-shadow: var(--lp-shadow-raised);
 }
 
 .lp-panel__title {
-  padding: var(--sa-space-3) var(--sa-space-5);
-  border-bottom: var(--sa-stroke-thin) solid var(--sa-color-border);
-  background: var(--sa-color-surface-sunken);
-  font: var(--sa-text-md);
+  display: flex;
+  align-items: center;
+  gap: var(--sa-space-4);
+  padding: 22px var(--sa-space-5) var(--sa-space-4);
+  font: var(--sa-text-lg);
+  letter-spacing: -0.01em;
+}
+
+.lp-panel__chip {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: var(--sa-stroke-thin) solid color-mix(in srgb, var(--lp-ink) 45%, transparent);
+  border-radius: 7px;
+  background: var(--lp-fill);
+  color: var(--lp-ink);
 }
 
 .lp-panel__list {
   display: grid;
-  gap: var(--sa-space-5);
-  padding: var(--sa-space-5);
+  gap: 18px;
+  padding: var(--sa-space-2) var(--sa-space-5) var(--sa-space-6);
 }
 
 .lp-panel__list dt {
@@ -641,8 +829,23 @@ main:focus {
   display: grid;
   align-content: start;
   gap: var(--sa-space-3);
-  padding-top: var(--sa-space-5);
+  padding-top: var(--sa-space-6);
   border-top: var(--sa-stroke) solid var(--sa-edge-stroke);
+}
+
+/* On wide screens each step ends in an arrowhead: the steps read as one edge. */
+@media (min-width: 800px) {
+  .lp-step:not(:last-child)::after {
+    position: absolute;
+    top: -5.25px;
+    right: -1px;
+    width: 0;
+    height: 0;
+    border-top: 4.5px solid transparent;
+    border-bottom: 4.5px solid transparent;
+    border-left: 10px solid var(--sa-edge-stroke);
+    content: "";
+  }
 }
 
 /* A terminal ring at the start of each step, like a relationship edge. */
@@ -660,13 +863,14 @@ main:focus {
 }
 
 .lp-step__index {
-  color: var(--sa-color-text-muted);
+  color: var(--sa-color-accent);
   font: var(--sa-text-2xs);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .lp-step__title {
-  font: var(--sa-text-lg);
+  font: var(--sa-text-xl);
+  letter-spacing: -0.015em;
 }
 
 .lp-step p {
@@ -682,20 +886,21 @@ main:focus {
 
 .lp-audience li {
   display: grid;
-  gap: var(--sa-space-1) var(--sa-space-6);
-  padding: var(--sa-space-5) 0;
+  gap: var(--sa-space-2) var(--sa-space-6);
+  padding: 22px 0;
   border-bottom: var(--sa-stroke-thin) solid var(--sa-color-border);
 }
 
 @media (min-width: 720px) {
   .lp-audience li {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
     align-items: baseline;
   }
 }
 
 .lp-audience strong {
-  font: var(--sa-text-lg);
+  font: var(--sa-text-xl);
+  letter-spacing: -0.015em;
 }
 
 .lp-audience span {
@@ -717,24 +922,27 @@ main:focus {
 }
 
 .lp-scope__col {
-  padding: var(--sa-space-6);
+  padding: 28px var(--sa-space-6);
   border: var(--sa-stroke-thin) solid var(--sa-color-border);
-  border-radius: var(--sa-radius-lg);
+  border-radius: var(--lp-radius-xl);
   background: var(--sa-color-surface);
+  box-shadow: var(--lp-shadow-rest);
 }
 
 .lp-scope__col--not {
   border-style: dashed;
   border-color: var(--sa-color-border-strong);
   background: var(--sa-color-canvas);
+  box-shadow: none;
 }
 
 .lp-scope__title {
   display: flex;
   align-items: center;
   gap: var(--sa-space-3);
-  margin-bottom: var(--sa-space-4);
-  font: var(--sa-text-lg);
+  margin-bottom: var(--sa-space-5);
+  font: var(--sa-text-xl);
+  letter-spacing: -0.015em;
 }
 
 .lp-scope__title svg {
@@ -795,11 +1003,27 @@ main:focus {
 
 .lp-data__facts {
   display: grid;
-  gap: var(--sa-space-4);
+  gap: var(--sa-space-5);
 }
 
 .lp-data__facts li {
+  position: relative;
+  padding-left: var(--sa-space-6);
   color: var(--sa-color-text-muted);
+}
+
+/* Memory-ink port dots mark each fact. */
+.lp-data__facts li::before {
+  position: absolute;
+  top: 8px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border: var(--sa-stroke) solid var(--sa-type-memory-ink);
+  border-radius: 50%;
+  background: var(--sa-type-memory-fill);
+  content: "";
 }
 
 .lp-data__facts strong {
@@ -811,9 +1035,9 @@ main:focus {
   display: flex;
   align-items: flex-start;
   gap: var(--sa-space-4);
-  padding: var(--sa-space-5);
-  border: var(--sa-stroke-thin) solid var(--sa-color-warning-text);
-  border-radius: var(--sa-radius-lg);
+  padding: 20px;
+  border: var(--sa-stroke-thin) solid color-mix(in srgb, var(--sa-color-warning-text) 45%, transparent);
+  border-radius: var(--lp-radius-xl);
   background: var(--sa-color-warning-soft);
   color: var(--sa-color-warning-text);
 }
@@ -826,25 +1050,77 @@ main:focus {
 /* ---- Final CTA and footer -------------------------------------------------- */
 
 .lp-final {
-  display: grid;
   max-width: var(--lp-max);
-  justify-items: center;
-  gap: var(--sa-space-4);
   margin: 96px auto 0;
   padding: 0 var(--lp-gutter) 96px;
+}
+
+@media (min-width: 640px) {
+  .lp-final {
+    margin-top: 128px;
+    padding-bottom: 120px;
+  }
+}
+
+/* A small piece of canvas that bookends the hero. */
+.lp-final__card {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  isolation: isolate;
+  justify-items: center;
+  gap: var(--sa-space-5);
+  padding: 56px var(--sa-space-5);
+  border: var(--sa-stroke-thin) solid var(--sa-color-border);
+  border-radius: var(--lp-radius-2xl);
+  background: var(--sa-color-canvas);
+  box-shadow: var(--lp-shadow-raised);
   text-align: center;
 }
 
+.lp-final__card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--sa-color-canvas-grid) 0.75px, transparent 1.25px);
+  background-position: center;
+  background-size: 20px 20px;
+  content: "";
+  -webkit-mask-image: radial-gradient(ellipse 60% 80% at 50% 50%, #000 20%, transparent 100%);
+  mask-image: radial-gradient(ellipse 60% 80% at 50% 50%, #000 20%, transparent 100%);
+}
+
+@media (min-width: 640px) {
+  .lp-final__card {
+    padding: 80px var(--sa-space-7);
+  }
+}
+
+.lp-final__mark {
+  display: block;
+  overflow: visible;
+}
+
 .lp-final__title {
-  font-size: clamp(24px, 3.4vw, 30px);
-  font-weight: var(--sa-weight-semibold);
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  max-width: 640px;
+  font-size: clamp(28px, 4.4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 .lp-final__text {
-  margin-bottom: var(--sa-space-3);
   color: var(--sa-color-text-muted);
+  font-size: 16px;
+}
+
+.lp-final__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sa-space-4);
+  margin-top: var(--sa-space-3);
 }
 
 .lp-footer {
@@ -862,6 +1138,20 @@ main:focus {
   margin: 0 auto;
   padding: var(--sa-space-6) var(--lp-gutter);
   font: var(--sa-text-sm);
+}
+
+.lp-footer__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sa-space-3);
+  font: var(--sa-text-md);
+}
+
+@media (min-width: 880px) {
+  .lp-footer__links {
+    margin-right: auto;
+    margin-left: var(--sa-space-7);
+  }
 }
 
 .lp-footer__links {
@@ -929,12 +1219,40 @@ main:focus {
   }
 
   .lp-brand__mark,
+  .lp-final__mark {
+    --lp-logo-o: CanvasText;
+    --lp-logo-a: CanvasText;
+    --lp-logo-t: CanvasText;
+    --lp-logo-m: CanvasText;
+    --lp-logo-d: CanvasText;
+    --lp-logo-x: CanvasText;
+  }
+
+  .lp-node {
+    filter: none;
+  }
+
+  .lp-panel::before {
+    background: CanvasText;
+  }
+
+  .lp-panel__chip,
+  .lp-final__card,
   .lp-type,
   .lp-panel,
   .lp-scope__col,
   .lp-callout,
   .lp-step::before {
     border: 1px solid CanvasText;
+  }
+
+  .lp-step::after {
+    border-left-color: CanvasText;
+  }
+
+  .lp-eyebrow::before,
+  .lp-data__facts li::before {
+    border-color: CanvasText;
   }
 
   .lp-skip:focus-visible,
