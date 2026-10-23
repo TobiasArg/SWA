@@ -8,7 +8,9 @@ Built for AI engineers, software architects, and researchers who need to documen
 
 No account. No application backend. No API key. Open source under MIT.
 
-[Quickstart](#quickstart) · [Feature tour](#feature-tour) · [Your data](#how-your-data-works) · [Documentation](#documentation) · [Contributing](#contributing)
+**[Open the app → swarm-architecturer.vercel.app/app/](https://swarm-architecturer.vercel.app/app/)** · [Website](https://swarm-architecturer.vercel.app)
+
+[Use it online](#use-it-online) · [Quickstart](#quickstart) · [Feature tour](#feature-tour) · [Your data](#how-your-data-works) · [Documentation](#documentation) · [Contributing](#contributing)
 
 ![The Swarm Architecturer editor showing an AI-agent architecture on a canvas with its inspector open](docs/assets/product-overview.png)
 
@@ -100,9 +102,18 @@ A few practical consequences:
 - **There is no real-time sync or cloud collaboration.** Two tabs can open the same architecture, but the app warns you; writes are last-write-wins, with no merge.
 - **Sharing is asynchronous.** Send JSON when someone needs to edit, or Markdown/PNG when someone needs to review.
 
+## Use it online
+
+The hosted version runs entirely in your browser — nothing to install, no sign-up:
+
+- **Editor:** [swarm-architecturer.vercel.app/app/](https://swarm-architecturer.vercel.app/app/)
+- **Website:** [swarm-architecturer.vercel.app](https://swarm-architecturer.vercel.app)
+
+Your architectures are saved in that browser for that address only. They are not shared with a local `npm run dev` copy or another browser, so export JSON to move work between them.
+
 ## Quickstart
 
-Swarm Architecturer is pre-1.0 (`0.0.0`) and has no tagged release yet; these steps run the current source.
+To run it from source instead: Swarm Architecturer is pre-1.0 (`0.0.0`) and has no tagged release yet; these steps run the current source.
 
 ### Requirements
 
@@ -127,7 +138,7 @@ npm run build
 npm run preview
 ```
 
-The production output is a static `dist/` directory. Deploy it to any static host at the site root (the default Vite configuration); the landing page is served at `/` and the editor at `/app/`. There is no application server.
+The production output is a static `dist/` directory. Deploy it to any static host at the site root (the default Vite configuration); the landing page is served at `/` and the editor at `/app/`. There is no application server. The hosted site is deployed to Vercel with the settings in `vercel.json`, which also redirects `/app` to `/app/`.
 
 ## Checks
 
