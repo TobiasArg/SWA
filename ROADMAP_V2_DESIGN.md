@@ -1,7 +1,7 @@
 # Swarm Architecturer — Roadmap v2 Design
 
-Status: design only, ready for Build. Baseline: `main` at `4026f90` (verified identical to this branch's base).
-This report adds no code, tests, dependencies or config changes. It does not supersede `TECHNICAL_DESIGN.md` (TD), `UI_DESIGN_HANDOFF.md` (UH) or `UI_COLOR_CONFIRMATION_DESIGN.md` (UCC). Where this report changes a contract from those documents, it says so explicitly, and Build updates them in the stage that ships the change.
+Status: **historical design and delivery plan; implementation complete**. The original design baseline was `main` at `4026f90`; that is not the current code baseline. Current as-built evidence below is for `main` HEAD `6c462f2` (2026-10-23).
+This report preserves the pre-build rationale, proposal and proposed acceptance tests. Its original sections are historical planning text, not a live status report. The as-built addendum below and the updated `TECHNICAL_DESIGN.md` (TD), `PRODUCT_CONCEPT_V1.1.md` (PC) and `UI_DESIGN_HANDOFF.md` (UH) describe the shipped contracts; where old proposal text conflicts, those current contracts and the code win. No document changes the non-executable architecture-tool invariant.
 
 It covers six improvements:
 
@@ -27,9 +27,31 @@ It covers six improvements:
 - **P5 App-styled UI only.** Use native `<dialog>` through `ui/Dialog` / `ui/ConfirmDialog`, the app toast and the live region. No `alert`, `confirm` or `prompt` (UCC 2.6).
 - **P6 Keyboard parity.** Every new action can be done with the keyboard, has an accessible name and is announced through `ui/LiveRegion` `announce()`.
 
+**Still-binding product invariant:** P1 is absolute: the app documents architectures and does not execute them. Relationships are semantic documentation, and neither Quick Find nor Arrange reads graph relationships to infer sequence, data flow or runtime behavior. The remaining bullets record the original design guardrails; use the as-built addendum and current technical contract below for shipped details.
+
+## 0.1 As-built implementation addendum (2026-10-23)
+
+The six roadmap v2 areas are shipped. The design sections that follow retain their original planned interactions and test IDs for traceability; words such as “new”, future tense and the pre-build findings in §1 are historical, not current-state claims. This addendum records material implementation differences and the current behavior.
+
+| Area | Shipped contract |
+|---|---|
+| Undo feedback | Delete, Tidy layout and version restore use a toast bound to that exact session history-entry ID. It is dismissed when that entry is no longer the undo head, and an Undo click cannot undo a later edit. Action toasts last 10 s and pause while hovered or focused; plain toasts last 5 s. Action toasts are editor-session scoped. |
+| Quick Find | `Mod+K` (also in editable fields) and `/` outside editable fields open text-only search. Choosing a result selects it, explicitly centers/reveals it, does not zoom out, focuses the node and announces it. This explicit find action is the sole automatic-pan exception; inspector selection does not pan. |
+| Multi-color | A selection containing components has a Color group. Different color settings (with Type default counted as a value) leave every radio unchecked, state the mix in text and mark the settings in use; a choice dispatches one `setComponentAccent` command for the selected components and announces the selected count and chosen color. |
+| Arrange | Align, Distribute and Tidy change positions and derived group bounds only and are relationship-blind. A truly empty selection makes Tidy operate on the whole diagram; a relationship-only selection does not. IDs, relationships, pins and memberships remain unchanged. |
+| Versions | IndexedDB version 2 adds a `snapshots` store and `[architectureId, createdAt]` index; the architecture store is not rewritten by that DB upgrade. The architecture-file schema remains v2. `open` attempts to capture the persisted file; `interval` requires a saved content change and at least 10 minutes since the prior successful capture; manual/pre-restore flush first. Dedup checks the fingerprint and full diagram key. Retention is 30 automatic (also prune automatic entries older than 90 days), 20 manual and 10 recovery records; only a new distinct capture prunes. Automatic capture is skipped above 80% reported quota. Import and duplicate do not copy versions; JSON export remains unchanged and versions are browser-local. Deleting an architecture removes its snapshots atomically with its record. |
+| Restore and capture caveats | Restore flushes first and requires a pre-restore recovery capture; it replaces only diagram arrays, preserves architecture metadata and canvas, clears selection, fits the view, and waits for the final save. If that final save fails, the restored diagram remains in memory, the dialog closes with an explicit unsaved warning, and the recovery snapshot remains. A leave capture is attempted during editor teardown after a successful flush; it is fire-and-forget, so it is not guaranteed on every exit or browser unload. The toolbar-import handler does not abort if its initial flush fails. Automatic capture failures are logged but not shown in the Versions dialog; manual failures are shown inline. The Current badge compares the stored snapshot fingerprint with the fingerprint of the live editor diagram; it is not a persisted-record/full-key comparison. |
+| Quality scope | The editor is route-lazy-loaded; PNG support is dynamically loaded on export. Playwright runs all specs in Chromium and only `@smoke` tests in Firefox/WebKit. Axe is installed and the configured exclusions list is empty, but scans cover selected UI states, not a complete WCAG audit. The empty Versions state is RTL-only; the E2E axe suite scans a populated list, not the empty state. Cross-browser PNG smoke checks establish a PNG signature and non-zero dimensions only; Chromium Scenario H adds pixel-statistical framing checks, not a golden-image comparison. |
+
+The actual axe E2E coverage is in `e2e/a11y-axe.spec.ts` (empty/list library; New, Rename, Delete and import-error dialogs; empty editor; component and multi-selection inspectors; Connect, relationship and group states; delete/ungroup confirmations, export menu and delete toast) and `e2e/a11y-axe-v2.spec.ts` (Quick Find results/no results, Arrange menu, Versions populated list/restore confirmation and mixed Color). `e2e/axe-exclusions.ts` is empty. Smoke projects additionally scan the library and an editor-with-selection state. The normal Versions empty state is not in the axe E2E suite, and no claim here is a manual WCAG audit or certification.
+
+**Coordinator-reported release gates** (run on 2026-10-23; not rerun by this documentation stage): `npm test -- --maxWorkers=1` 757/757; `node --test scripts/check-bundle.test.mjs` 8/8; typecheck, lint, build and `check:bundle` passed. Initial JS gzip was 107.88 KiB; largest JS chunk was 213.63 KiB; no size warnings. `CI=1 npm run e2e` passed 74/74 across the full Chromium project and Firefox/WebKit smoke projects. These are coordinator-provided results, not this worker’s validation. They do not imply manual accessibility certification or full cross-browser parity.
+
 ---
 
-## 1. Baseline findings (verified in code)
+## 1. Historical pre-roadmap baseline findings (verified before implementation)
+
+The table is an audit snapshot of the earlier build, not a description of the current code. In particular, DB v1/single-store, absent `revealComponent`, 5-second action toasts, missing axe, and Chromium-only Playwright were superseded by the shipped roadmap v2 behavior summarized in §0.1. The rows and source references are retained as historical evidence.
 
 | Area | Fact | Where |
 |---|---|---|
@@ -40,7 +62,7 @@ It covers six improvements:
 | Selection | `store.selection` is the source of truth. The inspector selects without panning ("No automatic panning", TD 6.6). | TD 6.6 |
 | Multi-selection inspector | Group, Remove from groups, Duplicate and Delete. No color. | `src/inspector/MultiSelectionInspector.tsx` |
 | Color command | `setComponentAccent { ids: string[]; accent }` already takes many IDs. It is a no-op for unchanged components and has the label "Change color". | `src/domain/operations.ts:607`, `src/editor/commandLabels.ts` |
-| Picker | 17 native radios plus "Type default". Single component only (`ids: [id]`). | `src/inspector/AccentPicker.tsx:53` |
+| Picker | 17 native radios total: "Type default" plus the 16 accent swatches. Single component only (`ids: [id]`). | `src/inspector/AccentPicker.tsx:53` |
 | Move | `moveElements { componentPositions, groupDeltas }` moves components to absolute positions and recomputes the bounds of affected groups. `groupDeltas` moves only empty groups. Membership is untouched. | `src/domain/operations.ts:359-418` |
 | Canvas API | `zoomIn`, `zoomOut`, `fitView`, `screenToFlowPosition`, `getViewportElement`, `getNodesBounds`, `getDiagramBounds`. There is no way to reveal one element. The viewport is persisted by `onMoveEnd → store.setViewport`. Zoom range is 0.2–2. | `src/canvas/canvasApi.ts`, `src/canvas/CanvasView.tsx:99-100,126-160,321` |
 | Shortcuts | One `keydown` handler. It ignores everything while a `dialog[open]` exists. `Mod+Z` works in text fields. `Alt` and the other platform modifier are ignored. Single-key shortcuts (`C`, `Delete`, `Shift+1`) do not fire in editable focus. | `src/app/shortcuts.ts` |
@@ -50,7 +72,7 @@ It covers six improvements:
 | IDs | `createId(prefix)` uses `crypto.randomUUID()`. Prefixes are `arch`, `cmp`, `rel`, `grp`. The app therefore already requires a secure context. | `src/domain/ids.ts` |
 | Playwright | One project (`chromium`), tests run against `vite preview` on port 4173. `e2e/helpers.ts:101` `modifierFor(page)` derives Meta or Control from the page's platform, so it already works in other engines. Only Chromium browsers are installed locally (`~/Library/Caches/ms-playwright`). There is no CI config in the repo. | `playwright.config.ts` |
 | Build | `npm run build` (Vite 8.3.5, Rolldown 1.2.15) emits `index-*.js` **671.28 kB (208.05 kB gzip)** and warns that it is larger than 500 kB. The only split is the lazy `MarkdownPreview` (117.5 kB). `@xyflow/react`, `html-to-image` and the editor all load on the library route. The production CSP is `script-src 'self'`. | measured 2026-10-22; `vite.config.ts` |
-| Axe | Not installed. | `package.json` |
+| Axe | Not installed in the pre-roadmap baseline; since added and used for selected E2E states (§0.1). | `package.json` |
 
 ---
 
@@ -209,7 +231,7 @@ This is a deliberate exception to TD 6.6 "No automatic panning" for an explicit 
 ### 4.1 Interaction (`inspector/MultiSelectionInspector.tsx`)
 
 - When the selection contains **at least one component**, a "Color" section appears after "Selection", open by default. Its caption: "Applies to {n} selected components." When groups or relationships are also selected, it adds "Groups and relationships have no color."
-- The same 18 radios as the single picker: "Type default" plus the 17 accents.
+- The same 17 radios total as the single picker: "Type default" plus the 16 accents.
 - **State**, computed over the selected components only:
   - All share the same `accent` value (including all `undefined`): that radio is checked. Caption "Color: {label}" or "Color: Type default".
   - Values differ: **no radio is checked** (mixed). Caption "Color: Mixed ({k} colors)", where "Type default" counts as one value. Native radios cannot be indeterminate, so the fieldset gets `aria-describedby` pointing at the caption. Screen readers then announce "Mixed" when the group is entered.
