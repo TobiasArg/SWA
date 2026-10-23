@@ -1,10 +1,12 @@
 # Swarm Architecturer — UI Design Handoff (MVP)
 
-**Status:** Visual design handoff, written before implementation starts.
-**Authority:** `PRODUCT_CONCEPT_V1.1.md` and `TECHNICAL_DESIGN.md` are authoritative. This document only sets visual values and the visual treatment of behavior those two documents already define. It adds no features, screens, controls or dependencies. If this document conflicts with either of them, they win.
+**Status:** Original visual design handoff, written before implementation. Shipped roadmap v2 visual/interaction additions are folded in below; the handoff's original diagrams and values are retained.
+**Authority:** `PRODUCT_CONCEPT_V1.1.md` and `TECHNICAL_DESIGN.md`, including their as-built addenda, are authoritative. This handoff specifies visual treatment; it does not change product behavior. If an original pre-build statement conflicts with a current contract, the current contract wins.
 **UI v2 update:** sections 2.1 (canvas rows), 2.3 (accent), 2.4, 5.1–5.3, 6, 7 (node and edge states), 8.1 (Appearance), 9.3 and 12 describe the "ported canvas" as built; the full rationale, contrast tables and acceptance criteria are in `UI_V2_DESIGN.md`. Where the two differ, the code and this document describe what ships.
 **Color and confirmation update (as built):** sections 2.3 (component color), 5.1–5.2 (chip, band, hatch), 7.4, 8.1 (header, Appearance), 8.4 (dialogs), 9.3 and 12 describe the shipped behavior from the design record `UI_COLOR_CONFIRMATION_DESIGN.md`: one effective palette entry drives a component's fill and ink, every delete asks first in the app-styled `ConfirmDialog`, and no browser-native dialogs or notifications are used (the `beforeunload` prompt is browser-owned).
 **Implements into:** `src/ui/tokens.css` (all `--sa-*` tokens below), `src/ui/base.css`, and the per-module CSS files (TD 4.1). "TD x.y" refers to sections of `TECHNICAL_DESIGN.md`; "PC x.y" refers to `PRODUCT_CONCEPT_V1.1.md`.
+
+**Shipped roadmap v2 UI additions:** the editor toolbar now includes Find, Arrange and Versions; the multi-selection inspector exposes a mixed-state Color group; and the Quick Find, Arrange and Versions/Restore surfaces are implemented. Delete, Tidy and restore action toasts are entry-bound and session-scoped (10 s, pausing on hover/focus); plain toasts remain 5 s. See `ROADMAP_V2_DESIGN.md` §0.1 and `TECHNICAL_DESIGN.md` §0.1, §5.2, §6.8, §7.6 and §8.7 for current behavior and known caveats.
 
 ---
 
@@ -81,7 +83,7 @@ Each type has an **ink** (border, icon, type label) and a **fill** (node backgro
 | Memory / Data Store | `--sa-type-memory-ink` `#2E6A4C` | `--sa-type-memory-fill` `#EBF4EE` | 5.7 / 5.8 |
 | External System | `--sa-type-external-ink` `#57534C` | `--sa-type-external-fill` `#F1EFEA` | 6.7 / 6.9 |
 | Decision / Routing Rule | `--sa-type-decision-ink` `#6C3D74` | `--sa-type-decision-fill` `#F5EEF6` | 7.2 / 7.4 |
-**Component color.** A component may carry one of 16 fixed color IDs, persisted as `accent` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; values `ACCENTS` in `src/domain/constants.ts`, CSS `--sa-accent-{id}-ink` / `--sa-accent-{id}-tint`; Tomato's tint is `#FADCD6`). Each component has exactly **one effective palette entry**: the selected color, or the type default above (`type-agent` … `type-decision`) when none is set. `ComponentNode` sets `data-palette` to it, one `[data-palette]` rule per entry in `tokens.css` sets `--sa-palette-ink` / `--sa-palette-fill`, and only `.sa-node` maps them, so type rules set geometry only and a selected color always wins. The entry supplies **both** the node fill (the tint for a selected color) **and** the ink: silhouette stroke, icon chip ring and glyph (the module logo), type label, Memory lid rim, External hatch (ink at 16 % opacity) and Orchestrator band. The chip plate is always white (`--sa-node-surface`). Name and description keep `--sa-color-text` / `--sa-color-text-muted`. Every entry passes ink:fill, ink:white, text:fill and muted:fill ≥ 4.5:1 and ink:canvas and selection:fill ≥ 3:1 (checked in `palette.test.ts`). Edges, ports, groups, selection, focus and chrome never take a palette entry. Colors carry no meaning and are not announced.
+**Component color.** A component may carry one of 16 fixed color IDs, persisted as `accent` (`tomato, coral, tangerine, mustard, olive, fern, mint, teal, lagoon, sky, denim, indigo, lavender, plum, rose, cocoa`; values `ACCENTS` in `src/domain/constants.ts`, CSS `--sa-accent-{id}-ink` / `--sa-accent-{id}-tint`; Tomato's tint is `#FADCD6`). Each component has exactly **one effective palette entry**: the selected color, or the type default above (`type-agent` … `type-decision`) when none is set. `ComponentNode` sets `data-palette` to it, one `[data-palette]` rule per entry in `tokens.css` sets `--sa-palette-ink` / `--sa-palette-fill`, and only `.sa-node` maps them, so type rules set geometry only and a selected color always wins. The entry supplies **both** the node fill (the tint for a selected color) **and** the ink: silhouette stroke, icon chip ring and glyph (the module logo), type label, Memory lid rim, External hatch (ink at 16 % opacity) and Orchestrator band. The chip plate is always white (`--sa-node-surface`). Name and description keep `--sa-color-text` / `--sa-color-text-muted`. Every entry passes ink:fill, ink:white, text:fill and muted:fill ≥ 4.5:1 and ink:canvas and selection:fill ≥ 3:1 (checked in `palette.test.ts`). Edges, ports, groups, selection, focus and chrome never take a palette entry. Color has no architectural meaning and never changes type cues; it is omitted from node aria-labels and Markdown export. Single-component picker changes are not separately announced; multi-selection changes announce the selected component count and chosen color.
 
 Agent and Orchestrator share a hue family on purpose: an Orchestrator *is* an Agent (PC 6.2). They are told apart by structure (section 5), not by hue.
 
@@ -284,8 +286,9 @@ Empty states are text-first and calm, with no illustrations or mascots.
 | **Backup notice** (TD 8.5) | A banner at the top of the library list on `--sa-color-info-soft`, with an info icon, the text and a "Dismiss" ghost button. The always-visible footer line is `--sa-text-xs` muted. |
 | **Tab conflict banner** (TD 8.6) | A 32 px strip directly under the toolbar on `--sa-color-warning-soft` with `--sa-color-warning-text` and a warning icon. It does not overlay the canvas; it pushes the canvas down. |
 | **Damaged library row** | Name in muted text, a warning icon plus "Can't be opened", and the first issue in `--sa-text-xs`. Only the allowed actions are shown. |
-| **Toast** (TD 5.3, 10, 13) | Bottom-center of the canvas, 16 px above the bottom edge, `--sa-color-toast-bg`, `--sa-radius-lg`, `--sa-shadow-dialog`, max 480 px wide. Text in toast-text; action ("Undo") as a text button in toast-action. It never covers the toolbar or the panels. |
-| **Delete confirmation** (TD 11.2, 11.3) | The `ConfirmDialog` from 8.4, before every editor and library deletion. After a confirmed editor delete, the existing Undo toast and announcement follow, unchanged; Cancel shows nothing. |
+| **Toast** (TD 5.3, 10, 13) | Bottom-center of the canvas, 16 px above the bottom edge, `--sa-color-toast-bg`, `--sa-radius-lg`, `--sa-shadow-dialog`, max 480 px wide. Plain toast: 5 s. Action toast: 10 s, pausing on pointer hover or focus within. It never moves focus. |
+| **Entry-bound Undo toast** (roadmap v2) | Delete, Tidy and restore Undo actions target their specific history entry, close when it stops being the undo head, and are dismissed when the editor session ends. This supersedes the original handoff's unchanged-toast timing/action assumption. |
+| **Delete confirmation** (TD 11.2, 11.3) | The `ConfirmDialog` from 8.4, before every editor and library deletion. After a confirmed editor delete, the entry-bound Undo toast and announcement follow; Cancel shows nothing. |
 | **Leave-page prompt** (TD 8.5) | Browser-owned `beforeunload` prompt while a save is pending or failed. It is not styled, cannot be re-worded and is the only native prompt; never describe it as app-styled. |
 | **Import error dialog** (TD 9.2) | The dialog style from 8.3, 560 px wide. The issues are a scrollable list (max 50vh) in `--sa-text-xs` with IDs in mono, then "Nothing was saved." in semibold. |
 
@@ -297,8 +300,10 @@ Empty states are text-first and calm, with no illustrations or mascots.
 
 - **Header:** a sticky bar at the top of the panel with the type icon and mono type label (or "RELATIONSHIP", "GROUP", "ARCHITECTURE", "SELECTION"), then the element name in `--sa-text-lg` on the next line. For a component, the icon and label use the component's effective palette ink (`data-palette`), so they match the node.
 - **Sections** (`<details>`): the summary row is 36 px tall on `--sa-color-surface-sunken`, `--sa-text-sm` semibold, with a chevron that rotates on open and a 1 px `--sa-color-border` below. The section body has 16 px padding and 16 px gaps between fields.
-- **Appearance** (component inspectors, UI v2): a collapsible section (open by default) after the type-specific fields and before Relationships. It holds a `<fieldset>` "Color" with 17 native radios: a full-width "Type default" row (28 px swatch with the type fill and ink ring + visible text) and a 4 × 4 grid of 28 px swatches (8 px gaps; each swatch sets `data-palette`, so it shows the same fill and ink the node will use: fill, 2 px ink ring, 6 px radius; checked = 16 px check glyph + 2 px text-color outer ring; hover = 1 px `--sa-color-border-strong` ring; focus = the standard ring outermost), each with a hidden label and `title` of its name. A caption "Color: {name}" (or "Color: Type default") shows the value as text. Changes apply immediately (one undo entry each, labelled "Change color"). Relationship inspectors get a read-only **Ports** row and a secondary "Reset ports to automatic" button (only while a pin exists).
+- **Appearance** (single-component inspectors, UI v2): a collapsible section (open by default) after the type-specific fields and before Relationships. It holds a `<fieldset>` "Color" with 17 native radios: a full-width "Type default" row (28 px swatch with the type fill and ink ring + visible text) and a 4 × 4 grid of 28 px swatches (8 px gaps; each swatch sets `data-palette`, so it shows the same fill and ink the node will use: fill, 2 px ink ring, 6 px radius; checked = 16 px check glyph + 2 px text-color outer ring; hover = 1 px `--sa-color-border-strong` ring; focus = the standard ring outermost), each with a hidden label and `title` of its name. A caption "Color: {name}" (or "Color: Type default") shows the value as text. Changes apply immediately (one undo entry each, labelled "Change color"). Relationship inspectors get a read-only **Ports** row and a secondary "Reset ports to automatic" button (only while a pin exists).
 - **Footer actions** (Connect…, Duplicate, Delete): a row of secondary buttons at the end of the scroll content. Delete uses the destructive *outline* variant there; the solid destructive fill is reserved for confirmation dialogs.
+
+**Multi-selection Color (shipped roadmap v2).** When any components are selected, a Color section follows Selection. A shared color setting (including Type default across mixed component types) checks one radio; differing settings leave all radios unchecked and show "Color: Mixed ({k} colors)". Swatches in use show a corner mark and accessible usage text; Type default is neutral for mixed component types. Color changes apply to selected components only, in one command and one history entry, and announce the selected component count and chosen color. The caption and accessible usage text communicate state independently of color.
 
 ### 8.2 Fields
 
@@ -336,6 +341,12 @@ All buttons use `--sa-text-sm` semibold labels, `--sa-radius-sm` and `--sa-contr
 - **No browser-native dialogs or notifications:** confirmations are `ConfirmDialog`/`Dialog` and notices are toasts; `window.alert`/`confirm`/`prompt` and `Notification` are lint errors. The browser's `beforeunload` prompt is the one exception (7.4).
 - **Relationship type picker** (TD 6.3): a popover, not a modal. 280 px wide, `--sa-shadow-popover`, `--sa-radius-md`. Each option is two lines: the display name (`--sa-text-sm` semibold) and the "reads as" hint (`--sa-text-xs` muted). The active option uses accent-soft plus a 2 px accent left bar. Shares Context With shows a small "↔ undirected" tag in mono muted, so the direction rule is visible before it is chosen.
 
+### 8.5 Roadmap v2 surfaces (as shipped)
+
+- **Quick Find:** modal, width `min(520px, calc(100vw - 32px))`; search field, polite result count, scrollable list (max 360 px/50 vh), text-marked matches and an accent-soft active option with a left bar. It is text search only. The chosen result is explicitly revealed and focused; this user action is the only automatic pan.
+- **Arrange:** keyboard-operable toolbar menu using the existing menu/focus pattern; its actions are neutral chrome, and the note states positions only. Tidy's Undo toast follows the same entry-bound feedback rule as deletion and restore.
+- **Versions:** modal width `min(560px, calc(100vw - 32px))`; Save version now and status above a newest-first list with date, kind, counts, optional Current badge, and Restore. Empty/loading/error/low-storage/damaged states use text and icons. The restore confirmation uses the standard busy-capable `ConfirmDialog`. The Current badge reflects snapshot-fingerprint equality with the live editor diagram, not a persisted-record/full-key comparison. The empty state is covered in RTL; the axe E2E suite scans the populated list, not the empty state.
+
 ---
 
 ## 9. Keyboard, focus and contrast guidance
@@ -354,6 +365,7 @@ A single focus style used everywhere through `:focus-visible`: `outline: 2px sol
 - Tab order is toolbar → palette → canvas → inspector (TD 12). Panels have visible landmarks only through their headings; do not add extra focus stops.
 - Palette items are real buttons with icon plus name (`--sa-text-sm`). Each one is focusable and activates on Enter or Space (click-to-add).
 - Shortcut hints appear in tooltips and in the type picker footer ("↑↓ to choose, Enter to add, Esc to cancel") in `--sa-text-2xs` mono.
+- Quick Find opens with `Mod+K` (even in editable focus) or `/` outside editable focus. The Find control advertises `Mod+K` in its tooltip; `/` is a contextual shortcut.
 - Collapsed panels keep their toggle focusable and show `aria-expanded`.
 
 ### 9.3 Contrast and non-color rules (acceptance checklist)
@@ -374,7 +386,7 @@ A single focus style used everywhere through `:focus-visible`: `outline: 2px sol
 
 ```
 ┌──────────────────────────── Toolbar 48px (surface, bottom hairline) ───────────────────────────┐
-│ ‹ Library │ Name ▢ │ ✓ Saved     ↶ ↷ │ − + ⤢           Group Ungroup Connect… Delete │ Export ▾ Import │
+│ ‹ Library │ Name ▢ │ ✓ Saved │ ↶ ↷ − + ⤢ Find │ Group Ungroup Connect… Delete Arrange Versions Export ▾ Import │
 ├──────────┬─────────────────────────────────────────────────────────────────────┬───────────────┤
 │ Palette  │                                                                     │ Inspector     │
 │ 216px    │                     CANVAS (paper + dot grid)                       │ 340px         │
@@ -449,4 +461,4 @@ Module CSS references tokens only; no raw hex values outside `tokens.css`. The P
 | TD 1 / 14: system fonts, no external resources | 3 |
 | Scenario H: export legibility | 2.1 (canvas token), 6 (SVG labels), 9.1 (hidden in export) |
 
-**Out of scope here (deliberately not added):** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts, an icon library, and new screens. The Notes Markdown preview (8.2) is already included; this handoff specifies its visual treatment only.
+**Original handoff non-goals:** dark theme, per-relationship-type edge colors, animated edges, illustrations, custom fonts and an icon library remain out of scope. Quick Find, Arrange and Versions were added by roadmap v2 and their shipped visual treatment is specified in §8.5. The Notes Markdown preview (8.2) was already included.

@@ -1,7 +1,7 @@
 # Swarm Architecturer — Technical Design (MVP)
 
-**Status:** Implementation-ready design for the MVP.
-**Authority:** `PRODUCT_CONCEPT_V1.1.md` (the "product spec") is authoritative. Where this document adds a rule the spec leaves open, it is marked **[Design decision]** and applies to every implementation agent.
+**Status:** MVP implementation design, now supplemented by the shipped roadmap v2 contract below. The implementation plan in §17 is historical and complete.
+**Authority:** `PRODUCT_CONCEPT_V1.1.md` (the "product spec") is authoritative for product meaning. The roadmap v2 as-built sections below supersede conflicting pre-build details. Where this document adds a rule the spec leaves open, it is marked **[Design decision]**.
 **Scope guard:** No backend, no accounts or authentication, no AI/LLM calls, no collaboration, no runtime, workflow engine, executable conditions or state machine. The app is a static, local-first web app.
 **Date of research:** 2026-10-21.
 **UI v2 update:** Sections 3.1, 3.5, 3.6, 3.7, 5.1, 6.1, 6.3, 6.4, 7.1, 7.3, 10, 12 and 15.3 describe the "ported canvas" as built (`UI_V2_DESIGN.md`): per-type silhouettes, component accent, port pins on relationships, curved edges, schema version 2. **Release note:** schema v2 is *rollback-incompatible* (not destructive): a build that only knows v1 rejects v2 files and shows v2 IndexedDB records as damaged; no data is deleted and everything opens again after rolling forward. **UI v2 refinement (2026-10-21):** curves carry a minimum bow and tangent-aligned arrowheads, edge labels are placed clear of nodes (callout fallback), and the PNG margin is exact (§6.4, §10, §17.5). Render-only: the schema stays v2 and the saved JSON is unchanged.
@@ -32,6 +32,19 @@
 | 17 | Phased plan, parallel workstreams, file ownership and commits |
 | 18 | Traceability: M1–M9 and Scenarios A–J |
 | 19 | Verified facts vs. assumptions |
+
+### 0.1 Roadmap v2 as-built contract (2026-10-23)
+
+This document retains its original MVP design. The following implementation facts supersede incompatible details elsewhere in the pre-build text; the fuller rationale and acceptance record are in `ROADMAP_V2_DESIGN.md` §0.1. The tool remains strictly non-executable: it does not run, simulate or infer architecture behavior.
+
+- **History and feedback:** history entries have session-local IDs. `EditorState.historyHeadId`, successful `dispatch(...).entryId` and `undoEntry(id)` support entry-bound Undo. Delete, Tidy layout and restore use this toast; a later history entry dismisses it. Action toasts are 10 s and pause on hover/focus; plain toasts remain 5 s. Action toasts are dismissed with their editor session.
+- **Quick Find and view movement:** `Mod+K` (including editable focus) and `/` (outside editable focus) search text only. Choosing a component selects, explicitly reveals/centers, focuses and announces it. This is the sole automatic-pan exception; inspector selection still does not pan, and reveal never zooms out.
+- **Color and Arrange:** multi-selection Color supports an explicit mixed state, applies one command to selected components, and announces the selected count and chosen color. Arrange aligns, distributes and tidies geometry only; it never reads relationships. Only a truly empty selection makes Tidy use whole-diagram scope.
+- **Versions:** IndexedDB v2 adds `snapshots` and its architecture/date index without rewriting the `architectures` store; `ArchitectureFile` remains schema v2. Snapshot dedup compares fingerprint and full diagram key; caps are 30 automatic (90-day automatic age pruning), 20 manual and 10 recovery. Automatic capture skips when estimated quota use is over 80%. Import/duplicate do not copy snapshots; JSON export excludes browser-local versions; architecture deletion removes snapshots atomically. The Current badge compares a snapshot fingerprint with the live editor diagram fingerprint, not with a persisted record/full key.
+- **Capture/restore limits:** `open`, eligible 10-minute changed-content intervals, manual save, pre-restore and teardown leave are the capture triggers. Manual and pre-restore flush; a leave capture is attempted after flush, but teardown is fire-and-forget and unload cannot guarantee it. Toolbar import's first flush failure does not block import, so do not promise a successful pre-import capture. Automatic snapshot errors are console-logged, not shown in the Versions dialog; manual failures are inline. Restore requires its initial flush and recovery capture, changes only diagram arrays, clears selection and fits the view, then waits for the final save. If that save fails the in-memory restore remains, the dialog closes with an explicit unsaved warning and the recovery snapshot is retained.
+- **Quality:** axe is installed with an empty exclusion list and scans selected UI states only; this is not a complete WCAG audit or manual certification. The empty Versions state is RTL-only because the editor's opening capture makes it unavailable in a normal E2E session. Playwright runs the full suite in Chromium and `@smoke` only in Firefox/WebKit. PNG smoke assertions in all engines check signature and dimensions; the Chromium Scenario H check is pixel-statistical and has no golden image.
+
+**Coordinator-reported release gates (2026-10-23; not rerun for this documentation update):** `npm test -- --maxWorkers=1` 757/757; `node --test scripts/check-bundle.test.mjs` 8/8; typecheck, lint, build and `check:bundle` passed. Initial JS gzip 107.88 KiB, largest JS chunk 213.63 KiB, zero size warnings. `CI=1 npm run e2e` passed 74/74 across Chromium full-suite and Firefox/WebKit smoke. These results were supplied by the coordinator and are not a claim of validation by this stage.
 
 ---
 
@@ -488,7 +501,7 @@ export function applyCommand(a: Architecture, c: Command): CommandResult; // pur
 Snapshot-based undo over immutable domain states. Structural sharing makes snapshots cheap at "dozens of components" scale. Operations are domain commands, so undo is independent of the canvas library (spec 13).
 
 ```ts
-interface HistoryEntry { before: Architecture; after: Architecture; coalesceKey?: string; label: string }
+interface HistoryEntry { id: number; before: Architecture; after: Architecture; coalesceKey?: string; label: string }
 interface History { past: HistoryEntry[]; future: HistoryEntry[]; openCoalesceKey?: string }
 
 push(h, entry): History    // clears future; merges into top entry when entry.coalesceKey === h.openCoalesceKey
@@ -498,7 +511,8 @@ breakCoalescing(h): History
 ```
 
 - Cap: 200 entries (oldest dropped).
-- **Coalescing:** inspector text inputs dispatch on every keystroke with `coalesceKey = "${entityId}:${field}"`. Consecutive dispatches with the same key merge into one entry (keep the first `before`, update `after`). Coalescing is broken by: field blur, any command with a different key, selection change, undo/redo.
+- IDs are assigned by the store, unique within the editor session, and survive undo/redo. History is still never persisted.
+- **Coalescing:** inspector text inputs dispatch on every keystroke with `coalesceKey = "${entityId}:${field}"`. Consecutive dispatches with the same key merge into one entry (keep the first `before`, update `after`, retain the entry ID). Coalescing is broken by: field blur, any command with a different key, selection change, undo/redo.
 - Arrow-key nudges use `coalesceKey = "nudge:" + sortedIds.join(",")` so holding an arrow is one step.
 - History starts empty when an architecture is opened and is never persisted (spec M2).
 
@@ -516,10 +530,11 @@ export interface EditorState {
   canRedo: boolean;
   revision: number;          // increments on every architecture change (content or viewport)
   contentRevision: number;   // increments on content changes only
+  historyHeadId: number | null; // id of the top undo entry
 }
 
 export type DispatchResult =
-  | { ok: true; summary?: CommandResult["summary"] }
+  | { ok: true; summary?: CommandResult["summary"]; entryId?: number }
   | { ok: false; error: DomainError };
 
 export interface EditorStore {
@@ -527,6 +542,7 @@ export interface EditorStore {
   subscribe(listener: () => void): () => void;
   dispatch(cmd: Command, opts?: { coalesceKey?: string; label?: string }): DispatchResult;
   undo(): void;
+  undoEntry(entryId: number): boolean;              // only if entryId is still the undo head
   redo(): void;
   breakCoalescing(): void;
   setSelection(sel: Selection): void;              // prunes unknown IDs; breaks coalescing
@@ -541,7 +557,8 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 - After every architecture change (including undo/redo), selection is pruned to existing IDs.
 - `context.tsx`: `EditorProvider`, `useEditorStore()`, `useEditorState<T>(selector, isEqual?)` via `useSyncExternalStore`.
 - `actions.ts` (UI-agnostic helpers used by canvas, inspector, toolbar and shortcuts so behavior is identical everywhere):
-  - `deleteSelection(store)` → dispatches `deleteElements`, then shows a toast "Deleted 1 component and 3 relationships." with an **Undo** button and announces it via the live region (spec 8.3 "the user sees it happen"). UI routes never call it directly: they go through the confirmation below, which calls it unchanged after Confirm.
+  - `deleteSelection(store)` → dispatches `deleteElements`, then shows an entry-bound, editor-session-scoped Undo toast and announces it. UI routes go through the confirmation below, which calls it after Confirm.
+  - `showEntryUndoToast(store, feedback, entryId, message)` is also used by Arrange Tidy and version restore. It closes when the entry is no longer the undo head. Action toasts last 10 s and pause while hovered/focused; plain toasts last 5 s. Leaving the editor dismisses its pending action toasts.
   - Confirmation helpers (pure): `deletionTargets(selection, intent)` (`"delete"` = the whole selection, `"ungroup"` = only the selected groups), `previewDeletion(architecture, ids)` (runs `applyCommand` with the same `deleteElements` command without dispatching, so the counts equal the real summary, cascaded relationships included; `null` when nothing would be deleted or the command is rejected) and `deletionConfirmCopy(preview, intent)` (title, description and confirm label, 11.3).
   - `duplicateSelection(store)`, `groupSelection(store)` (name "Group", "Group 2", …; selects the new group), `ungroupSelection(store)` (6.5), `nudgeSelection(store, dx, dy)`.
 
@@ -574,7 +591,7 @@ export function createEditorStore(initial: Architecture, now?: () => string): Ed
 | `proOptions` | not set (attribution visible) | 2.3. |
 | Children | `<Background/>`, `<MiniMap/>` (optional, hidden < 900px width) | Zoom buttons live in the toolbar, not in `<Controls/>`. |
 
-`canvasApi.ts` exposes, via a React context set by `CanvasView`, `{ zoomIn, zoomOut, fitView, screenToFlowPosition, getViewportElement(): HTMLElement | null, getNodesBounds(): Rect, getDiagramBounds(): Rect }` so the toolbar, palette and PNG export never import React Flow directly. `getDiagramBounds()` (UI v2) is the union of the node bounds and, for every relationship, the bounds of its cubic (four control points, terminal rings, arrow tip) plus an estimated label plate (10).
+`canvasApi.ts` exposes, via a React context set by `CanvasView`, `{ zoomIn, zoomOut, fitView, screenToFlowPosition, getViewportElement(): HTMLElement | null, getNodesBounds(): Rect, getDiagramBounds(): Rect, revealComponent(id): Promise<boolean> }` so the toolbar, palette, Quick Find and PNG export never import React Flow directly. `getDiagramBounds()` (UI v2) is the union of the node bounds and, for every relationship, the bounds of its cubic (four control points, terminal rings, arrow tip) plus an estimated label plate (10). `revealComponent` is the sole automatic-pan exception, used only by explicit Quick Find: it centers the component, zooms to `max(current, 1)` clamped to `[0.2, 2]`, respects reduced motion and stores the settled viewport.
 
 ### 6.2 Projection (`canvas/projection.ts`, pure, unit-tested)
 
@@ -687,7 +704,7 @@ Resize: `NodeResizer` on selected component nodes (`minWidth/minHeight` = MIN_SI
 - Click selects one; `Mod`+click toggles; `Shift`+drag box-selects; click on empty pane clears.
 - Selection is not undoable (M2).
 - Inspector rules: nothing → Architecture inspector; exactly one element → its inspector; more → Multi-selection inspector.
-- Selecting from the inspector (relationship list, group member list) calls `store.setSelection` and the canvas reflects it. No automatic panning. **[Design decision]**
+- Selecting from the inspector (relationship list, group member list) calls `store.setSelection` and the canvas reflects it without panning. **[Design decision]** Quick Find is the sole exception: its explicit choose action selects, reveals/centers and focuses the component.
 
 ### 6.7 Keyboard shortcuts (`app/shortcuts.ts`, single `keydown` listener on the editor screen)
 
@@ -705,6 +722,16 @@ Resize: `NodeResizer` on selected component nodes (`minWidth/minHeight` = MIN_SI
 | Arrow keys / `Shift`+Arrow | Nudge selected components and groups by 8 / 40 px (`moveElements`, coalesced) | Focus on the canvas, not editable. |
 | `Tab` / `Shift+Tab` | React Flow focus traversal; Enter/Space selects focused node/edge | Canvas. |
 | `Mod+=` / `Mod+-` / `Shift+1` | Zoom in / out / fit | Not in editable focus. |
+| `Mod+K` | Open Quick Find | Even in editable focus; ignored while a dialog is open or IME composition is active. |
+| `/` | Open Quick Find | Outside editable focus; ignored while a dialog is open or IME composition is active. |
+
+---
+
+### 6.8 Quick Find and Arrange (roadmap v2)
+
+**Quick Find** is a modal, text-only component search (name first, then type/group labels); ranking never reads relationships or geometry. Choosing a result closes the dialog, selects it, calls `revealComponent`, focuses the node and announces the selection. Search does not imply graph ordering or execution. See `ROADMAP_V2_DESIGN.md` §3 for ranking and keyboard interaction details.
+
+**Arrange** accepts only `components`, `groups` and selection geometry. Align/Distribute act on selected geometric units; Tidy acts on selected units except that a truly empty selection uses whole-diagram scope. Relationship IDs do not count as units; a relationship-only selection remains selection-scoped. The operations dispatch the existing `moveElements` command and do not inspect or change relationships, direction, pins, IDs or membership. Tidy uses geometric packing, not a graph layout. See `ROADMAP_V2_DESIGN.md` §5.
 
 ---
 
@@ -723,7 +750,7 @@ All inputs have visible `<label>`s. Text edits dispatch on change with a coalesc
 | | Group (`Group.memberComponentIds`) | select: "None" + groups by name → `assignToGroup` |
 | **Responsibilities** | Responsibilities (`behavior.responsibilities`), Boundaries (`behavior.boundaries`) | `ListField`: textarea, one item per line; committed as trimmed non-empty lines |
 | **Behavior** | Activation, Behavioral Rules (`rules`, ListField), Delegation, Outputs, Failure Handling | textareas |
-| **Appearance** (UI v2) | Color (`accent`) | `AccentPicker`: `<fieldset>` with legend "Color" and 17 native radios ("Type default" + the 16 accents in `ACCENT_IDS` order, accessible names = display names) and a text caption "Color: {name}" / "Color: Type default". Each swatch sets `data-palette` to the entry the node would use (`type-*` for "Type default"), so swatch and node share one CSS source. A change dispatches `setComponentAccent` immediately (one undo entry per change; nothing is announced beyond the radio). Placed after the type-specific fields and before Relationships, **open by default** (as built). Present for every component type; not in the group, relationship, architecture or multi-selection inspectors. |
+| **Appearance** (UI v2) | Color (`accent`) | `AccentPicker`: `<fieldset>` with legend "Color" and 17 native radios ("Type default" + the 16 accents in `ACCENT_IDS` order, accessible names = display names) and a text caption "Color: {name}" / "Color: Type default". Each swatch sets `data-palette` to the entry the node would use (`type-*` for "Type default"), so swatch and node share one CSS source. A change dispatches `setComponentAccent` immediately (one undo entry per change). Placed after the type-specific fields and before Relationships, **open by default**. |
 | **Relationships** | read-only `RelationshipList` (7.4) | — |
 | **Documentation** | Notes (`notes`, Markdown source), External links (`links`) | `NotesField`: textarea (monospace hint "Markdown") with an Edit/Preview toggle (two `aria-pressed` buttons; Preview renders `ui/MarkdownPreview`, see 14); `LinksField` rows of label + URL with add/remove buttons |
 | Footer actions | Connect…, Duplicate, Delete | buttons → `actions.*` |
@@ -766,6 +793,7 @@ Name (required), Description, Notes (`NotesField` with Edit/Preview, as in 7.1);
 
 - Architecture: Name (renames; not undoable), Description (not undoable), counts of components/relationships/groups, a short hint on adding components.
 - Multi-selection: "{n} components, {m} relationships, {k} groups selected"; actions: Group selected components (enabled if ≥1 component), Remove from groups, Duplicate (components only), Delete.
+- **Multi-selection Color (roadmap v2):** shown when at least one component is selected; applies only to selected component IDs even when groups/relationships are also selected. Uniform color settings (including Type default across mixed component types) check the matching radio; differing settings, with Type default counted as a value, leave all radios unchecked and use an accessible text caption plus per-swatch "used by m of n" marks. For mixed component types the Type default swatch is neutral. A color choice dispatches one `setComponentAccent` command and creates one history entry; it also announces the selected component count and chosen color. Groups and relationships have no color.
 
 ---
 
@@ -784,9 +812,10 @@ IndexedDB wins on capacity, async writes and transactions. `localStorage` is use
 
 ### 8.2 Schema
 
-- Database `swarm-architecturer`, version `1`.
-- Object store `architectures`, `keyPath: "architecture.id"`, value = canonical `ArchitectureFile` (3.7). The stored format equals the export format, so there is exactly one serialization path.
-- No indexes; the library uses `getAll()` and sorts in memory (fine at the expected scale).
+- Database `swarm-architecturer`, version `2` (database version, distinct from `ArchitectureFile.schemaVersion: 2`).
+- `architectures`, `keyPath: "architecture.id"`, stores canonical `ArchitectureFile`; `snapshots`, `keyPath: "id"`, stores browser-local versions with `byArchitectureCreated: [architectureId, createdAt]` index.
+- The v1→v2 database upgrade adds only the snapshots store/index; it does not read, rewrite or delete architecture records. The independent lazy schema migration in `repository.ts` remains unchanged. Architecture JSON export/import remains the architecture format only; snapshots do not travel with it.
+- A blocked upgrade shows “Finishing an update. Close or reload other Swarm Architecturer tabs to continue.” and resumes automatically when the old connection closes; it is not a storage-unavailable error. A connection blocking a future upgrade closes and the app asks the user to reload to keep saving. `terminated` is also reported by the database status callback. Rollback builds must retain database version 2: v1-only code cannot open the upgraded DB, even though no architecture data was deleted.
 
 ### 8.3 Repository API (`repository.ts`)
 
@@ -827,7 +856,7 @@ export function startAutosave(store: EditorStore, repo: Repository): SaveControl
 - Subscribes to `revision`. On change: status `pending`; debounce 400 ms, max wait 2 s; then `saving` → `repo.put(toArchitectureFile(state.architecture))` → `saved`, or `error` with a message (quota, storage unavailable, `E_STORAGE_INVARIANT`).
 - Only one write in flight; changes during a write schedule one follow-up write with the latest state.
 - After `error`, the next change retries automatically; the toolbar also offers **Retry**.
-- `flush()` is awaited before leaving the editor (Library button, opening an import).
+- Leaving via the Library button waits for `flush()` and stays in the editor on failure. The editor Import handler awaits `flush().catch(() => false)` but ignores the result and proceeds, including when the flush promise rejects; do not infer a guaranteed leave snapshot on import.
 - Toolbar labels: `saved` → "Saved", `pending`/`saving` → "Saving…", `error` → "Save failed" + Retry (spec 18).
 
 ### 8.5 Unload guard and storage durability
@@ -842,6 +871,14 @@ export function startAutosave(store: EditorStore, repo: Repository): SaveControl
 - Editor posts `{type: "opened", id, tabId}` on open; another tab that has the same architecture open answers `{type: "also-open", id}`; both show a non-blocking banner: "This architecture is also open in another tab. Edits in one tab can overwrite edits in the other."
 - Repository writes post `{type: "changed", id}`; an open library screen reloads its list.
 - Last write wins. No merging. **[Design decision]**
+
+### 8.7 Local versions and restore (roadmap v2)
+
+`snapshotScheduler.ts` captures the persisted architecture record, never unsaved editor state. `open` attempts a capture at session start; `interval` is eligible only on a saved transition with changed content and at least 10 minutes since the previous successful capture (viewport-only changes do not qualify). `manual` and `pre-restore` flush before capture. `leave` runs during asynchronous editor teardown, flushes before capturing, and its result is not awaited by route navigation; browser unload cannot guarantee async capture. Fingerprint matches are confirmed against the full canonical diagram key (`components`, `relationships`, `groups`) before deduplication. Deduplication does not prune; a new distinct record is added before per-class caps and 90-day automatic pruning run in the same transaction.
+
+Automatic captures are skipped when the browser reports usage above 80% of quota. Automatic failures are logged to the console and do not affect autosave or appear in the Versions dialog. Manual capture failures appear inline. The dialog's empty state is tested in RTL, not E2E; the axe E2E suite scans the populated list, not the empty state. The **Current** badge is based on equality of the snapshot fingerprint and a fingerprint of the live in-memory diagram; it is not a persisted-record comparison or a full-key comparison.
+
+Restore sequence: await initial save flush → require a successful `pre-restore` snapshot (an unchanged existing snapshot is success) → load/validate target → dispatch `restoreDiagram` for diagram arrays only, preserving architecture metadata and canvas → clear selection and `fitView()` → await final flush. The confirmation remains busy through the final flush. If the final flush fails, the diagram stays restored in memory, an explicit unsaved warning replaces success feedback, and the recovery version protects the prior diagram. Earlier-step failures leave the diagram unchanged. Action Undo is bound to the restore's history entry. Architecture deletion removes its snapshots and record in one transaction; importing or duplicating a new architecture creates no copied snapshots.
 
 ---
 
@@ -871,7 +908,7 @@ Steps (spec 12.5):
 5. Set `updatedAt = now`; keep `createdAt`.
 6. `repo.put(file)`; return `{ok:true}`. The caller opens the new architecture (route `#/a/<id>`) with empty history.
 
-Entry points: library "Import JSON" button and editor toolbar "Import" (flushes the current save, then imports; never replaces the open architecture). UI uses `<input type="file" accept=".json,application/json">`.
+Entry points: library "Import JSON" button and editor toolbar "Import" (the toolbar attempts to flush first, but a `false` result or rejected flush promise does not block import; import never replaces the open architecture). UI uses `<input type="file" accept=".json,application/json">`.
 
 Error UI: an `ImportErrorDialog` (`<dialog>`) titled "This file can't be imported", listing issues (max 20, see 3.5) and "Nothing was saved." Import is not undoable.
 
@@ -942,7 +979,7 @@ Failure → toast "Image export failed. Try zooming out or reducing the diagram 
 
 Layout: toolbar (top, `<header>`), palette (left, `<aside aria-label="Component library">`, collapsible), canvas (`<main>`), inspector (right, `<aside aria-label="Inspector">`, collapsible). Collapse buttons use `aria-expanded`; state remembered in `localStorage`.
 
-Lifecycle: `repo.get(id)` → if ok, `createEditorStore(file.architecture)` → `startAutosave` → `tabSync.open(id)` → render. On leave: `await saveController.flush()`, dispose.
+Lifecycle: `repo.get(id)` → if ok, `createEditorStore(file.architecture)` → `startAutosave` → `tabSync.open(id)` → asynchronously open the snapshot store/start its scheduler → render. Editor teardown attempts a `leave` capture, which flushes before capturing; teardown does not await that capture. The Library-button handler separately awaits flush and stays put on failure. The toolbar-import handler attempts a flush but does not block import on failure (8.7, 9.2).
 
 **Delete confirmation.** Every UI route that dispatches `deleteElements` goes through one `requestDelete(store, intent)` and one app-styled `ConfirmDialog`: Delete and Backspace, toolbar Delete, the component, relationship, multi-selection and group ("Delete group (keeps members)") inspector Delete buttons, and toolbar Ungroup / `Mod+Shift+G` when groups are selected. An empty selection (or a preview that deletes nothing) opens no dialog; Ungroup with only components selected stays an immediate `assignToGroup`. Copy from `deletionConfirmCopy`:
 
@@ -957,9 +994,9 @@ Cancel (button, Escape) dispatches nothing, shows no toast or announcement and r
 ### 11.4 Toolbar (`toolbar/`)
 
 Left: "Library" back button; architecture name (inline-editable text input → `renameArchitecture` on blur/Enter; Escape reverts); `SaveStatusIndicator` (`role="status"`).
-Center: Undo, Redo (disabled per `canUndo/canRedo`), Zoom out, Zoom in, Fit.
-Right: Group, Ungroup, Connect…, Delete (enabled per selection), **Export ▾** (JSON, Markdown, PNG), **Import**.
-All icon buttons have `aria-label` and a tooltip with the shortcut.
+Center: Undo, Redo (disabled per `canUndo/canRedo`), Zoom out, Zoom in, Fit, **Find**.
+Right: Group, Ungroup, Connect…, Delete (enabled per selection), **Arrange** menu, **Versions**, **Export ▾** (JSON, Markdown, PNG), **Import**.
+`ToolButton` controls have accessible names and tooltips; shortcut text appears only where a shortcut is defined. Arrange is a separately labelled, keyboard-operable menu.
 
 ---
 
@@ -970,14 +1007,16 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 - **Forms:** every control has a `<label>`; errors use `aria-invalid` + `aria-describedby`.
 - **Dialogs:** native `<dialog>` with `showModal()` (built-in focus containment and Escape); focus returns to the opener on close. `ConfirmDialog` (`ui/ConfirmDialog.tsx`, used by every editor and library delete) focuses Cancel on open, cancels on Escape, ignores backdrop clicks, exposes its consequence text via `aria-describedby`, cannot be dismissed or confirmed twice while busy, and shows failures inline (`role="alert"`). Focus after close is set by the caller (11.2, 11.3) and never falls to `<body>`.
 - **No browser-native dialogs or notifications:** app code never calls `window.alert`, `confirm` or `prompt` or uses the `Notification` API; ESLint enforces it (`no-alert`, `no-restricted-globals` / `no-restricted-properties` for `Notification`). Confirmations are `ConfirmDialog`/`Dialog`, notices are `Toast` plus `LiveRegion`. The `beforeunload` prompt is browser-owned and outside this rule (8.5).
-- **Live announcements:** one polite `LiveRegion` (`ui/LiveRegion.tsx`) for deletions, undo/redo ("Undid: Delete component"), save failures, import results.
-- **Canvas:** nodes and edges focusable; node `aria-label` = "{Type}: {name}. {description}"; edge `aria-label` = `describeRelationship`; `ariaLabelConfig` overrides React Flow's default help text to mention our shortcuts. Arrow-key nudge and Connect dialog give keyboard-only paths for move and connect.
-- **Not color alone:** each component type differs by silhouette **and** icon **and** type text (Agent/Orchestrator rounded rectangle, Tool chamfered octagon, Memory cylinder, External System dashed hatched parallelogram, Decision hexagon); the Orchestrator differs from the Agent by a solid header band + hub icon + "ORCHESTRATOR" label (a marker, not a shape); undirected edges are dashed and have no arrowheads. The selected color (fill and ink) carries no meaning: it is not announced, not in aria-labels and not in Markdown export, and it never changes a type's silhouette, details, dash, icon or label. The color picker is a native radio group with text names and a visible text caption.
+- **Live announcements:** one polite `LiveRegion` (`ui/LiveRegion.tsx`) for deletions, undo/redo ("Undid: Delete component"), save failures, import results, Quick Find selection, Arrange feedback, multi-selection color changes and version restore.
+- **Canvas:** nodes and edges focusable; node `aria-label` = "{Type}: {name}. {description}"; edge `aria-label` = `describeRelationship`; `ariaLabelConfig` overrides React Flow's default help text to mention our shortcuts. Arrow-key nudge and Connect dialog give keyboard-only paths for move and connect. Quick Find has `Mod+K` (including editable focus) and `/` (non-editable focus); its explicit reveal pans to the chosen node. Inspector selection does not pan.
+- **Multi-color:** the multi-selection Color group has an accessible text mixed-state caption and usage text when no native radio is checked; changing color is one command. The visual swatches do not carry the only state cue.
+- **Not color alone:** each component type differs by silhouette **and** icon **and** type text (Agent/Orchestrator rounded rectangle, Tool chamfered octagon, Memory cylinder, External System dashed hatched parallelogram, Decision hexagon); the Orchestrator differs from the Agent by a solid header band + hub icon + "ORCHESTRATOR" label (a marker, not a shape); undirected edges are dashed and have no arrowheads. Color carries no architectural meaning and never changes a type's silhouette, details, dash, icon or label. It is omitted from component aria-labels and Markdown export. The single-component picker does not separately announce changes; multi-selection color changes announce the selected component count and chosen color. The picker is a native radio group with text names and a visible text caption.
 - **Ports:** not keyboard tab stops; the Connect dialog (automatic ports) is the keyboard path for every relationship the pointer can make. Node and edge aria-labels contain no color or port wording.
 - **Selection:** a 2 px outline that follows the silhouette, inflated 4 px, plus an 8 px halo, with ≥ 3:1 contrast against the canvas; the keyboard focus ring stays on the rectangular node wrapper, distinct from selection.
 - **Contrast:** text ≥ 4.5:1; tokens validated by design agents.
 - **Motion:** no animations needed; port fade-in uses `--sa-duration-fast`, which is 0 under `prefers-reduced-motion`.
 - **Panels:** logical Tab order toolbar → palette → canvas → inspector; panel landmarks labelled.
+- **Automated scans are scoped evidence only:** `@axe-core/playwright` runs WCAG 2.0/2.1/2.2 A/AA tagged rules on selected E2E states with an empty `e2e/axe-exclusions.ts`. Covered states include the library and selected dialogs, empty editor, inspector selections, relationship/group/Connect states, delete/ungroup confirmations and toast, plus Quick Find results/no results, Arrange menu, Versions list/restore confirmation and mixed Color. The empty Versions state is RTL-only because opening a session attempts a capture. Axe scans are not a full WCAG audit or manual certification.
 
 ---
 
@@ -985,7 +1024,7 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 
 | Situation | Detection | User-facing behavior | Data effect |
 |---|---|---|---|
-| IndexedDB unavailable (blocked, disabled) | `openRepository` throws | Full-page message: "Swarm Architecturer can't store data in this browser (storage is blocked or unavailable). Check privacy settings or try another browser." | none |
+| IndexedDB unavailable (privacy/access denied, disabled) | `openRepository` throws | Full-page message: "Swarm Architecturer can't store data in this browser (storage is blocked or unavailable). Check privacy settings or try another browser." A version-upgrade wait is separate (§8.2), not this failure. | none |
 | Save failed (quota, transaction error) | `repo.put` rejects | Toolbar "Save failed" + Retry; live announcement; unload guard active | Last good record kept; in-memory state intact |
 | Pre-save validation failed (bug) | `validateArchitecture` issues | "Save failed" with `E_STORAGE_INVARIANT` message; console error with issues | Invalid state never written |
 | Stored record damaged / newer version | `repo.list/get` → `damaged` | Library row "Can't be opened" + Export raw / Delete | unchanged |
@@ -1042,9 +1081,13 @@ Targets: spec section 18 (labelled forms, legible text and contrast, clear selec
 | `ui/ConfirmDialog` | title and description, Cancel focused first, Cancel/Enter/Escape cancel, backdrop ignored, busy blocks dismissal and confirm, inline error |
 | `editor/actions`, `app` integration | `previewDeletion` counts equal the dispatched summary; confirmation copy; every editor delete route opens the dialog and dispatches nothing until confirmed; Cancel changes nothing and restores focus; Confirm deletes once, then shows the Undo toast and announcement; ungroup confirmation |
 
-### 15.3 End-to-end (Playwright, Chromium required; Firefox and WebKit run in CI if available)
+### 15.3 End-to-end (Playwright: Chromium full suite; Firefox/WebKit smoke only)
+
+The configured Playwright projects run all specs in Chromium and only `@smoke`-tagged specs in Firefox and WebKit. This is not full-suite cross-browser parity. Firefox/WebKit smoke PNG checks assert a valid PNG signature and non-zero dimensions; Chromium Scenario H adds size bounds and pixel-statistical framing checks without a golden-image baseline. Do not infer image fidelity or pixel equivalence in the other engines from those checks.
 
 One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plus `e2e/ui-v2.spec.ts` (UI v2: port-to-port and port-to-body connections, automatic re-routing, undirected geometry independent of stored order, reset ports, color persistence/undo/duplicate/round trip, every color driving body fill and logo on a Tool, a selected color winning on every type with PNG export, schema v1 → v2 import, PNG bounds for a bulging curve, and the UI v2 refinement checks E1–E4: curve bow, label clearance and PNG margins at 48 CSS px and at the 4096 px cap), fixtures in `e2e/fixtures/` (spec 12.4 example file; invalid files: dangling relationship, duplicate membership, unsupported version, malformed JSON; a performance fixture with 100 components, 150 relationships, 10 groups).
+
+Roadmap v2 E2E coverage also includes Quick Find, Arrange, versions/restore, a v1 DB upgrade, entry-bound Undo and smoke coverage. See `ROADMAP_V2_DESIGN.md` §0.1 for coordinator-reported gate counts; those gate results are not a claim that every proposed test table in this historical design ran.
 
 - **H (PNG):** export, read the downloaded file, assert PNG signature, dimensions and a clean frame (no content cropped at the edge), no selection-colored pixels, and the presence of both terminal rings and the arrowhead in the DOM before export. There is no stored image baseline: the check is pixel-statistical against the v2 canvas background `#F7F6F3`. Set `SA_E2E_PNG_DIR=<dir>` to also write the exported PNGs for human review.
 - **Delete confirmation:** `a11y-keyboard` (Delete opens the dialog with Cancel focused; Escape keeps the node and returns focus to it; Backspace, Tab, Enter deletes, focus stays in the canvas and the toast's Undo restores), `scenario-i` (toolbar Delete: Cancel keeps everything and refocuses the button, then Delete deletes) and `scenario-e` (group delete confirms first).
@@ -1054,6 +1097,10 @@ One spec file per scenario `e2e/scenario-a.spec.ts` … `scenario-j.spec.ts` plu
 ### 15.4 Build output
 
 `vite build` → static `dist/` deployable to any static host. No server code, no environment variables, no secrets.
+
+The editor route and default editor modules load lazily; the library's initial graph excludes canvas/editor code and `@xyflow`. PNG export dynamically imports `html-to-image`; Markdown preview stays lazy. Rolldown shares React, Flow and Markdown vendor chunks. A failed editor chunk load shows an error boundary with Reload, not a blank screen.
+
+`npm run check:bundle` checks the emitted manifest's module identities and static-import graph, every JS chunk against 500 KiB, and the initial gzip budget of 120,538 bytes (109,580-byte measured baseline plus 10%, below the 156 KiB hard cap). The Vite chunk warning limit is not raised. The gate also rejects inline scripts and unexpected dynamic-code construction. Zod is configured with `z.config({ jitless: true })` before schema construction; the audit permits only its identified, disabled Function capability probe, not arbitrary `eval`/Function use. Same-origin lazy chunks retain `script-src 'self'`; smoke tests listen for CSP violations. Current measured release results are in §0.1.
 
 ---
 
@@ -1078,9 +1125,11 @@ Approve the runtime dependency `react-markdown@^10.1.0` for the Notes preview; t
 
 ---
 
-## 17. Implementation plan
+## 17. Historical implementation plan (completed; retained for provenance)
 
-The project is a Git repository (branch `sa-canvas-v2`, branched from `main`). The commit guidance below applies to it. §17.5 lists the commit sequence, including the UI v2 refinement commits.
+This staged ownership and commit plan predates the current shipped tree. Its branch name, stage assignments, file reservations and proposed commits are historical, not instructions for current work. The current release evidence is recorded in §0.1.
+
+At the time this plan was written, the project branch was `sa-canvas-v2`, branched from `main`. The commit guidance below and §17.5's commit sequence (including the UI v2 refinement commits) are historical provenance only.
 
 ### 17.1 Stages and product phases
 

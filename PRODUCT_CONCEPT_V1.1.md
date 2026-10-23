@@ -1,6 +1,6 @@
 # Swarm Architecturer — Product Concept v1.1
 
-**Status:** Revised concept (v1.1). This document makes small revisions to the v1.0 concept. It adds the audit fixes and does not change the product's scope.
+**Status:** Original revised product concept (v1.1), retained as the product-meaning baseline. The shipped roadmap v2 product additions and current wire-format clarification are recorded below; see `TECHNICAL_DESIGN.md` and `ROADMAP_V2_DESIGN.md` for implementation contracts.
 
 ## Changes in v1.1
 
@@ -19,6 +19,19 @@ The changes below make v1.0 clearer. They add no new scope.
 | Undo/redo | The operations that undo/redo covers are now listed (Section 9, M2). |
 | Acceptance | Scenario J now means "no required external services". A lightweight, qualitative product-hypothesis check (Scenario K) has been added. It is not a release gate. |
 | Phases | The delivery phases are mapped to the MVP requirements M1–M9. The MVP is complete only when M1–M9 are implemented, Scenarios A–J pass and the quality requirements are met. Scenario K is recorded separately to inform post-MVP planning. |
+
+## Shipped roadmap v2 product additions (2026-10-23)
+
+These are shipped capabilities layered onto the v1.1 concept, not changes to the product's meaning. **Swarm Architecturer remains a local-first documentation tool, not an execution, simulation, workflow or runtime product.** Relationships remain semantic documentation and are never interpreted by Find or Arrange as execution/data flow.
+
+| Capability | Current product behavior |
+|---|---|
+| Quick Find | Text-only search of component names, types and groups. A user-directed choice selects, reveals/centers and focuses that component. Inspector selection itself does not pan. |
+| Arrange | Align, distribute and tidy are geometry-only; relationships, direction, pins, IDs and group membership are unchanged. Only a truly empty selection makes Tidy operate over the whole diagram. |
+| Color | Components can be colored individually or by multi-selection. Differing color settings are explicitly shown as mixed; one choice applies to the selected components as a single undoable action. Color is visual decoration, not architecture semantics. |
+| Versions | Browser-local diagram snapshots provide automatic, manual and pre-restore recovery points, bounded retention, and an undoable restore that keeps architecture metadata. Snapshots are not copied by import/duplicate and are not in JSON export; this is basic local version history, not collaborative or portable version control. |
+
+For capture timing, quota behavior, failure cases and the exact restore contract, see `ROADMAP_V2_DESIGN.md` §0.1 and `TECHNICAL_DESIGN.md` §8.7. The earlier delivery-phase table below is a historical MVP plan; these additions do not turn the architecture tool into an executable system.
 
 ---
 
@@ -331,6 +344,7 @@ Principles:
 - zoom in, zoom out and fit to content,
 - export (JSON and image),
 - import (creates a new architecture; it never replaces the open one),
+- Quick Find, Arrange and Versions,
 - basic actions (for example delete selection, group or ungroup).
 
 ### 8.2 Primary user journey
@@ -365,6 +379,8 @@ Interactions must be predictable:
   - creating, deleting and retyping relationships, and, for Generic relationships only, switching between directed and undirected and reversing them;
   - creating, renaming, moving and deleting groups, and adding, removing or reassigning group members;
   - duplicating a component.
+  - aligning, distributing and tidying selected geometry (Arrange), with one undo step per changed operation;
+  - restoring a saved version's diagram arrays, as one undoable command.
 - **Not covered:**
   - selection changes,
   - zoom and pan,
@@ -395,6 +411,7 @@ Interactions must be predictable:
 
 - Saving is automatic and local to the browser. No account is needed.
 - Saved data covers component positions and properties, relationships, groups and their membership, and, where practical, view state such as the viewport.
+- Shipped roadmap v2 also stores bounded diagram snapshots locally in a separate IndexedDB store; restore preserves architecture metadata, and snapshots remain browser-local and outside JSON import/export (see the addendum above).
 
 **M8 — Import and export.**
 
@@ -415,8 +432,8 @@ These are candidates for later versions. They are **not** part of the MVP.
 - **Templates:** supervisor/worker, hierarchical, research swarm, planner/executor, sequential delegation, shared memory.
 - **Richer metadata:** input/output contracts, model provider, permissions, retry policies, human approval points, error escalation, prompt references, constraints.
 - **Markdown:** import, linking, export and automatically generated documentation. There is no initial sync.
-- **Navigation and views:** search, focus, filtering, collapsing and multiple views.
-- **Cloud, accounts, collaboration and history:** only after the product has been validated.
+- **Navigation and views:** broader filtering, collapsing and multiple views. Basic component text search/reveal is shipped as Quick Find.
+- **Cloud, accounts, collaboration and shared/advanced history:** only after the product has been validated. Basic browser-local snapshots and diagram restore are shipped; they are not collaborative, portable or a complex version-control system.
 - **Framework integrations** (for example LangGraph, CrewAI, AutoGen or custom frameworks). These cover import and export of architecture descriptions only. They do not imply runtime execution, monitoring or code generation.
 
 ## 11. Non-Goals
@@ -447,7 +464,7 @@ The domain model does **not depend on the canvas library**. Canvas-specific stat
 
 ```ts
 interface ArchitectureFile {
-  schemaVersion: 1;                 // file format version (independent of this concept's v1.1)
+  schemaVersion: 2;                 // current file format (independent of this concept's v1.1)
   architecture: Architecture;
 }
 
@@ -479,6 +496,7 @@ interface Component {
   links?: { label?: string; url: string }[];
   position: { x: number; y: number };
   size?: { width: number; height: number };   // only where resizing applies
+  accent?: string;                  // implementation schema v2: optional fixed component-color ID
   properties?: Record<string, string>;        // type-specific optional fields (Section 6)
   behavior?: AgentBehavior;                   // only for type === "agent" (incl. orchestrator)
 }
@@ -561,13 +579,13 @@ Validation runs on import and before saving. The following are rejected or preve
 
 ### 12.3 Versioning
 
-`schemaVersion` versions the file format, starting at `1`. It is separate from the version of this document. Future format changes increase `schemaVersion` and ship with migrations for older versions.
+`schemaVersion` versions the file format, independently from this concept's v1.1 label. The shipped wire-format schema is v2; v2 adds the optional component `accent` color ID. Version 1 files import through a lossless migration to v2. IndexedDB database version 2 is separate again: it adds a snapshots store and does not rewrite architecture records during the DB upgrade. Future format changes require migrations.
 
 ### 12.4 JSON example
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "architecture": {
     "id": "arch_lhe",
     "name": "Lead Hunting Engine",
