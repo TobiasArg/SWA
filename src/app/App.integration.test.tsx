@@ -249,7 +249,7 @@ describe("editor delete confirmation", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(ids(store.getState().architecture.components)).toEqual(["cmp_b", "cmp_c"]);
     expect(ids(store.getState().architecture.relationships)).toEqual(["rel_bc"]);
-    const message = "Deleted 1 component and 3 relationships.";
+    const message = "Deleted Alpha and 3 relationships.";
     expect(await screen.findAllByText(message)).toHaveLength(2); // toast + live region
     // The inspector that opened the dialog is gone; focus is on the canvas, not <body>.
     expect(canvas()).toHaveFocus();

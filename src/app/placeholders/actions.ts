@@ -13,9 +13,13 @@ export function deletionMessage(summary: {
   deletedComponents: number;
   deletedRelationships: number;
   deletedGroups: number;
-}): string {
+}, singleComponentName?: string): string {
   const parts = [
-    summary.deletedComponents ? count(summary.deletedComponents, "component") : "",
+    summary.deletedComponents
+      ? summary.deletedComponents === 1 && singleComponentName
+        ? singleComponentName
+        : count(summary.deletedComponents, "component")
+      : "",
     summary.deletedRelationships ? count(summary.deletedRelationships, "relationship") : "",
     summary.deletedGroups ? count(summary.deletedGroups, "group") : "",
   ].filter(Boolean);
@@ -36,8 +40,12 @@ function reportFailure(result: ReturnType<EditorStore["dispatch"]>, feedback?: A
 
 export const placeholderActions: EditorActions = {
   deleteSelection(store, feedback) {
-    const { selection } = store.getState();
+    const { architecture, selection } = store.getState();
     if (!selection.componentIds.length && !selection.relationshipIds.length && !selection.groupIds.length) return;
+    const singleComponentName =
+      selection.componentIds.length === 1
+        ? architecture.components.find((component) => component.id === selection.componentIds[0])?.name
+        : undefined;
     const result = store.dispatch({ kind: "deleteElements", ...selection }, { label: "Delete" });
     if (!reportFailure(result, feedback) || !result.ok) return;
     const message = deletionMessage(
@@ -46,6 +54,7 @@ export const placeholderActions: EditorActions = {
         deletedRelationships: selection.relationshipIds.length,
         deletedGroups: selection.groupIds.length,
       },
+      singleComponentName,
     );
     if (result.entryId !== undefined) showEntryUndoToast(store, feedback, result.entryId, message);
     feedback.announce(message);

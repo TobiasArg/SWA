@@ -79,7 +79,8 @@ export function Toast({ message, action, durationMs, onDismiss }: ToastProps) {
       {action ? (
         <Button
           className="sa-toast__action"
-          variant="ghost"
+          variant="primary"
+          size="compact"
           onClick={() => {
             action.onClick();
             onDismiss();

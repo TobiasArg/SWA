@@ -74,9 +74,18 @@ function deletionList(summary: DeletionSummary): string {
   return parts.join(" and ");
 }
 
-function deletionMessage(summary: DeletionSummary): string {
-  const list = deletionList(summary);
-  return list ? `Deleted ${list}.` : "";
+function deletionToastMessage(summary: DeletionSummary, singleComponentName?: string): string {
+  const parts: string[] = [];
+  if (summary.deletedComponents > 0) {
+    parts.push(
+      summary.deletedComponents === 1 && singleComponentName
+        ? singleComponentName
+        : pluralized(summary.deletedComponents, "component"),
+    );
+  }
+  if (summary.deletedRelationships > 0) parts.push(pluralized(summary.deletedRelationships, "relationship"));
+  if (summary.deletedGroups > 0) parts.push(pluralized(summary.deletedGroups, "group"));
+  return parts.length ? `Deleted ${parts.join(" and ")}.` : "";
 }
 
 /** "delete" removes the selection; "ungroup" removes only the selected groups (members stay). */
@@ -150,7 +159,11 @@ export function deletionConfirmCopy(preview: DeletionPreview, intent: DeletionIn
 }
 
 export function deleteSelection(store: EditorStore, feedback: ActionFeedback): DispatchResult {
-  const selection = store.getState().selection;
+  const { architecture, selection } = store.getState();
+  const singleComponentName =
+    selection.componentIds.length === 1
+      ? architecture.components.find((component) => component.id === selection.componentIds[0])?.name
+      : undefined;
   const result = store.dispatch({
     kind: "deleteElements",
     componentIds: selection.componentIds,
@@ -159,7 +172,7 @@ export function deleteSelection(store: EditorStore, feedback: ActionFeedback): D
   });
   if (!result.ok || !result.summary) return result;
 
-  const message = deletionMessage(result.summary);
+  const message = deletionToastMessage(result.summary, singleComponentName);
   if (!message || result.entryId === undefined) return result;
   showEntryUndoToast(store, feedback, result.entryId, message);
   feedback.announce(message);

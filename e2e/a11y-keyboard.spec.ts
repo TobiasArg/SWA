@@ -93,7 +93,7 @@ test("keyboard walkthrough — tab order, focus ring, Connect, Escape and histor
   await expect(confirm).toBeHidden();
   await expect(source).toHaveCount(0);
   const toast = page.locator(".sa-toast");
-  await expect(toast).toContainText("Deleted 1 component and 1 relationship.");
+  await expect(toast).toContainText("Deleted Keyboard Source and 1 relationship.");
   expect(await page.evaluate(() => Boolean(document.activeElement?.closest("[data-sa-canvas]")))).toBe(true);
 
   const toastUndo = toast.getByRole("button", { name: "Undo", exact: true });

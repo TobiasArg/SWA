@@ -192,7 +192,7 @@ describe("App shell", () => {
     expect(screen.getByRole("button", { name: /Discovery Agent/ })).toBeInTheDocument();
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(await screen.findAllByText("Deleted 1 component.")).toHaveLength(2); // toast + live region
+    expect(await screen.findAllByText("Deleted Discovery Agent.")).toHaveLength(2); // toast + live region
     const toast = document.querySelector<HTMLElement>(".sa-toast")!;
     expect(within(toast).getByRole("button", { name: "Undo" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Discovery Agent/ })).not.toBeInTheDocument();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "./store";
+import { DomainError } from "../domain/commands";
 import {
   ENTRY_UNDO_TOAST_MS,
   STALE_UNDO_MESSAGE,
@@ -58,7 +59,7 @@ describe("UI-agnostic editor actions", () => {
     const { showToast, announce } = feedback;
 
     const result = deleteSelection(store, feedback);
-    const message = "Deleted 1 component and 2 relationships.";
+    const message = "Deleted A and 2 relationships.";
     expect(result.ok).toBe(true);
     expect(store.getState().architecture.components.map((item) => item.id)).toEqual(["cmp_b"]);
     expect(store.getState().architecture.relationships).toEqual([]);
@@ -84,6 +85,54 @@ describe("UI-agnostic editor actions", () => {
     deleteSelection(store, feedback);
     expect(feedback.showToast).not.toHaveBeenCalled();
     expect(feedback.announce).not.toHaveBeenCalled();
+  });
+
+  it("does not show deletion feedback when dispatch rejects the delete", () => {
+    const store = createEditorStore(architecture(), () => "edit");
+    store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+    vi.spyOn(store, "dispatch").mockReturnValue({
+      ok: false,
+      error: new DomainError("E_DELETE_REJECTED", "Delete rejected."),
+    });
+    const feedback = createFeedback();
+
+    deleteSelection(store, feedback);
+
+    expect(feedback.showToast).not.toHaveBeenCalled();
+    expect(feedback.announce).not.toHaveBeenCalled();
+  });
+
+  it("uses the component name for one deletion and keeps counts for multiple components", () => {
+    const store = createEditorStore(architecture(), () => "edit");
+    const feedback = createFeedback();
+
+    store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+    deleteSelection(store, feedback);
+    expect(feedback.showToast.mock.calls[0]?.[0]).toBe("Deleted A and 2 relationships.");
+
+    store.setSelection({ componentIds: ["cmp_b"], relationshipIds: [], groupIds: [] });
+    deleteSelection(store, feedback);
+    expect(feedback.showToast.mock.calls[1]?.[0]).toBe("Deleted B.");
+
+    const multiStore = createEditorStore(architecture(), () => "edit");
+    multiStore.setSelection({ componentIds: ["cmp_a", "cmp_b"], relationshipIds: [], groupIds: [] });
+    deleteSelection(multiStore, feedback);
+    expect(feedback.showToast.mock.calls[2]?.[0]).toBe("Deleted 2 components and 2 relationships.");
+  });
+
+  it("uses the latest renamed component name as a plain string in deletion feedback", () => {
+    const store = createEditorStore(architecture(), () => "edit");
+    store.setSelection({ componentIds: ["cmp_a"], relationshipIds: [], groupIds: [] });
+    const currentName = "Renamed <img src=x onerror=alert(1)>";
+    store.dispatch({ kind: "updateComponent", id: "cmp_a", patch: { name: currentName } });
+    const feedback = createFeedback();
+
+    deleteSelection(store, feedback);
+
+    const message = feedback.showToast.mock.calls[0]?.[0];
+    expect(typeof message).toBe("string");
+    expect(message).toBe(`Deleted ${currentName} and 2 relationships.`);
+    expect(feedback.announce).toHaveBeenCalledWith(`Deleted ${currentName} and 2 relationships.`);
   });
 
   describe("deletion Undo toast bound to its history entry", () => {
