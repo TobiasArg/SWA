@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { addComponent, createArchitecture, waitForSaved } from "./helpers";
 
 test("Scenario F — restore local content and viewport in a fresh browser context", async ({ page, browser }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario F — Local restore");
   await addComponent(page, "Agent", "Persistent Agent");
   await addComponent(page, "Tool", "Persistent Tool");
@@ -17,7 +17,7 @@ test("Scenario F — restore local content and viewport in a fresh browser conte
 
   try {
     const restoredPage = await freshContext.newPage();
-    await restoredPage.goto(`/${route}`);
+    await restoredPage.goto(`/app/${route}`);
     await expect(restoredPage.getByRole("textbox", { name: "Architecture name" })).toHaveValue(
       "Scenario F — Local restore",
     );

@@ -11,7 +11,7 @@ import {
 } from "./helpers";
 
 test("Scenario G — JSON round-trip preserves content and invalid imports save nothing", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario G — Round trip");
   await addComponent(page, "Agent", "Source Agent");
   await addComponent(page, "Memory / Data Store", "Shared Store");

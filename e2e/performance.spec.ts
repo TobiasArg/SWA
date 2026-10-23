@@ -3,7 +3,7 @@ import { performanceFixture } from "./fixtures/performanceFixture";
 import { componentNodeByName, importJson } from "./helpers";
 
 test("performance — selection under 100 ms, group drag frames ≤ 32 ms, zoom and pan respond", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await page.getByRole("button", { name: "Import JSON" }).click();
   await importJson(page, "performance-fixture.json", JSON.stringify(performanceFixture));
   await expect(page.getByRole("textbox", { name: "Architecture name" })).toHaveValue(

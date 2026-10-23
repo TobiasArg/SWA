@@ -112,7 +112,7 @@ test("an old tab blocks the upgrade with a message, and opening resumes when it 
     DATABASE,
   );
 
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await expect(page.getByText(BLOCKED)).toBeVisible();
   await expect(page.getByText("Storage is unavailable")).toHaveCount(0);
 

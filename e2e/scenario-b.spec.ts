@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { addComponent, createArchitecture } from "./helpers";
 
 test("Scenario B — add specialized node types and distinguish an Orchestrator", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario B — Node types");
 
   const orchestrator = await addComponent(page, "Orchestrator", "Coordinator");

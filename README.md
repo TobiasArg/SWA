@@ -118,7 +118,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. No environment file, account, or API key is required.
+Open the local URL printed by Vite: the landing page is served at `/` and the editor at `/app/`. No environment file, account, or API key is required.
 
 ### Build and preview
 
@@ -127,7 +127,7 @@ npm run build
 npm run preview
 ```
 
-The production output is a static `dist/` directory. Deploy it to any static host at the site root (the default Vite configuration); there is no application server.
+The production output is a static `dist/` directory. Deploy it to any static host at the site root (the default Vite configuration); the landing page is served at `/` and the editor at `/app/`. There is no application server.
 
 ## Checks
 

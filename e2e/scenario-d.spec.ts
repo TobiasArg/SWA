@@ -7,7 +7,7 @@ import {
 } from "./helpers";
 
 test("Scenario D — typed relationships have correct direction and are discoverable in the inspector", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario D — Relationships");
   await addComponent(page, "Orchestrator", "Coordinator");
   await addComponent(page, "Agent", "Research Agent");

@@ -11,7 +11,7 @@ import {
 } from "./helpers";
 
 test("Scenario H — PNG export includes a grouped diagram and its SVG relationship label", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario H — PNG export");
   await addComponent(page, "Orchestrator", "Coordinator");
   await addComponent(page, "Agent", "Worker Agent");

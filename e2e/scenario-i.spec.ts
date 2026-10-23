@@ -10,7 +10,7 @@ import {
 } from "./helpers";
 
 test("Scenario I — deleting a component cascades and undo/redo restores the complete state", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario I — Undo and redo");
   await addComponent(page, "Agent", "Source Agent");
   await addComponent(page, "Memory / Data Store", "Lead Store");

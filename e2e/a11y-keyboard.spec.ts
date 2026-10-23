@@ -8,7 +8,7 @@ import {
 } from "./helpers";
 
 test("keyboard walkthrough — tab order, focus ring, Connect, Escape and history", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Keyboard walkthrough");
   await addComponent(page, "Agent", "Keyboard Source");
   await addComponent(page, "Tool", "Keyboard Target");

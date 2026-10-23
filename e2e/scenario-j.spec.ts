@@ -20,7 +20,7 @@ test("Scenario J — the core workflow makes no requests outside the local app",
     await route.abort();
   });
 
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario J — Offline workflow");
   await addComponent(page, "Orchestrator", "Offline Coordinator");
   await addComponent(page, "Agent", "Offline Agent");

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { addComponent, createArchitecture, waitForSaved } from "./helpers";
 
 test("Scenario C — edit all Agent behavior fields and restore them after reload", async ({ page }) => {
-  await page.goto("/#/");
+  await page.goto("/app/#/");
   await createArchitecture(page, "Scenario C — Behavior");
   await addComponent(page, "Agent", "Discovery Agent");
 

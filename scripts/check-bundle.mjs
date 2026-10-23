@@ -168,8 +168,37 @@ function main() {
     process.exit(1);
   }
 
-  const entries = Object.entries(manifest).filter(([, chunk]) => chunk.isEntry && isJavaScript(chunk.file ?? ""));
-  failIf(entries.length === 0, "No JavaScript entry was found in the Vite manifest.", errors);
+  const allEntries = Object.entries(manifest).filter(([, chunk]) => chunk.isEntry && isJavaScript(chunk.file ?? ""));
+  // Two HTML entries: the static landing page (index.html) and the editor app (app/index.html).
+  // The gzip budget and forbidden-module rules apply to the editor app's initial graph;
+  // the landing entry is audited separately below.
+  const entries = allEntries.filter(([key, chunk]) => (chunk.src ?? key).replaceAll("\\", "/").startsWith("app/"));
+  const landingEntries = allEntries.filter(([key, chunk]) => (chunk.src ?? key).replaceAll("\\", "/") === "index.html");
+  failIf(entries.length === 0, "No JavaScript entry for app/index.html was found in the Vite manifest.", errors);
+  failIf(landingEntries.length === 0, "No JavaScript entry for the landing index.html was found in the Vite manifest.", errors);
+  // The landing's static graph may share tiny helpers (e.g. the modulepreload polyfill) but must
+  // never reach React or editor code, whether in its own chunk or any statically imported one.
+  const landingForbidden = /(?:^|\/)node_modules\/(?:react|react-dom|scheduler)\/|(?:^|\/)src\/(?:app|canvas|editor|inspector|palette)\//;
+  const landingSeen = new Set();
+  function auditLanding(key, entryKey) {
+    if (landingSeen.has(key)) return;
+    landingSeen.add(key);
+    const chunk = manifest[key];
+    if (!chunk) {
+      errors.push(`Landing entry ${entryKey} references missing static import key ${key}.`);
+      return;
+    }
+    for (const moduleId of chunk.moduleIds ?? []) {
+      failIf(
+        landingForbidden.test(moduleId.replaceAll("\\", "/")),
+        `Landing entry ${entryKey} includes app/React module ${moduleId} (via ${key}).`,
+        errors,
+      );
+    }
+    failIf(/vendor/.test(chunk.file ?? ""), `Landing entry ${entryKey} statically imports vendor chunk ${chunk.file}.`, errors);
+    for (const importedKey of chunk.imports ?? []) auditLanding(importedKey, entryKey);
+  }
+  for (const [key] of landingEntries) auditLanding(key, key);
 
   const initialKeys = new Set();
   function visitStaticImports(key) {
@@ -298,10 +327,18 @@ function main() {
   const viteConfig = readFileSync(join(root, "vite.config.ts"), "utf8");
   failIf(/\bchunkSizeWarningLimit\b/.test(viteConfig), "vite.config.ts must not override chunkSizeWarningLimit.", errors);
 
-  const indexHtml = readFileSync(join(dist, "index.html"), "utf8");
-  for (const match of indexHtml.matchAll(/<script\b([^>]*)>/gi)) {
-    if (!/\bsrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i.test(match[1] ?? "")) {
-      errors.push("Built index.html contains an inline script, which violates the production CSP.");
+  for (const htmlFile of ["index.html", join("app", "index.html")]) {
+    let html;
+    try {
+      html = readFileSync(join(dist, htmlFile), "utf8");
+    } catch (error) {
+      errors.push(`Cannot read built ${htmlFile} (${error.message}).`);
+      continue;
+    }
+    for (const match of html.matchAll(/<script\b([^>]*)>/gi)) {
+      if (!/\bsrc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i.test(match[1] ?? "")) {
+        errors.push(`Built ${htmlFile} contains an inline script, which violates the production CSP.`);
+      }
     }
   }
 
