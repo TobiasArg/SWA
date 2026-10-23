@@ -8,6 +8,11 @@ import {
   type ValidationResult,
 } from "./issues";
 
+// Configure before constructing objects: Zod's default constructor probes new Function,
+// which reports a CSP violation even if caught. App module bodies run only after
+// their imported dependencies, so configuring there is too late for these schemas.
+z.config({ jitless: true });
+
 export const MAX_COMPONENTS = 1_000;
 export const MAX_RELATIONSHIPS = 3_000;
 export const MAX_GROUPS = 200;
