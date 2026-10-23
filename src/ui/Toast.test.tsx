@@ -39,6 +39,30 @@ describe("ToastProvider and useToast", () => {
     expect(onUndo).toHaveBeenCalledOnce();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
+
+  it("keeps the controller identity stable and does not rerender consumers when toasts change", async () => {
+    const user = userEvent.setup();
+    const controllers: ToastController[] = [];
+    function Consumer() {
+      const controller = useToast();
+      controllers.push(controller);
+      return <ToastTrigger onUndo={() => undefined} />;
+    }
+    render(
+      <ToastProvider>
+        <Consumer />
+      </ToastProvider>,
+    );
+    const renders = controllers.length;
+
+    await user.click(screen.getByRole("button", { name: "Delete component" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Component deleted.");
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    expect(controllers).toHaveLength(renders);
+    expect(new Set(controllers).size).toBe(1);
+  });
 });
 
 describe("toast timing", () => {

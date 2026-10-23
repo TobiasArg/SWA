@@ -1,4 +1,4 @@
-import { lazy } from "react";
+import { lazy, useMemo } from "react";
 import type { Repository } from "../persistence/types";
 import type { AppServices, EditorModules } from "./services";
 
@@ -51,7 +51,12 @@ const DefaultEditorScreen = lazy(async () => {
   ]);
   return {
     default: function DefaultEditor(props: EditorRouteProps) {
-      const services = props.injectedServices ?? ({ ...props.libraryServices, ...defaultEditorServices } as AppServices);
+      const { injectedServices, libraryServices } = props;
+      // A new services object would make EditorScreen recreate its store and session.
+      const services = useMemo(
+        () => injectedServices ?? ({ ...libraryServices, ...defaultEditorServices } as AppServices),
+        [injectedServices, libraryServices],
+      );
       return (
         <EditorScreen
           id={props.id}

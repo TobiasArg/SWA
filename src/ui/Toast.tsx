@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 
 export interface ToastAction {
@@ -130,8 +130,11 @@ export function ToastProvider({ children }: ToastProviderProps) {
     [dismissToast],
   );
 
+  // A stable value keeps consumers (such as the editor route) from rerendering on every toast change.
+  const controller = useMemo<ToastController>(() => ({ showToast, dismissToast }), [dismissToast, showToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast, dismissToast }}>
+    <ToastContext.Provider value={controller}>
       {children}
       <div className="sa-toast-region" aria-relevant="additions text">
         {toasts.map(({ id, ...toast }) => (
