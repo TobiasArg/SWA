@@ -254,3 +254,49 @@
     transition-delay: 0ms;
   }
 }
+
+/* Arrange menu (roadmap v2 §5.4): icon items with hints, separators and the positions-only note */
+.sa-arrange {
+  width: 272px;
+}
+
+.sa-arrange__items {
+  display: grid;
+}
+
+.sa-arrange__items:focus {
+  outline: none;
+}
+
+.sa-menu__separator {
+  height: var(--sa-stroke-thin);
+  margin: var(--sa-space-2) var(--sa-space-3);
+  background: var(--sa-color-border);
+}
+
+.sa-menu__item.sa-arrange__item {
+  grid-template-columns: 16px 1fr;
+  column-gap: var(--sa-space-3);
+  align-items: center;
+}
+
+.sa-arrange__glyph {
+  grid-row: 1 / span 2;
+  color: var(--sa-color-text-muted);
+}
+
+.sa-arrange__item:disabled .sa-arrange__glyph {
+  color: var(--sa-color-text-disabled);
+}
+
+.sa-arrange__hint {
+  grid-column: 2;
+}
+
+.sa-arrange__note {
+  margin: var(--sa-space-2) 0 0;
+  padding: var(--sa-space-3) var(--sa-space-3) var(--sa-space-2);
+  border-top: var(--sa-stroke-thin) solid var(--sa-color-border);
+  color: var(--sa-color-text-muted);
+  font: var(--sa-text-xs);
+}
