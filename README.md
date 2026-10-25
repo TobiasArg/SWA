@@ -91,16 +91,31 @@ Notes support Markdown with an Edit/Preview toggle. User links are shown as link
 
 ## How your data works
 
-Architectures are stored in **IndexedDB** for the current browser origin. Autosave writes changes locally. There is no account system or application backend, and no analytics, telemetry, external fonts, or runtime AI calls. The production build is static and can be served from any static host.
+Swarm Architecturer is built around **self-contained, export-first use**. Each browser is its own workspace: you open the app, model an architecture, and take it with you as a file. There is no server copy, account, or sync behind it.
 
-> **Browser storage is not a backup.** Clearing site data, resetting the browser, using a different browser profile or origin, or browser storage eviction can erase your architectures and local versions. Export JSON regularly and keep the file somewhere safe.
+### Where your work is stored
 
-A few practical consequences:
+Your architectures are saved **only in your browser's local storage** (IndexedDB, part of the browser's site data, for the address you opened). Autosave writes every change there. Nothing is uploaded: the site only delivers the app's static files, and there are no analytics, telemetry, external fonts, or runtime AI calls.
+
+That means your work lives in **that browser, that profile, and that address**. Opening the app in another browser, another device, a private window, or a different address (for example a local `npm run dev` copy) starts with an empty library.
+
+### To avoid losing your work
+
+> [!IMPORTANT]
+> **Your browser is not a backup.** Your architectures disappear if the browser's site data is cleared. This can happen when you clear browsing data such as "cookies and site data" or cache, reset the browser, or remove the profile. Browsers can also free up storage on their own; Safari, for example, removes data for sites you have not visited in about 7 days, unless the site is added to the Home Screen.
+
+- **Export JSON regularly** and keep the file somewhere safe (a project folder, a repository, cloud storage). JSON is the only format that restores a full architecture.
+- **Don't clear this site's browsing data** while you have unexported work.
+- **Export before switching** browsers, devices, or addresses, then import the JSON on the other side.
+
+### Other consequences
 
 - **JSON is the portable source of truth.** It can restore an architecture on another device or browser. Markdown and PNG are for reading and sharing, not round-tripping.
-- **Versions stay local.** Automatic, manual, and pre-restore snapshots are not included in JSON export and are not copied to imported or duplicated architectures.
+- **Versions stay local.** Automatic, manual, and pre-restore snapshots live in the same browser storage. They are not included in JSON export and are not copied to imported or duplicated architectures.
 - **There is no real-time sync or cloud collaboration.** Two tabs can open the same architecture, but the app warns you; writes are last-write-wins, with no merge.
 - **Sharing is asynchronous.** Send JSON when someone needs to edit, or Markdown/PNG when someone needs to review.
+
+The production build is static and can be served from any static host.
 
 ## Use it online
 
@@ -109,7 +124,7 @@ The hosted version runs entirely in your browser — nothing to install, no sign
 - **Editor:** [swarm-architecturer.vercel.app/app/](https://swarm-architecturer.vercel.app/app/)
 - **Website:** [swarm-architecturer.vercel.app](https://swarm-architecturer.vercel.app)
 
-Your architectures are saved in that browser for that address only. They are not shared with a local `npm run dev` copy or another browser, so export JSON to move work between them.
+Your work is saved only in that browser, for that address. **Export JSON to keep it**, and don't clear the site's browsing data, or your architectures will be lost. See [How your data works](#how-your-data-works).
 
 ## Quickstart
 
