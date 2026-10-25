@@ -15,17 +15,22 @@ test("landing page at / links to the editor @smoke", async ({ page }) => {
   }
 });
 
-test("landing page links an SVG favicon that is served", async ({ page, request }) => {
-  await page.goto("/");
-  const icon = page.locator('head link[rel="icon"]');
-  await expect(icon).toHaveCount(1);
-  await expect(icon).toHaveAttribute("type", "image/svg+xml");
-  const href = await icon.getAttribute("href");
-  expect(href).toBe("/favicon.svg");
-  const response = await request.get(href!);
-  expect(response.ok()).toBe(true);
-  expect(await response.text()).toContain("<svg");
-});
+for (const path of ["/", "/app/"]) {
+  test(`${path} links SVG, ICO and touch icons that are served`, async ({ page, request }) => {
+    await page.goto(path);
+    const svgIcon = page.locator('head link[rel="icon"][type="image/svg+xml"]');
+    await expect(svgIcon).toHaveAttribute("href", "/favicon.svg");
+    await expect(page.locator('head link[rel="icon"][href="/favicon.ico"]')).toHaveCount(1);
+    await expect(page.locator('head link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/apple-touch-icon.png");
+
+    const svg = await request.get("/favicon.svg");
+    expect(svg.ok()).toBe(true);
+    expect(await svg.text()).toContain("<svg");
+    for (const asset of ["/favicon.ico", "/apple-touch-icon.png"]) {
+      expect((await request.get(asset)).ok()).toBe(true);
+    }
+  });
+}
 
 test("landing page has no WCAG A/AA violations", async ({ page }) => {
   await page.goto("/");
