@@ -436,7 +436,7 @@ main:focus {
 /* ---- Hero diagram ---------------------------------------------------------- */
 
 .lp-diagram {
-  max-width: 1020px;
+  max-width: 1026px;
   margin: 56px auto 0;
 }
 
@@ -444,11 +444,6 @@ main:focus {
   .lp-diagram {
     margin-top: 72px;
   }
-}
-
-/* Elevation like a resting node in the editor. */
-.lp-node {
-  filter: drop-shadow(0 1px 1px rgba(31, 29, 26, 0.06)) drop-shadow(0 6px 12px rgba(31, 29, 26, 0.07));
 }
 
 /* Gentle entrance: nodes rise, relationships follow. Off for reduced motion. */
@@ -502,12 +497,35 @@ main:focus {
   }
 }
 
-/* Node colors: the editor's type palette (fill + ink travel together). */
-.lp-node--orchestrator { --lp-ink: var(--sa-type-orchestrator-ink); --lp-fill: var(--sa-type-orchestrator-fill); }
-.lp-node--agent { --lp-ink: var(--sa-type-agent-ink); --lp-fill: var(--sa-type-agent-fill); }
-.lp-node--tool { --lp-ink: var(--sa-type-tool-ink); --lp-fill: var(--sa-type-tool-fill); }
-.lp-node--memory { --lp-ink: var(--sa-type-memory-ink); --lp-fill: var(--sa-type-memory-fill); }
-.lp-node--decision { --lp-ink: var(--sa-type-decision-ink); --lp-fill: var(--sa-type-decision-fill); }
+/* Node colors: the editor's type palette (fill, ink and side face travel together). */
+.lp-node--orchestrator { --lp-ink: var(--sa-type-orchestrator-ink); --lp-fill: var(--sa-type-orchestrator-fill); --lp-depth: var(--sa-type-orchestrator-depth); }
+.lp-node--agent { --lp-ink: var(--sa-type-agent-ink); --lp-fill: var(--sa-type-agent-fill); --lp-depth: var(--sa-type-agent-depth); }
+.lp-node--tool { --lp-ink: var(--sa-type-tool-ink); --lp-fill: var(--sa-type-tool-fill); --lp-depth: var(--sa-type-tool-depth); }
+.lp-node--memory { --lp-ink: var(--sa-type-memory-ink); --lp-fill: var(--sa-type-memory-fill); --lp-depth: var(--sa-type-memory-depth); }
+.lp-node--decision { --lp-ink: var(--sa-type-decision-ink); --lp-fill: var(--sa-type-decision-fill); --lp-depth: var(--sa-type-decision-depth); }
+
+/*
+ * 2.5D volume, as in the editor (src/canvas/canvas.css): a flat contact shadow
+ * (the volume offset 1 px, no blur), then the silhouette swept 4 px right and
+ * 8 px down in the palette's depth tone; the body (top face) covers the rest,
+ * so only the side face shows. Edges meeting a bottom or right side end on the
+ * volume's outer outline.
+ */
+.lp-node__shadow {
+  fill: var(--sa-node-shadow);
+  transform: translate(1px, 1px);
+}
+
+.lp-node__depth {
+  fill: var(--lp-depth);
+  stroke: var(--lp-ink);
+  stroke-linejoin: round;
+  stroke-width: var(--sa-stroke);
+}
+
+.lp-node--orchestrator .lp-node__depth {
+  stroke-width: var(--sa-stroke-strong);
+}
 
 .lp-node__body {
   fill: var(--lp-fill);
@@ -575,6 +593,14 @@ main:focus {
 
 .lp-group__header {
   fill: var(--sa-group-header-fill);
+}
+
+/* Sunken tray: a faint inner shadow on the top and left walls, as in the editor. */
+.lp-group__inset {
+  fill: none;
+  stroke: var(--sa-group-inset);
+  stroke-linecap: round;
+  stroke-width: 3px;
 }
 
 .lp-group__divider {
@@ -1179,6 +1205,7 @@ main:focus {
 
 @media (forced-colors: active) {
   .lp-node__body,
+  .lp-node__depth,
   .lp-node__rim,
   .lp-node__chip,
   .lp-group__outline,
@@ -1194,6 +1221,7 @@ main:focus {
   }
 
   .lp-node__body,
+  .lp-node__depth,
   .lp-node__chip,
   .lp-edge__plate,
   .lp-edge__terminal,
@@ -1228,8 +1256,10 @@ main:focus {
     --lp-logo-x: CanvasText;
   }
 
-  .lp-node {
-    filter: none;
+  /* Flat in system colours: the volume outline stays (edges end on it). */
+  .lp-node__shadow,
+  .lp-group__inset {
+    display: none;
   }
 
   .lp-panel::before {
