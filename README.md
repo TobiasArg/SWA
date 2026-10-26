@@ -128,7 +128,7 @@ Your work is saved only in that browser, for that address. **Export JSON to keep
 
 ## Quickstart
 
-To run it from source instead: Swarm Architecturer is pre-1.0 (`0.0.0`) and has no tagged release yet; these steps run the current source.
+To run it from source instead. The current release is [**v1.0.0**](https://github.com/TobiasArg/SWA/releases/tag/v1.0.0); these steps run the latest source on `main`.
 
 ### Requirements
 
