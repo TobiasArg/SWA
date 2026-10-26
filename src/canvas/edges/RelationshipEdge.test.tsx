@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Component, Relationship } from "../../domain/types";
 import type { LabelPlacement } from "../edgeLabels";
 import type { RelationshipFlowEdge } from "../flowTypes";
+import { DEPTH_DX, DEPTH_DY } from "../shapes";
 import { makeComponent, makeRelationship } from "../testing/fixtures";
 import { EdgeLabelLayoutContext, RelationshipEdge } from "./RelationshipEdge";
 
@@ -86,8 +87,8 @@ describe("RelationshipEdge", () => {
       const s = terminal(container, "source");
       const t = terminal(container, "target");
       expect(s.getAttribute("r")).toBe(t.getAttribute("r"));
-      // Automatic sides: A right (160, 40) -> B left (400, 40).
-      expect([s.getAttribute("cx"), s.getAttribute("cy")]).toEqual(["160", "40"]);
+      // Automatic sides: A right (160 + DEPTH_DX, 40) -> B left (400, 40).
+      expect([s.getAttribute("cx"), s.getAttribute("cy")]).toEqual([String(160 + DEPTH_DX), "40"]);
       expect([t.getAttribute("cx"), t.getAttribute("cy")]).toEqual(["400", "40"]);
       unmount();
     }
@@ -100,7 +101,7 @@ describe("RelationshipEdge", () => {
     expect(terminal(pinned.container, "source")).toHaveAttribute("data-side", "top");
     expect(terminal(pinned.container, "target")).toHaveAttribute("data-side", "bottom");
     expect(terminal(pinned.container, "source").getAttribute("cy")).toBe("0");
-    expect(terminal(pinned.container, "target").getAttribute("cy")).toBe("80");
+    expect(terminal(pinned.container, "target").getAttribute("cy")).toBe(String(80 + DEPTH_DY));
   });
 
   it("re-routes an automatic edge when a node moves (re-render with new rects)", () => {

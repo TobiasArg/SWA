@@ -21,7 +21,7 @@ import {
   type RelationshipLayout,
 } from "./floating";
 import { COMPONENT_NODE_TYPE, GROUP_NODE_TYPE, nodeComponent, type RelationshipEdgeData } from "./flowTypes";
-import { ARROW_HALF_WIDTH, ARROW_LENGTH, shapeKindFor, type ShapeKind } from "./shapes";
+import { ARROW_HALF_WIDTH, ARROW_LENGTH, DEPTH_DX, DEPTH_DY, shapeKindFor, type ShapeKind } from "./shapes";
 
 // ---------------------------------------------------------------------------
 // Constants and types (section 3.2)
@@ -370,14 +370,20 @@ export function labelRequestFor(source: EdgeLabelSource): LabelRequest | null {
 
 /**
  * Lays out every label of a diagram: builds the obstacles of section 3.2
- * (component boxes, group header strips, arrowheads, terminal rings) and the
+ * (component volumes, i.e. boxes extended by the 2.5D depth, group header strips, arrowheads, terminal rings) and the
  * requests, then runs layoutEdgeLabels. Used by the canvas and the export bounds.
  */
 export function layoutDiagramLabels(
   input: DiagramLabelInput,
   measure: MeasureText = measureLabelText,
 ): Map<string, LabelPlacement> {
-  const obstacles: Rect[] = [...input.componentRects];
+  // Component obstacles cover the painted 2.5D volume: the box plus its side face (DEPTH_DX right, DEPTH_DY down).
+  const volumes = input.componentRects.map((rect) => ({
+    ...rect,
+    width: rect.width + DEPTH_DX,
+    height: rect.height + DEPTH_DY,
+  }));
+  const obstacles: Rect[] = [...volumes];
   for (const group of input.groupRects) {
     obstacles.push({ x: group.x, y: group.y, width: group.width, height: Math.min(GROUP_HEADER, group.height) });
   }
@@ -387,7 +393,7 @@ export function layoutDiagramLabels(
     const request = labelRequestFor(edge);
     if (request) requests.push(request);
   }
-  return layoutEdgeLabels(requests, obstacles, measure, input.componentRects);
+  return layoutEdgeLabels(requests, obstacles, measure, volumes);
 }
 
 // ---------------------------------------------------------------------------

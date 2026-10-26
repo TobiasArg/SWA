@@ -153,7 +153,8 @@ function CanvasApiBridge({ children }: PropsWithChildren) {
         const input = diagramLabelInputFromFlow(nodes, flow.getEdges(), (id) => flow.getInternalNode(id));
         const placements = layoutDiagramLabels(input);
         return computeDiagramBounds({
-          nodeRects: [...input.componentRects, ...input.groupRects],
+          nodeRects: input.componentRects,
+          groupRects: input.groupRects,
           edges: input.edges,
           placements: placements.values(),
         });

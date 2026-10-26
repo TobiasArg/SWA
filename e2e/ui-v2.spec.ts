@@ -551,7 +551,8 @@ test.describe("UI v2 refinement — curves and labels (UI_V2_REFINEMENT 3.5)", (
 
 test.describe("UI v2 refinement — PNG margin at the 4096 px cap (UI_V2_REFINEMENT 4.2)", () => {
   test("E4: a 5780 px wide diagram is scaled to 4096 CSS px and keeps 96·s device px of margin", async ({ page }) => {
-    // Two unconnected 220 x 88 agents: B = (-1, -1, 6002, 90), so s = 4096 / 6098 and the image is 8192 x 250 device px.
+    // Two unconnected 220 x 88 agents, each painted with its 2.5D side face (+DEPTH_DX 4 right, +DEPTH_DY 8 down):
+    // B = (-1, -1, 6006, 98), so s = 4096 / 6102, H = ceil(194 * s) = 131 CSS px, and the image is 8192 x 262 device px.
     await openImported(page, "UI v2 margin cap", buildV2File("UI v2 margin cap", [
       { id: "cmp_cap_l", type: "agent", name: "Left Agent", x: 0, y: 0 },
       { id: "cmp_cap_r", type: "agent", name: "Right Agent", x: 5780, y: 0 },
@@ -563,11 +564,11 @@ test.describe("UI v2 refinement — PNG margin at the 4096 px cap (UI_V2_REFINEM
     await maybeSavePng(png, "ui-v2-margin-cap.png");
     const analysis = await analyzePng(page, png);
     expect(analysis.width).toBe(8192);
-    expect(analysis.height).toBe(250);
+    expect(analysis.height).toBe(262);
     expect(analysis.touchesEdge).toBe(false);
     const c = analysis.content!;
-    // 96 * s = 96 * 4096 / 6098 = 64.48 device px; right and bottom may gain up to 2 px from the ceil.
-    const expected = (96 * 4096) / 6098;
+    // 96 * s = 96 * 4096 / 6102 = 64.44 device px; right and bottom may gain up to 2 px from the ceil.
+    const expected = (96 * 4096) / 6102;
     const margins = {
       left: c.left,
       top: c.top,

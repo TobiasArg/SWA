@@ -40,6 +40,11 @@ export const CURVE_BOW_FACTOR = 0.15;
 export const CURVE_BOW_MIN_CHORD = 24;
 export const CONNECTION_RADIUS = 20;
 export const HATCH_STEP = 8;
+/** 2.5D extrusion depth (px). Fixed for every shape kind and state, so geometry (and edges) never jump. */
+export const NODE_DEPTH = 8;
+/** Extrusion vector: the side face is the silhouette swept from (0, 0) to (DEPTH_DX, DEPTH_DY), toward the bottom-right. */
+export const DEPTH_DX = NODE_DEPTH * 0.5;
+export const DEPTH_DY = NODE_DEPTH;
 
 /** Memory lid / base ellipse vertical radius: min(8, height / 7). */
 export function cylinderCapRy(h: number): number {
@@ -147,6 +152,143 @@ export function shapePath(kind: ShapeKind, w: number, h: number, inflate = 0): s
   }
 }
 
+/** Vertices (clockwise on screen) of the polygonal silhouettes; mirrors `shapePath`. */
+function polygonVertices(kind: "octagon" | "parallelogram" | "hexagon", w: number, h: number, i: number): Position[] {
+  const x0 = -i;
+  const y0 = -i;
+  const x1 = w + i;
+  const y1 = h + i;
+  const H = h + 2 * i;
+  switch (kind) {
+    case "octagon": {
+      const c = OCTAGON_CHAMFER + i;
+      return [
+        { x: x0 + c, y: y0 },
+        { x: x1 - c, y: y0 },
+        { x: x1, y: y0 + c },
+        { x: x1, y: y1 - c },
+        { x: x1 - c, y: y1 },
+        { x: x0 + c, y: y1 },
+        { x: x0, y: y1 - c },
+        { x: x0, y: y0 + c },
+      ];
+    }
+    case "parallelogram": {
+      const s = h > 0 ? (PARALLELOGRAM_SKEW * H) / h : PARALLELOGRAM_SKEW;
+      return [
+        { x: x0 + s, y: y0 },
+        { x: x1, y: y0 },
+        { x: x1 - s, y: y1 },
+        { x: x0, y: y1 },
+      ];
+    }
+    case "hexagon": {
+      const p = h > 0 ? (HEXAGON_POINT * H) / h : HEXAGON_POINT;
+      const my = h / 2;
+      return [
+        { x: x0 + p, y: y0 },
+        { x: x1 - p, y: y0 },
+        { x: x1, y: my },
+        { x: x1 - p, y: y1 },
+        { x: x0 + p, y: y1 },
+        { x: x0, y: my },
+      ];
+    }
+  }
+}
+
+/** Convex hull (Andrew's monotone chain), clockwise on screen, collinear points dropped. */
+function convexHull(points: readonly Position[]): Position[] {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Position, a: Position, b: Position) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const build = (input: readonly Position[]): Position[] => {
+    const out: Position[] = [];
+    for (const p of input) {
+      while (out.length >= 2 && cross(out[out.length - 2]!, out[out.length - 1]!, p) <= 1e-9) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  // Lower hull (in y-down screen space this is the top chain, left to right) + upper hull: clockwise on screen.
+  return [...build(pts), ...build([...pts].reverse())];
+}
+
+/**
+ * SVG path `d` of the extruded volume: the silhouette (see `shapePath`) swept along
+ * the depth vector (DEPTH_DX, DEPTH_DY), i.e. the union of the top face and the
+ * side face as ONE closed outline. All kinds are convex, so this is the Minkowski
+ * sum of the silhouette and the depth segment. `inflate` behaves as in `shapePath`
+ * (the top face is inflated, then swept), so an inflated volume encloses the plain one.
+ */
+export function extrusionPath(kind: ShapeKind, w: number, h: number, inflate = 0): string {
+  const i = inflate;
+  const dx = DEPTH_DX;
+  const dy = DEPTH_DY;
+  const len = Math.hypot(dx, dy);
+  // Unit normal where the silhouette is tangent to the depth vector, on the upper-right side.
+  const nx = dy / len;
+  const ny = -dx / len;
+  const x0 = -i;
+  const y0 = -i;
+  const x1 = w + i;
+  const y1 = h + i;
+  const pt = (x: number, y: number) => `${r2(x)},${r2(y)}`;
+  switch (kind) {
+    case "rounded": {
+      const r = ROUNDED_RADIUS + i;
+      const arc = (x: number, y: number) => `A${r2(r)},${r2(r)} 0 0 1 ${pt(x, y)}`;
+      // Tangent points: upper-right on the top-right corner circle, lower-left on the bottom-left one.
+      const t1 = { x: x1 - r + r * nx, y: y0 + r + r * ny };
+      const t2 = { x: x0 + r - r * nx, y: y1 - r - r * ny };
+      return [
+        `M${pt(x0 + r, y0)}`,
+        `H${r2(x1 - r)}`,
+        arc(t1.x, t1.y),
+        `L${pt(t1.x + dx, t1.y + dy)}`,
+        arc(x1 + dx, y0 + r + dy),
+        `V${r2(y1 - r + dy)}`,
+        arc(x1 - r + dx, y1 + dy),
+        `H${r2(x0 + r + dx)}`,
+        arc(t2.x + dx, t2.y + dy),
+        `L${pt(t2.x, t2.y)}`,
+        arc(x0, y1 - r),
+        `V${r2(y0 + r)}`,
+        arc(x0 + r, y0),
+        "Z",
+      ].join(" ");
+    }
+    case "cylinder": {
+      const ry = cylinderCapRy(h) + i;
+      const rx = (w + 2 * i) / 2;
+      const cx = w / 2;
+      const cyTop = y0 + ry;
+      const cyBottom = y1 - ry;
+      // Parameter where the ellipse tangent is parallel to (dx, dy): upper-right (t1) and lower-left (t2 = t1 + pi).
+      const t = Math.atan2(-ry * dx, rx * dy);
+      const ex = rx * Math.cos(t);
+      const ey = ry * Math.sin(t);
+      const arc = (x: number, y: number) => `A${r2(rx)},${r2(ry)} 0 0 1 ${pt(x, y)}`;
+      return [
+        `M${pt(x0, cyTop)}`,
+        arc(cx + ex, cyTop + ey),
+        `L${pt(cx + ex + dx, cyTop + ey + dy)}`,
+        arc(x1 + dx, cyTop + dy),
+        `V${r2(cyBottom + dy)}`,
+        arc(cx - ex + dx, cyBottom - ey + dy),
+        `L${pt(cx - ex, cyBottom - ey)}`,
+        arc(x0, cyBottom),
+        "Z",
+      ].join(" ");
+    }
+    default: {
+      const base = polygonVertices(kind, w, h, i);
+      const hull = convexHull([...base, ...base.map((v) => ({ x: v.x + dx, y: v.y + dy }))]);
+      return hull.map((v, k) => `${k === 0 ? "M" : "L"}${pt(v.x, v.y)}`).join(" ") + " Z";
+    }
+  }
+}
+
 /**
  * Type details drawn above the body path. Fixed order. `kind` lets the node
  * component style each differently:
@@ -176,18 +318,48 @@ export function shapeDetails(component: TypeAndSubtype, w: number, h: number): S
   return [];
 }
 
-/** Box-local port anchor, exactly on the silhouette outline. */
+/**
+ * Box-local port anchor, exactly on the outline of the extruded volume (the
+ * silhouette swept along the depth vector, see `extrusionPath`).
+ *
+ * `top` / `left` sit on the unmoved top face. `bottom` / `right` keep the
+ * top-face anchor's x / y respectively (so facing ports of axis-aligned nodes
+ * stay aligned and their edges straight) and move to the outer extent of the
+ * volume along the other axis:
+ * - bottom: (w / 2, h + DEPTH_DY). The sweep of the flat bottom edges reaches
+ *   y = h + DEPTH_DY at w / 2; the cylinder's lower cap is an arc translated by
+ *   DEPTH_DX, so its outline at x = w / 2 is a hair higher (exact ellipse y).
+ * - right at y = h / 2: x = w + DEPTH_DX on the vertical right edge of
+ *   rounded / octagon / cylinder; the parallelogram's right edge is the slanted
+ *   edge translated by the depth vector; the hexagon's is its point (x = w) once
+ *   the translated upper-right edge does not reach beyond it, otherwise that
+ *   translated edge.
+ */
 export function portAnchor(kind: ShapeKind, w: number, h: number, side: PortSide): Position {
-  const s = kind === "parallelogram" ? PARALLELOGRAM_SKEW : 0;
   switch (side) {
     case "top":
       return { x: w / 2, y: 0 };
-    case "bottom":
-      return { x: w / 2, y: h };
+    case "bottom": {
+      if (kind === "cylinder") {
+        const ry = cylinderCapRy(h);
+        const rx = w / 2;
+        const k = Math.min(1, DEPTH_DX / rx);
+        return { x: w / 2, y: h + DEPTH_DY - ry * (1 - Math.sqrt(1 - k * k)) };
+      }
+      return { x: w / 2, y: h + DEPTH_DY };
+    }
     case "left":
-      return { x: s / 2, y: h / 2 };
-    case "right":
-      return { x: w - s / 2, y: h / 2 };
+      return { x: kind === "parallelogram" ? PARALLELOGRAM_SKEW / 2 : 0, y: h / 2 };
+    case "right": {
+      switch (kind) {
+        case "parallelogram":
+          return { x: w + DEPTH_DX - PARALLELOGRAM_SKEW * (0.5 - DEPTH_DY / h), y: h / 2 };
+        case "hexagon":
+          return { x: w + Math.max(0, DEPTH_DX - (2 * HEXAGON_POINT * DEPTH_DY) / h), y: h / 2 };
+        default:
+          return { x: w + DEPTH_DX, y: h / 2 };
+      }
+    }
   }
 }
 

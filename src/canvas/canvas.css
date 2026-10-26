@@ -91,14 +91,15 @@
 
 /*
  * Per-node variables (UI_COLOR_CONFIRMATION_DESIGN §1.3, §1.4). The node's one
- * effective palette entry (`data-palette`, see tokens.css) supplies fill and ink
- * together; this is the only rule that maps it. Type rules set geometry only,
+ * effective palette entry (`data-palette`, see tokens.css) supplies fill, ink and
+ * the 2.5D side-face depth together; this is the only rule that maps it. Type rules set geometry only,
  * never color, so a type can never override a selected color. Text never takes
  * the fill. The fallback is the neutral External pair.
  */
 .sa-node {
   --sa-node-ink: var(--sa-palette-ink, var(--sa-type-external-ink));
   --sa-node-fill: var(--sa-palette-fill, var(--sa-type-external-fill));
+  --sa-node-depth: var(--sa-palette-depth, var(--sa-type-external-depth));
   --sa-node-border: var(--sa-node-ink);
   --sa-node-chip-fill: var(--sa-node-surface);
   --sa-node-chip-ink: var(--sa-node-ink);
@@ -137,6 +138,43 @@
 
 .sa-node[data-type="external_system"] .sa-node__body {
   stroke-dasharray: 6 4;
+}
+
+/*
+ * 2.5D volume (UI v2 depth): the silhouette swept toward the bottom-right. The
+ * body (top face) is painted over it, so only the side face shows, in the
+ * palette's darker depth tone; its stroke outlines the whole volume. The
+ * geometry never changes with state, so ports and edges never move.
+ */
+.sa-node__depth {
+  fill: var(--sa-node-depth);
+  stroke: var(--sa-node-border);
+  stroke-linejoin: round;
+  stroke-width: var(--sa-node-stroke-rest);
+}
+
+.sa-node[data-type="external_system"] .sa-node__depth {
+  stroke-dasharray: 6 4;
+}
+
+/*
+ * Contact shadow: the volume as one flat translucent shape, offset by CSS (no
+ * blur, no filter, no defs). At rest it stays within the 1 px export bounds
+ * inflate; hover and selection lift it (shadow only, never geometry).
+ */
+.sa-node__shadow {
+  fill: var(--sa-node-shadow);
+  stroke: none;
+  transform: translate(1px, 1px);
+  transition:
+    fill var(--sa-duration-fast) var(--sa-ease),
+    transform var(--sa-duration-fast) var(--sa-ease);
+}
+
+.sa-flow .react-flow__node-component:hover .sa-node__shadow,
+.sa-node[data-selected="true"] .sa-node__shadow {
+  fill: var(--sa-node-shadow-lift);
+  transform: translate(2px, 3px);
 }
 
 .sa-node__detail {
@@ -186,7 +224,8 @@
 }
 
 /* Hover: thicker stroke in the same colour, so the palette ink stays visible. */
-.sa-flow .react-flow__node-component:hover .sa-node__body {
+.sa-flow .react-flow__node-component:hover .sa-node__body,
+.sa-flow .react-flow__node-component:hover .sa-node__depth {
   stroke-width: 2.25px; /* NODE_STROKE_HOVER */
 }
 
@@ -323,7 +362,8 @@
 }
 
 /* A valid connection target under the pointer (UI v2 §7.1; set by the connection code). */
-.sa-node[data-connect-target="true"] .sa-node__body {
+.sa-node[data-connect-target="true"] .sa-node__body,
+.sa-node[data-connect-target="true"] .sa-node__depth {
   stroke: var(--sa-port-active);
   stroke-width: 2.25px;
 }
@@ -386,6 +426,15 @@
   stroke-width: 10px;
   pointer-events: stroke;
   cursor: pointer;
+}
+
+/* Sunken tray: inner shadow on the top and left walls (decoration only). */
+.sa-group__inset {
+  fill: none;
+  stroke: var(--sa-group-inset);
+  stroke-linecap: round;
+  stroke-width: 3px;
+  pointer-events: none;
 }
 
 .sa-group__outline-stroke {
@@ -619,9 +668,16 @@
 }
 
 /* Rest stroke only: no hover or connection-target treatment in the image. */
-.sa-exporting .sa-node .sa-node__body {
+.sa-exporting .sa-node .sa-node__body,
+.sa-exporting .sa-node .sa-node__depth {
   stroke: var(--sa-node-border) !important;
   stroke-width: var(--sa-node-stroke-rest) !important;
+}
+
+/* The volume and its shadow are part of the drawing; only the lift is a state. */
+.sa-exporting .sa-node .sa-node__shadow {
+  fill: var(--sa-node-shadow) !important;
+  transform: translate(1px, 1px) !important;
 }
 
 .sa-exporting .react-flow__edge .sa-edge-path,
@@ -667,7 +723,8 @@
   .sa-edge-terminal,
   .sa-edge-leader,
   .sa-flow .react-flow__edge-path.sa-edge-path,
-  .sa-flow .react-flow__handle.sa-port {
+  .sa-flow .react-flow__handle.sa-port,
+  .sa-node__shadow {
     transition: none;
   }
 }
@@ -676,6 +733,24 @@
   .sa-node__body,
   .sa-node__detail--rim {
     stroke: CanvasText;
+  }
+
+  /*
+   * Flat in system colours: no shadow and no tinted side face. The volume
+   * outline stays (Canvas fill) because bottom and right ports and edge ends
+   * sit on it.
+   */
+  .sa-node__shadow {
+    display: none;
+  }
+
+  .sa-node__depth {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+
+  .sa-group__inset {
+    display: none;
   }
 
   .sa-node__detail--band {

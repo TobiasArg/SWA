@@ -15,6 +15,8 @@ import {
   CURVE_BOW_FACTOR,
   CURVE_BOW_MAX,
   CURVE_BOW_MIN_CHORD,
+  DEPTH_DX,
+  DEPTH_DY,
   TERMINAL_RADIUS,
   portNormal,
   type PortSide,
@@ -243,7 +245,7 @@ describe("layoutRelationship", () => {
     expect(directed.arrow).not.toBeNull();
     expect(undirected.arrow).toBeNull();
     for (const g of [directed, undirected]) {
-      expect(g.sourceTerminal).toEqual({ x: 160, y: 40 });
+      expect(g.sourceTerminal).toEqual({ x: 160 + DEPTH_DX, y: 40 }); // right port sits on the extruded outline
       expect(g.targetTerminal).toEqual({ x: 400, y: 40 });
     }
   });
@@ -454,10 +456,11 @@ describe("U1 curvature, aligned facing", () => {
     for (const directed of [true, false]) {
       for (const gap of gaps) {
         const targets: Array<[PortSide, PortSide, Position]> = [
-          ["right", "left", { x: AGENT_W + gap, y: 0 }],
-          ["left", "right", { x: -AGENT_W - gap, y: 0 }],
-          ["bottom", "top", { x: 0, y: AGENT_H + gap }],
-          ["top", "bottom", { x: 0, y: -AGENT_H - gap }],
+          // Gaps are measured between the extruded outlines: the right / bottom ports sit DEPTH_DX / DEPTH_DY outside the box.
+          ["right", "left", { x: AGENT_W + DEPTH_DX + gap, y: 0 }],
+          ["left", "right", { x: -AGENT_W - DEPTH_DX - gap, y: 0 }],
+          ["bottom", "top", { x: 0, y: AGENT_H + DEPTH_DY + gap }],
+          ["top", "bottom", { x: 0, y: -AGENT_H - DEPTH_DY - gap }],
         ];
         for (const [sSide, tSide, pos] of targets) {
           const g = agentLayout(pos, directed ? "directed" : "undirected");
@@ -545,6 +548,10 @@ describe("U4 arrowhead", () => {
     for (let x = -700; x <= 700; x += 10) {
       for (let y = -500; y <= 500; y += 10) {
         if (x > -AGENT_W && x < AGENT_W && y > -AGENT_H && y < AGENT_H) continue;
+        // Skip boxes closer than the extrusion plus arrowhead clearance: the extruded volume (not the box) is what edges must clear.
+        const gapX = Math.max(x - AGENT_W, -x - AGENT_W);
+        const gapY = Math.max(y - AGENT_H, -y - AGENT_H);
+        if (Math.max(gapX, gapY) < 3 * DEPTH_DY) continue;
         for (const off of [0, 20, -20, 40]) {
           const g = agentLayout({ x, y }, "directed", off);
           const arrow = g.arrow!;
@@ -589,7 +596,7 @@ describe("U5 parallel fan", () => {
   it("aligned facing ports: midpoints >= 15 px apart and no edge below 0.6 B", () => {
     for (const dir of ["directed", "undirected"] as const) {
       for (const gap of [80, 300, 480]) {
-        const gs = [0, 1, 2, 3, 4].map((i) => agentLayout({ x: AGENT_W + gap, y: 0 }, dir, canonicalOffset(i)));
+        const gs = [0, 1, 2, 3, 4].map((i) => agentLayout({ x: AGENT_W + DEPTH_DX + gap, y: 0 }, dir, canonicalOffset(i)));
         const mids = gs.map((g) => cubicPoint(g.p0, g.p1, g.p2, g.p3, 0.5));
         for (let i = 0; i < mids.length; i++) {
           for (let j = i + 1; j < mids.length; j++) {

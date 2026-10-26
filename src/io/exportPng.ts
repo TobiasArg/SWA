@@ -108,6 +108,9 @@ export async function exportPng(api: CanvasApi, name: string): Promise<void> {
         width: `${frame.width}px`,
         height: `${frame.height}px`,
         transform: `translate(${frame.transform.x}px, ${frame.transform.y}px) scale(${frame.transform.zoom})`,
+        // The canvas fill already paints `backgroundColor`; painting it again on the scaled
+        // viewport leaves a 1-level seam where its edges land on fractional pixels.
+        backgroundColor: "transparent",
       },
       filter: exportFilter,
     });

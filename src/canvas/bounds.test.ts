@@ -11,6 +11,7 @@ import {
   unionRects,
 } from "./bounds";
 import { cubicPoint } from "./floating";
+import { DEPTH_DX, DEPTH_DY } from "./shapes";
 
 const contains = (r: Rect, p: Position) =>
   p.x >= r.x - 1e-9 && p.x <= r.x + r.width + 1e-9 && p.y >= r.y - 1e-9 && p.y <= r.y + r.height + 1e-9;
@@ -129,8 +130,25 @@ describe("computeDiagramBounds", () => {
   it("inflates every node box by 1 px, and includes groups as well as components", () => {
     const component = { x: 100, y: 100, width: 220, height: 88 };
     const group = { x: 60, y: 40, width: 400, height: 200 };
-    const bounds = computeDiagramBounds({ nodeRects: [component, group], edges: [], placements: [] });
+    const bounds = computeDiagramBounds({ nodeRects: [component], groupRects: [group], edges: [], placements: [] });
     close(bounds, { x: 59, y: 39, width: 402, height: 202 });
+  });
+
+  it("extends component boxes by the extrusion depth (right and bottom) but not group boxes", () => {
+    const component = { x: 100, y: 100, width: 220, height: 88 };
+    close(computeDiagramBounds({ nodeRects: [component], edges: [], placements: [] }), {
+      x: 99,
+      y: 99,
+      width: 222 + DEPTH_DX,
+      height: 90 + DEPTH_DY,
+    });
+    const group = { x: 100, y: 100, width: 220, height: 88 };
+    close(computeDiagramBounds({ nodeRects: [], groupRects: [group], edges: [], placements: [] }), {
+      x: 99,
+      y: 99,
+      width: 222,
+      height: 90,
+    });
   });
 
   it("unites label plates and leader end points", () => {

@@ -13,6 +13,7 @@ import {
   type LabelPlacement,
   type LabelRequest,
 } from "./edgeLabels";
+import { DEPTH_DX, DEPTH_DY } from "./shapes";
 import { computeParallelInfo, cubicPoint, layoutRelationship, type RelationshipLayout } from "./floating";
 
 /** U7: every test injects a 7 px per character measure. */
@@ -59,8 +60,11 @@ const placementOf = (map: Map<string, LabelPlacement>, id: string) => {
   return placement!;
 };
 
-/** The §3.5 review layout: Agents A, B, C at x = 100, 400, 700. */
-const reviewRects = { A: agent(100), B: agent(400), C: agent(700) };
+/**
+ * The §3.5 review layout: Agents A, B, C at x = 100, 400, 700, each step widened by the
+ * 2.5D depth (DEPTH_DX) so the visible gap between a right port and the next left port is the original 80 px.
+ */
+const reviewRects = { A: agent(100), B: agent(400 + DEPTH_DX), C: agent(700 + 2 * DEPTH_DX) };
 const reviewEdges = [
   { rel: { ...rel("rel_ab", "A", "B"), type: "delegates_to", label: "coordinates" } as Relationship, text: "delegates to · coordinates" },
   { rel: rel("rel_bc", "B", "C"), text: "uses" },
@@ -232,6 +236,23 @@ describe("obstacles", () => {
     const header = { x: 0, y: label.y - 40, width: 1200, height: 400 };
     const result = placementOf(layoutDiagramLabels({ componentRects: Object.values(rects), groupRects: [header], edges: [edge!] }, measure), "r");
     expect(overlaps(result.plate, inflate({ x: 0, y: label.y - 40, width: 1200, height: 32 }))).toBe(false);
+  });
+
+  it("treats a component's 2.5D side face (DEPTH_DX right, DEPTH_DY down) as part of its obstacle", () => {
+    const rects = { A: agent(100, 300), B: agent(700, 300) };
+    const [edge] = sources(rects, [{ rel: rel("r", "A", "B"), text: "uses" }]);
+    const free = placementOf(layoutDiagramLabels({ componentRects: Object.values(rects), groupRects: [], edges: [edge!] }, measure), "r");
+    expect(free.mode).toBe("path");
+    // C's box ends 6 px above the plate (outside the 4 px clearance), but its side face reaches 2 px into it.
+    const c: Rect = { x: free.plate.x - 20, y: free.plate.y - 6 - 60, width: free.plate.width + 40, height: 60 };
+    expect(overlaps(free.plate, inflate(c))).toBe(false);
+    const volume: Rect = { ...c, width: c.width + DEPTH_DX, height: c.height + DEPTH_DY };
+    expect(overlaps(free.plate, inflate(volume))).toBe(true);
+    const moved = placementOf(
+      layoutDiagramLabels({ componentRects: [...Object.values(rects), c], groupRects: [], edges: [edge!] }, measure),
+      "r",
+    );
+    expect(overlaps(moved.plate, inflate(volume))).toBe(false);
   });
 
   it("skips edges without text", () => {

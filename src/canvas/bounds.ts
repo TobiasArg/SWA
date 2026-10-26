@@ -2,7 +2,8 @@
  * Pure diagram bounds for PNG export (UI_V2_REFINEMENT.md section 4.1): the
  * painted extents of the diagram, not a generous hull. The union of
  *
- *   1. every node box (components and groups), inflated by 1 px;
+ *   1. every component box extended by the extrusion depth (right DEPTH_DX, bottom DEPTH_DY),
+ *      and every group box, inflated by 1 px;
  *   2. every edge's exact cubic bounding box, inflated by 0.75 px;
  *   3. every arrowhead triangle (its three vertices) and both terminal rings (R + 0.75);
  *   4. every label plate and leader end point (section 3, after layout).
@@ -11,7 +12,7 @@ import type { Position, Rect } from "../domain/types";
 import type { LabelPlacement } from "./edgeLabels";
 import { labelPlacementBounds } from "./edgeLabels";
 import { cubicPoint, type CubicEdgeGeometry } from "./floating";
-import { ARROW_HALF_WIDTH, ARROW_LENGTH } from "./shapes";
+import { ARROW_HALF_WIDTH, ARROW_LENGTH, DEPTH_DX, DEPTH_DY } from "./shapes";
 
 /** Half of the largest node outline stroke that reaches outside the node box (px). */
 export const NODE_BOUNDS_INFLATE = 1;
@@ -25,8 +26,10 @@ export type EdgeBoundsGeometry = Pick<
 >;
 
 export interface DiagramBoundsInput {
-  /** Absolute boxes of every component and group node (not yet inflated). */
+  /** Absolute boxes of every component node (not yet inflated or extended by the extrusion depth). */
   nodeRects: readonly Rect[];
+  /** Absolute boxes of every group node (flat: no extrusion). */
+  groupRects?: readonly Rect[];
   edges: readonly { geometry: EdgeBoundsGeometry }[];
   /** Label placements from layoutDiagramLabels (the same ones the canvas draws). */
   placements: Iterable<LabelPlacement>;
@@ -114,7 +117,10 @@ export function edgeBoundsRects(geometry: EdgeBoundsGeometry): Rect[] {
 
 /** Union of everything the diagram paints, in flow coordinates (CSS px). Empty input gives a zero rect at the origin. */
 export function computeDiagramBounds(input: DiagramBoundsInput): Rect {
-  const rects: (Rect | null)[] = input.nodeRects.map((rect) => inflateRect(rect, NODE_BOUNDS_INFLATE));
+  const rects: (Rect | null)[] = input.nodeRects.map((rect) =>
+    inflateRect({ ...rect, width: rect.width + DEPTH_DX, height: rect.height + DEPTH_DY }, NODE_BOUNDS_INFLATE),
+  );
+  for (const rect of input.groupRects ?? []) rects.push(inflateRect(rect, NODE_BOUNDS_INFLATE));
   for (const { geometry } of input.edges) rects.push(...edgeBoundsRects(geometry));
   for (const placement of input.placements) rects.push(labelPlacementBounds(placement));
   return unionRects(rects) ?? { x: 0, y: 0, width: 0, height: 0 };

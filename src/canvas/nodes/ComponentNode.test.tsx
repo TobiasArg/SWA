@@ -12,6 +12,7 @@ import { EditorProvider } from "../../editor/context";
 import { CanvasView } from "../CanvasView";
 import { createFakeStore } from "../testing/fakeStore";
 import { buildFixtureArchitecture } from "../testing/fixtures";
+import { SELECTION_INFLATE, extrusionPath, shapePath, type ShapeKind } from "../shapes";
 
 // Vitest replaces CSS imports (including ?raw) with empty strings, so the
 // stylesheets are read from disk. jsdom cannot compute custom properties from
@@ -141,8 +142,51 @@ describe("ComponentNode silhouettes", () => {
       const markup = svg[0]!.outerHTML;
       expect(markup).not.toMatch(/url\(#|<pattern|<clipPath|<marker|Gradient/);
       const order = Array.from(svg[0]!.children).map((child) => child.getAttribute("class"));
-      expect(order.slice(0, 3)).toEqual(["sa-node__halo", "sa-node__selection", "sa-node__body"]);
+      expect(order.slice(0, 5)).toEqual([
+        "sa-node__shadow",
+        "sa-node__halo",
+        "sa-node__selection",
+        "sa-node__depth",
+        "sa-node__body",
+      ]);
     }
+  });
+
+  it("draws the fixed 2.5D volume under the unmoved top face; halo and selection wrap the whole volume", () => {
+    const { node } = renderNodes();
+    for (const id of ["cmp_orch", "cmp_search", "cmp_store", "cmp_crm", "cmp_router"]) {
+      const el = node(id);
+      const kind = el.dataset.shape as ShapeKind;
+      const svg = el.querySelector<SVGSVGElement>("svg.sa-node__shape")!;
+      const w = Number(svg.getAttribute("width"));
+      const h = Number(svg.getAttribute("height"));
+      expect(el.querySelector(".sa-node__body")!.getAttribute("d")).toBe(shapePath(kind, w, h));
+      expect(el.querySelector(".sa-node__depth")!.getAttribute("d")).toBe(extrusionPath(kind, w, h));
+      expect(el.querySelector(".sa-node__shadow")!.getAttribute("d")).toBe(extrusionPath(kind, w, h));
+      const ring = extrusionPath(kind, w, h, SELECTION_INFLATE);
+      expect(el.querySelector(".sa-node__halo")!.getAttribute("d")).toBe(ring);
+      expect(el.querySelector(".sa-node__selection")!.getAttribute("d")).toBe(ring);
+      // The extrusion paints outside the node box; the SVG must not clip it.
+      expect(svg.getAttribute("overflow")).toBe("visible");
+    }
+  });
+
+  it("styles depth and shadow without filters, blur or color-mix, and keeps them in the PNG export", () => {
+    const depth = declarations(ruleBody(canvasCss, ".sa-node__depth"));
+    expect(depth.fill).toBe("var(--sa-node-depth)");
+    expect(depth.stroke).toBe("var(--sa-node-border)");
+    const shadow = declarations(ruleBody(canvasCss, ".sa-node__shadow"));
+    expect(shadow.fill).toBe("var(--sa-node-shadow)");
+    const forcedStart = canvasCss.indexOf("@media (forced-colors: active)");
+    const nodeRules = canvasCss
+      .slice(0, forcedStart)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("}")
+      .filter((rule) => /sa-node__(?:depth|shadow)/.test(rule.split("{")[0] ?? ""));
+    for (const rule of nodeRules) expect(rule).not.toMatch(/filter|blur|drop-shadow|color-mix|display:\s*none/);
+    // The forced-colors block is the only place the shadow is hidden.
+    const forced = canvasCss.slice(forcedStart);
+    expect(forced).toMatch(/\.sa-node__shadow\s*\{\s*display: none;/);
   });
 
   it("places the four source ports on the outline (parallelogram side midpoints on the slant)", () => {
@@ -216,9 +260,27 @@ describe("ComponentNode palette (UI_COLOR_CONFIRMATION_DESIGN §1)", () => {
     }
   });
 
+  it("gives every palette entry a fixed-hex depth tone between its fill and its ink", () => {
+    const hex = (value: string) => {
+      expect(value, value).toMatch(/^#[0-9A-F]{6}$/i);
+      return [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16));
+    };
+    const luminance = (value: string) => hex(value).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i]!, 0);
+    const entries = [...Object.values(TYPE_NODES), ...ACCENT_IDS];
+    for (const palette of entries) {
+      const scope = nodeScope(palette);
+      const depth = resolveToken(scope["--sa-node-depth"]!, scope);
+      const fill = resolveToken(scope["--sa-node-fill"]!, scope);
+      const ink = resolveToken(scope["--sa-node-ink"]!, scope);
+      // Visibly darker than the top face, still well lighter than the outline ink.
+      expect(luminance(fill) - luminance(depth), palette).toBeGreaterThan(20);
+      expect(luminance(depth) - luminance(ink), palette).toBeGreaterThan(60);
+    }
+  });
+
   it("AC-C4: only .sa-node maps the palette, and no rule selects on data-accent", () => {
     expect(canvasCss).not.toContain("[data-accent");
-    const nodeVars = /(--sa-node-(?:ink|fill|border|chip-[\w-]+|label-ink))\s*:/g;
+    const nodeVars = /(--sa-node-(?:ink|fill|depth|border|chip-[\w-]+|label-ink))\s*:/g;
     const rules = canvasCss.replace(/\/\*[\s\S]*?\*\//g, "").split("}");
     for (const rule of rules) {
       const [selector = "", body = ""] = rule.split("{");

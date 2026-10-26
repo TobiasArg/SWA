@@ -6,14 +6,19 @@ import {
   CURVE_BOW_MAX,
   CURVE_BOW_MIN_CHORD,
   CURVE_FACTOR,
+  DEPTH_DX,
+  DEPTH_DY,
+  NODE_DEPTH,
   OCTAGON_CHAMFER,
   PARALLELOGRAM_SKEW,
   PARALLEL_STEP,
   PORT_SIDES,
+  absolutePortAnchor,
   autoPortFor,
   autoPorts,
   contentInsets,
   cylinderCapRy,
+  extrusionPath,
   hatchSegments,
   portAnchor,
   portNormal,
@@ -147,8 +152,8 @@ const SIZES: [string, number, number][] = [
 describe("portAnchor", () => {
   for (const kind of KINDS) {
     for (const [label, w, h] of SIZES) {
-      it(`${kind} @ ${label} ${w}x${h}: every side lies on the outline within 0.5 px`, () => {
-        const segs = flatten(shapePath(kind, w, h));
+      it(`${kind} @ ${label} ${w}x${h}: every side lies on the extruded outline within 0.5 px`, () => {
+        const segs = flatten(extrusionPath(kind, w, h));
         for (const side of PORT_SIDES) {
           expect(outlineDistance(portAnchor(kind, w, h, side), segs)).toBeLessThan(0.5);
         }
@@ -157,10 +162,34 @@ describe("portAnchor", () => {
   }
 
   it("matches the section 3.2 anchor table", () => {
-    expect(portAnchor("rounded", 200, 80, "right")).toEqual({ x: 200, y: 40 });
+    expect(portAnchor("rounded", 200, 80, "right")).toEqual({ x: 200 + DEPTH_DX, y: 40 });
+    expect(portAnchor("octagon", 200, 80, "right")).toEqual({ x: 200 + DEPTH_DX, y: 40 });
+    expect(portAnchor("rounded", 200, 80, "bottom")).toEqual({ x: 100, y: 80 + DEPTH_DY });
     expect(portAnchor("parallelogram", 200, 80, "left")).toEqual({ x: PARALLELOGRAM_SKEW / 2, y: 40 });
-    expect(portAnchor("parallelogram", 200, 80, "right")).toEqual({ x: 200 - PARALLELOGRAM_SKEW / 2, y: 40 });
+    // Slanted edge (200,0)->(186,80) translated by (4,8): at y = 40, x = 204 - 14 * (32 / 80) = 198.4.
+    expect(portAnchor("parallelogram", 200, 80, "right").x).toBeCloseTo(198.4, 9);
+    expect(portAnchor("parallelogram", 200, 80, "right").y).toBe(40);
+    // Hexagon at h = 80: the translated edge and the point coincide, so the right port is the point itself.
+    expect(portAnchor("hexagon", 200, 80, "right")).toEqual({ x: 200, y: 40 });
     expect(portAnchor("cylinder", 200, 80, "top")).toEqual({ x: 100, y: 0 });
+  });
+
+  it("bottom / right extremes: bottom is the lowest outline point, right a rightmost point of its row", () => {
+    for (const kind of KINDS) {
+      const box = pathBox(flatten(extrusionPath(kind, 200, 80)));
+      expect(portAnchor(kind, 200, 80, "bottom").y).toBeCloseTo(box.maxY, 1);
+      expect(portAnchor(kind, 200, 80, "top").y).toBeCloseTo(box.minY, 1);
+    }
+    for (const kind of ["rounded", "octagon", "cylinder"] as const) {
+      expect(portAnchor(kind, 200, 80, "right").x).toBeCloseTo(pathBox(flatten(extrusionPath(kind, 200, 80))).maxX, 1);
+    }
+  });
+
+  it("facing ports of aligned boxes stay aligned (right/left share y, bottom/top share x)", () => {
+    for (const kind of KINDS) {
+      expect(portAnchor(kind, 200, 80, "right").y).toBe(portAnchor(kind, 200, 80, "left").y);
+      expect(portAnchor(kind, 200, 80, "bottom").x).toBe(portAnchor(kind, 200, 80, "top").x);
+    }
   });
 
   it("portNormal is a unit axis vector per side", () => {
@@ -168,6 +197,71 @@ describe("portAnchor", () => {
     expect(portNormal("right")).toEqual({ x: 1, y: 0 });
     expect(portNormal("bottom")).toEqual({ x: 0, y: 1 });
     expect(portNormal("left")).toEqual({ x: -1, y: 0 });
+  });
+});
+
+function pathBox(segs: Seg[]): { minX: number; minY: number; maxX: number; maxY: number } {
+  const box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const [a, b] of segs) {
+    for (const p of [a, b]) {
+      box.minX = Math.min(box.minX, p.x);
+      box.minY = Math.min(box.minY, p.y);
+      box.maxX = Math.max(box.maxX, p.x);
+      box.maxY = Math.max(box.maxY, p.y);
+    }
+  }
+  return box;
+}
+
+describe("extrusionPath", () => {
+  it("depth constants", () => {
+    expect(NODE_DEPTH).toBe(8);
+    expect(DEPTH_DX).toBe(4);
+    expect(DEPTH_DY).toBe(8);
+  });
+
+  for (const kind of KINDS) {
+    for (const [label, w, h] of SIZES) {
+      it(`${kind} @ ${label}: one closed subpath whose bbox is the silhouette bbox extended by the depth vector`, () => {
+        const d = extrusionPath(kind, w, h);
+        expect(d.match(/M/g)).toHaveLength(1);
+        expect(d.trim().endsWith("Z")).toBe(true);
+        expect(d).not.toContain("url(");
+        const sil = pathBox(flatten(shapePath(kind, w, h)));
+        const ext = pathBox(flatten(d));
+        expect(ext.minX).toBeCloseTo(sil.minX, 1);
+        expect(ext.minY).toBeCloseTo(sil.minY, 1);
+        expect(ext.maxX).toBeCloseTo(sil.maxX + DEPTH_DX, 1);
+        expect(ext.maxY).toBeCloseTo(sil.maxY + DEPTH_DY, 1);
+      });
+
+      it(`${kind} @ ${label}: inflate grows the volume evenly`, () => {
+        const base = pathBox(flatten(extrusionPath(kind, w, h)));
+        const grown = pathBox(flatten(extrusionPath(kind, w, h, 4)));
+        expect(grown.minX).toBeCloseTo(base.minX - 4, 1);
+        expect(grown.minY).toBeCloseTo(base.minY - 4, 1);
+        expect(grown.maxX).toBeCloseTo(base.maxX + 4, 1);
+        expect(grown.maxY).toBeCloseTo(base.maxY + 4, 1);
+      });
+    }
+  }
+
+  it("rounded: top-face edges stay on the outline and the right/bottom edges move by the depth vector", () => {
+    const segs = flatten(extrusionPath("rounded", 200, 80));
+    for (const p of [
+      { x: 100, y: 0 },
+      { x: 0, y: 40 },
+      { x: 200 + DEPTH_DX, y: 40 + DEPTH_DY },
+      { x: 100 + DEPTH_DX, y: 80 + DEPTH_DY },
+    ]) {
+      expect(outlineDistance(p, segs)).toBeLessThan(0.05);
+    }
+  });
+
+  it("octagon: hull of the silhouette and its translate", () => {
+    expect(extrusionPath("octagon", 200, 80)).toBe(
+      "M0,12 L12,0 L188,0 L200,12 L204,20 L204,76 L192,88 L16,88 L4,76 L0,68 Z",
+    );
   });
 });
 
@@ -336,16 +430,18 @@ describe("autoPortFor (rule B)", () => {
   });
 
   it("breaks ties in the order right, bottom, left, top", () => {
-    // Exact ties: center point is equidistant (50) horizontally from left/right? use a square.
+    // Anchors of a 100x100 square: top (50,0), left (0,50), right (100+DX, 50), bottom (50, 100+DY).
     const sq = rect(0, 0, 100, 100);
-    const center = { x: 50, y: 50 };
-    expect(autoPortFor("rounded", sq, center)).toBe("right");
-    // left vs top tie (point at top-left diagonal): left (0,50) and top (50,0) from (0,0).
+    const right = absolutePortAnchor("rounded", sq, "right");
+    const bottom = absolutePortAnchor("rounded", sq, "bottom");
+    // top vs left tie from (0,0): left wins over top.
     expect(autoPortFor("rounded", sq, { x: 0, y: 0 })).toBe("left");
-    // right vs bottom tie from (100,100).
-    expect(autoPortFor("rounded", sq, { x: 100, y: 100 })).toBe("right");
-    // bottom vs left tie from (0,100).
-    expect(autoPortFor("rounded", sq, { x: 0, y: 100 })).toBe("bottom");
+    // right vs bottom tie at their midpoint (closer than left/top): right wins.
+    const mid = { x: (right.x + bottom.x) / 2, y: (right.y + bottom.y) / 2 };
+    expect(Math.hypot(mid.x - right.x, mid.y - right.y)).toBeCloseTo(Math.hypot(mid.x - bottom.x, mid.y - bottom.y), 9);
+    expect(autoPortFor("rounded", sq, mid)).toBe("right");
+    // bottom vs left tie at their midpoint: bottom wins.
+    expect(autoPortFor("rounded", sq, { x: (bottom.x + 0) / 2, y: (bottom.y + 50) / 2 })).toBe("bottom");
   });
 });
 
