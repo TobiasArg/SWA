@@ -22,3 +22,12 @@ node_modules/.tmp/
 
 # Vercel
 .vercel/
+
+# Internal design and planning notes (kept locally, not published)
+PRODUCT_CONCEPT_V1.1.md
+ROADMAP_V2_DESIGN.md
+TECHNICAL_DESIGN.md
+UI_COLOR_CONFIRMATION_DESIGN.md
+UI_DESIGN_HANDOFF.md
+UI_V2_DESIGN.md
+UI_V2_REFINEMENT.md

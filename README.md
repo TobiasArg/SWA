@@ -193,12 +193,10 @@ Built with React, TypeScript, Vite, React Flow (`@xyflow/react`), Zod, and `idb`
 
 ## Documentation
 
-- [Product concept](PRODUCT_CONCEPT_V1.1.md) — positioning, component vocabulary, behavior model, and non-goals.
-- [Technical design](TECHNICAL_DESIGN.md) — domain contracts, persistence, import/export, security, and test strategy.
-- [Roadmap v2 design](ROADMAP_V2_DESIGN.md) — shipped interaction details for Quick Find, Arrange, color, versions, and quality work.
+- This README — the product, its features, how your data is stored, and how to run it.
 - [Third-party runtime licenses](public/THIRD_PARTY_LICENSES.md) — notices for the dependencies shipped with the app.
 
-The design documents include historical planning context; the code and its tests are the final source of truth for current behavior.
+The code and its tests are the source of truth for current behavior.
 
 ## Contributing
 
