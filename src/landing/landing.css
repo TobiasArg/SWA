@@ -17,13 +17,11 @@
   --lp-shadow-raised: 0 1px 2px rgba(31, 29, 26, 0.05), 0 8px 24px rgba(31, 29, 26, 0.08);
   --lp-topbar-bg: rgba(255, 255, 255, 0.78);
   --lp-hairline: color-mix(in srgb, var(--sa-color-border) 72%, transparent);
-  /* Product mark inks (the "Flock S" symbol reads these through <use>). */
-  --lp-logo-o: var(--sa-type-orchestrator-ink);
-  --lp-logo-a: var(--sa-type-agent-ink);
-  --lp-logo-t: var(--sa-type-tool-ink);
-  --lp-logo-m: var(--sa-type-memory-ink);
-  --lp-logo-d: var(--sa-type-decision-ink);
-  --lp-logo-x: var(--sa-color-accent);
+  /* Product mark inks (the "Abeja Bit" symbol reads these through <use>). */
+  --lp-logo-wing: var(--sa-brand-wing);
+  --lp-logo-abdomen: var(--sa-brand-abdomen);
+  --lp-logo-stripe: var(--sa-brand-ink);
+  --lp-logo-body: var(--sa-brand-ink);
 }
 
 @media (min-width: 640px) {
@@ -155,6 +153,7 @@ main:focus {
   display: block;
   flex: none;
   overflow: visible;
+  shape-rendering: crispEdges;
 }
 
 .lp-nav {
@@ -1125,6 +1124,7 @@ main:focus {
 .lp-final__mark {
   display: block;
   overflow: visible;
+  shape-rendering: crispEdges;
 }
 
 .lp-final__title {
@@ -1246,14 +1246,13 @@ main:focus {
     color: CanvasText;
   }
 
+  /* The one-ink mark: solid abdomen with the stripes cut out, wings in system gray. */
   .lp-brand__mark,
   .lp-final__mark {
-    --lp-logo-o: CanvasText;
-    --lp-logo-a: CanvasText;
-    --lp-logo-t: CanvasText;
-    --lp-logo-m: CanvasText;
-    --lp-logo-d: CanvasText;
-    --lp-logo-x: CanvasText;
+    --lp-logo-wing: GrayText;
+    --lp-logo-abdomen: CanvasText;
+    --lp-logo-stripe: Canvas;
+    --lp-logo-body: CanvasText;
   }
 
   /* Flat in system colours: the volume outline stays (edges end on it). */

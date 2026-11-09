@@ -5,6 +5,7 @@ import type { Architecture, Selection } from "../domain/types";
 import { useEditorState, useEditorStore } from "../editor/context";
 import type { EditorState } from "../editor/storeTypes";
 import type { SaveController } from "../persistence/types";
+import { BrandMark } from "../ui/BrandMark";
 import { Button, type ButtonProps } from "../ui/Button";
 import { Icon } from "../ui/icons";
 import { ArrangeMenu } from "./ArrangeMenu";
@@ -314,6 +315,7 @@ export function Toolbar({
   return (
     <header className="sa-toolbar">
       <div className="sa-toolbar__group sa-toolbar__group--identity">
+        <BrandMark size={16} className="sa-toolbar__mark" />
         <Button variant="ghost" className="sa-toolbar__back" onClick={onBack}>
           <Glyph name="back" />
           <span className="sa-toolbar__back-label">Library</span>

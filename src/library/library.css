@@ -22,6 +22,18 @@
   margin-bottom: var(--sa-space-5);
 }
 
+/* Product lockup above the page title; plain text, not a link. */
+.sa-library__brand {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: var(--sa-space-3);
+  margin: 0 0 var(--sa-space-2);
+  color: var(--sa-color-text);
+  font: var(--sa-text-md);
+  letter-spacing: -0.01em;
+}
+
 .sa-library__title {
   margin: 0;
   font: var(--sa-text-xl);

@@ -90,6 +90,26 @@ button:disabled {
     color var(--sa-duration-fast) var(--sa-ease);
 }
 
+/* Product mark (BrandMark.tsx): a pixel bee, rendered only at whole multiples of 16 px. */
+.sa-brand-mark {
+  display: block;
+  flex: none;
+  shape-rendering: crispEdges;
+}
+
+.sa-brand-mark__wing {
+  fill: var(--sa-brand-wing);
+}
+
+.sa-brand-mark__abdomen {
+  fill: var(--sa-brand-abdomen);
+}
+
+.sa-brand-mark__stripe,
+.sa-brand-mark__body {
+  fill: var(--sa-brand-ink);
+}
+
 .sa-button--primary {
   border-color: var(--sa-color-accent);
   background: var(--sa-color-accent);
@@ -295,5 +315,19 @@ button:disabled {
 
   .sa-button:focus-visible {
     outline-color: Highlight;
+  }
+
+  /* The one-ink mark: solid abdomen with the stripes cut out, wings in system gray. */
+  .sa-brand-mark__wing {
+    fill: GrayText;
+  }
+
+  .sa-brand-mark__abdomen,
+  .sa-brand-mark__body {
+    fill: CanvasText;
+  }
+
+  .sa-brand-mark__stripe {
+    fill: Canvas;
   }
 }

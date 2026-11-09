@@ -19,6 +19,10 @@
   flex: 1 1 auto;
 }
 
+.sa-toolbar__mark {
+  margin: 0 var(--sa-space-2) 0 var(--sa-space-1);
+}
+
 .sa-toolbar__group--end {
   margin-left: auto;
 }
@@ -218,6 +222,11 @@
   .sa-toolbar {
     gap: var(--sa-space-2);
     padding: 0 var(--sa-space-3);
+  }
+
+  /* The name field needs the room more than the mark does. */
+  .sa-toolbar__mark {
+    display: none;
   }
 
   .sa-toolbar .sa-toolbar__back {

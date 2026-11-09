@@ -3,6 +3,7 @@ import type { AppServices } from "../app/services";
 import type { ArchitectureFile } from "../domain/types";
 import type { ValidationIssue } from "../domain/validation/issues";
 import type { Repository, StoredRecord } from "../persistence/types";
+import { BrandMark } from "../ui/BrandMark";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Icon, type IconName } from "../ui/icons";
@@ -255,6 +256,10 @@ export function LibraryScreen({
     <div className="sa-library">
       <main className="sa-library__main" aria-labelledby="sa-library-title">
         <header className="sa-library__header">
+          <p className="sa-library__brand">
+            <BrandMark size={32} />
+            <span>Swarm Architecturer</span>
+          </p>
           <h1 id="sa-library-title" className="sa-library__title">
             Architectures
           </h1>
