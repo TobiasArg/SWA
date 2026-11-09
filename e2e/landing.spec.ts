@@ -15,19 +15,38 @@ test("landing page at / links to the editor @smoke", async ({ page }) => {
   }
 });
 
+// Browsers keep favicons in a separate cache keyed by icon URL and do not refetch them on reload,
+// so a new mark only shows if the href changes. Bump ICON_VERSION whenever the icon artwork changes.
+const ICON_VERSION = "blue-bee-2";
+const SVG_ICON = `/favicon.svg?v=${ICON_VERSION}`;
+const ICO_ICON = `/favicon.ico?v=${ICON_VERSION}`;
+const TOUCH_ICON = `/apple-touch-icon.png?v=${ICON_VERSION}`;
+
 for (const path of ["/", "/app/"]) {
-  test(`${path} links SVG, ICO and touch icons that are served`, async ({ page, request }) => {
+  test(`${path} links versioned SVG, ICO and touch icons that are served`, async ({ page, request }) => {
     await page.goto(path);
     const svgIcon = page.locator('head link[rel="icon"][type="image/svg+xml"]');
-    await expect(svgIcon).toHaveAttribute("href", "/favicon.svg");
-    await expect(page.locator('head link[rel="icon"][href="/favicon.ico"]')).toHaveCount(1);
-    await expect(page.locator('head link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/apple-touch-icon.png");
+    await expect(svgIcon).toHaveCount(1);
+    await expect(svgIcon).toHaveAttribute("href", SVG_ICON);
+    await expect(svgIcon).toHaveAttribute("sizes", "any");
+    await expect(page.locator('head link[rel="icon"]')).toHaveCount(2);
+    await expect(page.locator(`head link[rel="icon"][href="${ICO_ICON}"]`)).toHaveCount(1);
+    await expect(page.locator('head link[rel="apple-touch-icon"]')).toHaveAttribute("href", TOUCH_ICON);
 
-    const svg = await request.get("/favicon.svg");
+    const svg = await request.get(SVG_ICON);
     expect(svg.ok()).toBe(true);
-    expect(await svg.text()).toContain("<svg");
-    for (const asset of ["/favicon.ico", "/apple-touch-icon.png"]) {
-      expect((await request.get(asset)).ok()).toBe(true);
+    expect(svg.headers()["content-type"]).toContain("image/svg+xml");
+    const body = await svg.text();
+    expect(body).toContain("<svg");
+    // The blue pixel bee abdomen, not the retired Flock S mark.
+    expect(body).toContain("#3B66D9");
+    for (const [asset, type] of [
+      [ICO_ICON, "icon"],
+      [TOUCH_ICON, "image/png"],
+    ]) {
+      const response = await request.get(asset);
+      expect(response.ok()).toBe(true);
+      expect(response.headers()["content-type"]).toContain(type);
     }
   });
 }
